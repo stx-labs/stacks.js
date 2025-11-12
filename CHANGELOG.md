@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [7.3.0](https://github.com/hirosystems/stacks.js/compare/v7.2.0...v7.3.0) (2025-11-12)
+
+
+### Features
+
+* Add ClarityVersion `.Clarity4` ([#1810](https://github.com/hirosystems/stacks.js/issues/1810)) ([74deecf](https://github.com/hirosystems/stacks.js/commit/74deecf6f4cd21fe2aa5e109666129182f18ae7b))
+
+
+
 ## [7.2.0](https://github.com/hirosystems/stacks.js/compare/v7.1.2...v7.2.0) (2025-08-07)
 
 
