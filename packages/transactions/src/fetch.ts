@@ -141,7 +141,7 @@ export async function fetchFeeEstimateTransfer({
   /** The token transfer transaction to estimate fees for (or its estimated length in bytes) */
   transaction: StacksTransactionWire | number;
 } & NetworkClientParam): Promise<bigint> {
-  const network = typeof txOpt === 'number' ? 'mainnet' : _network ?? deriveNetworkFromTx(txOpt);
+  const network = typeof txOpt === 'number' ? 'mainnet' : (_network ?? deriveNetworkFromTx(txOpt));
   const client = Object.assign({}, clientFromNetwork(networkFrom(network)), _client);
 
   const url = `${client.baseUrl}${TRANSFER_FEE_ESTIMATE_PATH}`;
