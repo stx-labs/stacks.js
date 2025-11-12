@@ -5,11 +5,15 @@ on:
     branches:
       - main
     tags-ignore:
-      - '**'
+      - "**"
     paths-ignore:
-      - '**.md'
+      - "**.md"
 
   workflow_dispatch:
+
+permissions:
+  id-token: write # Required for OIDC
+  contents: read
 
 jobs:
   pre-run:
@@ -21,24 +25,19 @@ jobs:
     needs: pre-run
     if: "needs.pre-run.outputs.is-not-fork == 'true' && (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'chore: version packages'))"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
-      - run: npm install -g npm@latest
       - run: npm ci
       - run: npm run build
 
       - run: git config --local user.email 'action@github.com'
       - run: git config --local user.name 'GitHub Action'
-
-      - run: echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > ~/.npmrc
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish
         run: |
