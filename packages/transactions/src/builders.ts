@@ -319,7 +319,7 @@ export async function makeUnsignedContractDeploy(
     network: STACKS_MAINNET,
     postConditionMode: PostConditionMode.Deny,
     sponsored: false,
-    clarityVersion: ClarityVersion.Clarity3,
+    clarityVersion: ClarityVersion.Clarity4,
   };
 
   const options = Object.assign(defaultOptions, txOptions);
