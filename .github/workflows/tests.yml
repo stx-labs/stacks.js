@@ -4,7 +4,7 @@ on:
     branches:
       - main
     tags-ignore:
-      - '**'
+      - "**"
 
   workflow_call:
   workflow_dispatch:
@@ -13,13 +13,12 @@ jobs:
   tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
-      - run: npm install -g npm@latest
       - run: npm ci
 
       - name: Check package.json

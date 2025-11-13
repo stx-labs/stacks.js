@@ -23,7 +23,6 @@
     "name": "Stacks.js",
     "entryPointStrategy": "packages",
     "entryPoints": [
-      // "packages/*", without packages/cli
       "packages/api",
       "packages/auth",
       "packages/encryption",
