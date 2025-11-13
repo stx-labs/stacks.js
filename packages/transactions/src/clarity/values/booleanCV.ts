@@ -15,7 +15,7 @@ import { BooleanCV } from '../types';
  * ```
  *
  * @see
- * {@link https://github.com/hirosystems/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
+ * {@link https://github.com/stx-labs/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
  */
 export const trueCV = (): BooleanCV => ({ type: ClarityType.BoolTrue });
 
@@ -33,7 +33,7 @@ export const trueCV = (): BooleanCV => ({ type: ClarityType.BoolTrue });
  * ```
  *
  * @see
- * {@link https://github.com/hirosystems/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
+ * {@link https://github.com/stx-labs/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
  */
 export const falseCV = (): BooleanCV => ({ type: ClarityType.BoolFalse });
 
@@ -51,6 +51,6 @@ export const falseCV = (): BooleanCV => ({ type: ClarityType.BoolFalse });
  * ```
  *
  * @see
- * {@link https://github.com/hirosystems/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
+ * {@link https://github.com/stx-labs/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
  */
 export const boolCV = (bool: boolean) => (bool ? trueCV() : falseCV());

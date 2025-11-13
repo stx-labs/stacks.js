@@ -57,9 +57,9 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hirosystems/stacks.js.git"
+    "url": "git+https://github.com/stx-labs/stacks.js.git"
   },
   "bugs": {
-    "url": "https://github.com/hirosystems/stacks.js/issues"
+    "url": "https://github.com/stx-labs/stacks.js/issues"
   }
 }

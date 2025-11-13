@@ -328,7 +328,7 @@ async function getStacksWalletKey(_network: CLINetworkAdapter, args: string[]): 
 
 /**
  * Enable users to transfer subdomains to wallet-key addresses that correspond to all data-key addresses
- * Reference: https://github.com/hirosystems/stacks.js/issues/1209
+ * Reference: https://github.com/stx-labs/stacks.js/issues/1209
  * args:
  * @mnemonic (string) the seed phrase to retrieve the privateKey & address
  * @registrarUrl (string) URL of the registrar to use (defaults to 'https://registrar.stacks.co')

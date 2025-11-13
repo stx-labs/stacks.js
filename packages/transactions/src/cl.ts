@@ -22,7 +22,7 @@ export { prettyPrint, stringify } from './clarity/prettyPrint';
 
 export { parse } from './clarity/parser';
 
-// todo: https://github.com/hirosystems/clarinet/issues/786
+// todo: https://github.com/stx-labs/clarinet/issues/786
 
 // Primitives //////////////////////////////////////////////////////////////////
 /**
