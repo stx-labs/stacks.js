@@ -263,7 +263,7 @@ const serializedSignedTx = deserializedTx.serialize();
 Read-only contract functions can be called without generating or broadcasting a transaction. Instead it works via a direct API call to a Stacks node.
 
 ```typescript
-import { bufferCVFromString, callReadOnlyFunction } from '@stacks/transactions';
+import { bufferCVFromString, fetchCallReadOnlyFunction } from '@stacks/transactions';
 import { StacksTestnet } from '@stacks/network';
 
 const contractAddress = 'ST3KC0MTNW34S1ZXD36JYKFD3JJMWA01M55DSJ4JE';
@@ -282,7 +282,7 @@ const options = {
   senderAddress,
 };
 
-const result = await callReadOnlyFunction(options);
+const result = await fetchCallReadOnlyFunction(options);
 ```
 
 ## Constructing Clarity Values
