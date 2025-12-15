@@ -208,6 +208,12 @@ export enum TenureChangeCause {
   BlockFound = 0,
   /** The next burnchain block is taking too long, so extend the runtime budget */
   Extended = 1,
+  /// NEW in SIP-034: extend specific dimensions
+  ExtendedRuntime = 2,
+  ExtendedReadCount = 3,
+  ExtendedReadLength = 4,
+  ExtendedWriteCount = 5,
+  ExtendedWriteLength = 6,
 }
 
 export enum AuthFieldType {
