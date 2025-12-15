@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [7.4.0](https://github.com/stx-labs/stacks.js/compare/v7.2.0...v7.4.0) (2025-12-15)
+
+
+### Features
+
+* Add ClarityVersion `.Clarity4` ([#1810](https://github.com/stx-labs/stacks.js/issues/1810)) ([74deecf](https://github.com/stx-labs/stacks.js/commit/74deecf6f4cd21fe2aa5e109666129182f18ae7b))
+
+
+### Bug Fixes
+
+* add tenure change causes ([#1818](https://github.com/stx-labs/stacks.js/issues/1818)) ([66964af](https://github.com/stx-labs/stacks.js/commit/66964af5e60ec8b088e847a24711f096366fbca0))
+
+
+
 ## [7.3.0](https://github.com/hirosystems/stacks.js/compare/v7.2.0...v7.3.0) (2025-11-12)
 
 
