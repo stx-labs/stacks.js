@@ -1,4 +1,7 @@
+import { isInstance } from './utils';
+
 // Define default request options and allow modification using getters, setters
+
 // Reference: https://developer.mozilla.org/en-US/docs/Web/API/Request/Request
 const defaultFetchOpts: RequestInit = {
   // By default referrer value will be client:origin: above reference link
@@ -37,7 +40,10 @@ export const setFetchOptions = (ops: RequestInit): RequestInit => {
 };
 
 /** @ignore */
-export async function fetchWrapper(input: RequestInfo, init?: RequestInit): Promise<Response> {
+export async function fetchWrapper(
+  input: RequestInfo | URL,
+  init?: RequestInit
+): Promise<Response> {
   const fetchOpts = {};
   // Use the provided options in request options along with default or user provided values
   Object.assign(fetchOpts, defaultFetchOpts, init);
@@ -46,11 +52,11 @@ export async function fetchWrapper(input: RequestInfo, init?: RequestInit): Prom
   return fetchResult;
 }
 
-export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
+export type FetchFn = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 /**
  * @ignore Internally used for letting networking functions specify "API" options.
- * Should be compatible with the `client`s created by the API and RPC packages.
+ * Should be compatible with the `client`s created by the API and RPC client packages.
  */
 export interface ClientOpts {
   baseUrl?: string;
@@ -65,24 +71,41 @@ export interface ClientParam {
 
 export interface RequestContext {
   fetch: FetchFn;
+
+  /** @deprecated This may in some cases be a Request/RequestInfo object instead of a string. For safety use `.input` instead. */
   url: string;
+
+  input: RequestInfo | URL;
   init: RequestInit;
 }
 
 export interface ResponseContext {
   fetch: FetchFn;
+
+  /** @deprecated This may in some cases be a Request/RequestInfo object instead of a string. For safety use `.input` instead. */
   url: string;
+
+  input: RequestInfo | URL;
   init: RequestInit;
+
   response: Response;
 }
 
+/** @deprecated Use {@link FetchArgs} instead. The `.url` property is may also be a Request object. */
 export interface FetchParams {
   url: string;
   init: RequestInit;
 }
 
+export interface FetchArgs {
+  input: RequestInfo | URL;
+  init?: RequestInit;
+}
+
 export interface FetchMiddleware {
-  pre?: (context: RequestContext) => PromiseLike<FetchParams | void> | FetchParams | void;
+  pre?: (
+    context: RequestContext
+  ) => PromiseLike<FetchParams | FetchArgs | void> | FetchParams | FetchArgs | void;
   post?: (context: ResponseContext) => Promise<Response | void> | Response | void;
 }
 export interface ApiKeyMiddlewareOpts {
@@ -118,8 +141,13 @@ export function createApiKeyMiddleware({
 }: ApiKeyMiddlewareOpts): FetchMiddleware {
   return {
     pre: context => {
-      const reqUrl = new URL(context.url);
-      if (!hostMatches(reqUrl.host, host)) return; // Skip middleware if host does not match pattern
+      const url = isInstance(context.input, URL)
+        ? context.input
+        : typeof context.input === 'string'
+          ? new URL(context.input)
+          : new URL(context.input.url);
+
+      if (!hostMatches(url.host, host)) return; // Skip middleware if host does not match pattern
 
       const headers =
         context.init.headers instanceof Headers
@@ -130,16 +158,16 @@ export function createApiKeyMiddleware({
   };
 }
 
-function argsForCreateFetchFn(args: any[]): { fetchLib: FetchFn; middlewares: FetchMiddleware[] } {
-  let fetchLib: FetchFn = fetchWrapper;
-  let middlewares: FetchMiddleware[] = [];
-  if (args.length > 0 && typeof args[0] === 'function') {
-    fetchLib = args.shift();
+/** @internal */
+function argsForCreateFetchFn(args: any[]): { fetch: FetchFn; middlewares: FetchMiddleware[] } {
+  if (typeof args[0] === 'function') {
+    return {
+      fetch: args.shift(), // first arg is fetch function
+      middlewares: args,
+    };
   }
-  if (args.length > 0) {
-    middlewares = args; // remaining args
-  }
-  return { fetchLib, middlewares };
+
+  return { fetch: fetchWrapper, middlewares: args };
 }
 
 /**
@@ -152,35 +180,39 @@ function argsForCreateFetchFn(args: any[]): { fetchLib: FetchFn; middlewares: Fe
  * ```
  * @category Network
  */
-export function createFetchFn(fetchLib: FetchFn, ...middleware: FetchMiddleware[]): FetchFn;
+export function createFetchFn(fetchFn: FetchFn, ...middleware: FetchMiddleware[]): FetchFn;
 export function createFetchFn(...middleware: FetchMiddleware[]): FetchFn;
 export function createFetchFn(...args: any[]): FetchFn {
-  const { fetchLib, middlewares } = argsForCreateFetchFn(args);
+  const { fetch, middlewares } = argsForCreateFetchFn(args);
 
-  const fetchFn = async (url: string, init?: RequestInit | undefined): Promise<Response> => {
-    let fetchParams = { url, init: init ?? {} };
+  const fetchFn: FetchFn = async (input, init) => {
+    let fetchParams: FetchArgs = { input, init: init ?? {} };
 
     for (const middleware of middlewares) {
       if (typeof middleware.pre === 'function') {
         const result = await Promise.resolve(
           middleware.pre({
-            fetch: fetchLib,
-            ...fetchParams,
+            fetch,
+            url: fetchParams.input as string, // @deprecated (type mismatch, but this is backwards compatible behavior)
+            input: fetchParams.input,
+            init: fetchParams.init ?? {},
           })
         );
-        fetchParams = result ?? fetchParams;
+        if (result && 'url' in result) (result as unknown as FetchArgs).input = result.url;
+        fetchParams = (result as FetchArgs | void) ?? fetchParams;
       }
     }
 
-    let response = await fetchLib(fetchParams.url, fetchParams.init);
+    let response = await fetch(fetchParams.input, fetchParams.init);
 
     for (const middleware of middlewares) {
       if (typeof middleware.post === 'function') {
         const result = await Promise.resolve(
           middleware.post({
-            fetch: fetchLib,
-            url: fetchParams.url,
-            init: fetchParams.init,
+            fetch,
+            url: fetchParams.input as string, // @deprecated (type mismatch, but this is backwards compatible behavior)
+            input: fetchParams.input,
+            init: fetchParams.init ?? {},
             response: response?.clone() ?? response,
           })
         );
