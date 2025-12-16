@@ -1,10 +1,12 @@
 {
-  "version": "7.3.0",
+  "version": "7.3.1",
   "registry": "https://registry.npmjs.org/",
   "publishConfig": {
     "access": "public"
   },
   "changelogPreset": "conventionalcommits",
-  "packages": ["packages/*"],
+  "packages": [
+    "packages/*"
+  ],
   "$schema": "node_modules/lerna/schemas/lerna-schema.json"
 }

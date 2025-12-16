@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [7.3.1](https://github.com/stx-labs/stacks.js/compare/v7.3.0...v7.3.1) (2025-12-16)
+
+
+### Bug Fixes
+
+* add tenure change causes ([#1818](https://github.com/stx-labs/stacks.js/issues/1818)) ([66964af](https://github.com/stx-labs/stacks.js/commit/66964af5e60ec8b088e847a24711f096366fbca0))
+
+
+
 ## [7.3.0](https://github.com/hirosystems/stacks.js/compare/v7.2.0...v7.3.0) (2025-11-12)
 
 
