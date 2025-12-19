@@ -21,7 +21,7 @@ import { BufferCV } from '../types';
  * ```
  *
  * @see
- * {@link https://github.com/stx-labs/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
+ * {@link https://github.com/hirosystems/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
  */
 export const bufferCV = (buffer: Uint8Array): BufferCV => {
   // max size 1024 * 1024 = 1MB; https://github.com/stacks-network/stacks-core/blob/c50a93088d7c0261f1dbe31ab24b95028a038447/clarity/src/vm/types/mod.rs#L47
@@ -51,6 +51,6 @@ export const bufferCV = (buffer: Uint8Array): BufferCV => {
  *```
  *
  * @see
- * {@link https://github.com/stx-labs/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
+ * {@link https://github.com/hirosystems/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
  */
 export const bufferCVFromString = (str: string): BufferCV => bufferCV(utf8ToBytes(str));
