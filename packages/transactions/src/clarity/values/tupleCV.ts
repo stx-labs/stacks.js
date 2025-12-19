@@ -23,7 +23,7 @@ import { TupleCV, TupleData } from '../types';
  * ```
  *
  * @see
- * {@link https://github.com/stx-labs/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
+ * {@link https://github.com/hirosystems/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
  */
 export function tupleCV<T extends ClarityValue = ClarityValue>(
   data: TupleData<T>

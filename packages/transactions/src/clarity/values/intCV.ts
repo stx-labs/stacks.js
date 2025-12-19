@@ -30,7 +30,7 @@ const MIN_I128 = BigInt('-170141183460469231731687303715884105728'); // (-2 ** 1
  * ```
  *
  * @see
- * {@link https://github.com/stx-labs/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
+ * {@link https://github.com/hirosystems/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
  */
 export const intCV = (value: IntegerType): IntCV => {
   // ensure compatibility with twos-complement encoded hex-strings
@@ -66,7 +66,7 @@ export const intCV = (value: IntegerType): IntCV => {
  * ```
  *
  * @see
- * {@link https://github.com/stx-labs/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
+ * {@link https://github.com/hirosystems/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
  */
 export const uintCV = (value: IntegerType): UIntCV => {
   const bigInt = intToBigInt(value);
