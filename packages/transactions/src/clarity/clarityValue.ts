@@ -193,7 +193,7 @@ type ClarityTypetoValue = {
  * @example
  * ```ts
  * // some functions can return a generic `ClarityValue` type
- * let value = callReadOnlyFunction();
+ * let value = fetchCallReadOnlyFunction();
  * //  ^ ClarityValue
  * // use `isClarityType` to narrow down the type
  * assert(isClarityType(value, ClarityType.Int))
