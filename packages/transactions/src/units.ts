@@ -1,3 +1,5 @@
+import { IntegerType, intToBigInt } from '@stacks/common';
+
 export const MICROSTX_IN_STX = 1_000_000;
 
 /**
@@ -9,8 +11,8 @@ export const MICROSTX_IN_STX = 1_000_000;
  * microStxToStx(1000000n); // 1n
  * ```
  */
-export function microStxToStx(amountInMicroStx: number): number {
-  return amountInMicroStx / MICROSTX_IN_STX;
+export function microStxToStx(amountInMicroStx: IntegerType): number {
+  return Number(intToBigInt(amountInMicroStx)) / MICROSTX_IN_STX;
 }
 
 /**
@@ -22,6 +24,6 @@ export function microStxToStx(amountInMicroStx: number): number {
  * stxToMicroStx(1); // 1000000
  * ```
  */
-export function stxToMicroStx(amountInStx: number): number {
-  return amountInStx * MICROSTX_IN_STX;
+export function stxToMicroStx(amountInStx: IntegerType): number {
+  return Number(intToBigInt(amountInStx)) * MICROSTX_IN_STX;
 }
