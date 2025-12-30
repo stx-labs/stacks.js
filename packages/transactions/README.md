@@ -32,6 +32,20 @@ const privateKey = createStacksPrivateKey(key);
 ```
 
 ## STX Token Transfer Transaction
+> **Tip:** Always validate user input addresses to ensure they match the network (Mainnet vs Testnet).
+
+```typescript
+import { validateStacksAddress } from '@stacks/transactions';
+
+const recipient = 'ST3FGQ8...'; // Testnet address
+const validation = validateStacksAddress(recipient);
+
+if (validation.valid && validation.version === 'testnet') {
+  // Safe to proceed on Testnet
+} else {
+  throw new Error('Invalid address or wrong network');
+}
+```
 
 ```typescript
 import { makeSTXTokenTransfer, broadcastTransaction } from '@stacks/transactions';
