@@ -2,9 +2,9 @@ import fetchMock from 'jest-fetch-mock';
 import { fetchWrapper, getFetchOptions, setFetchOptions } from '../src/fetch';
 
 test('Verify fetch private options', async () => {
-  const defaultOptioins = getFetchOptions();
+  const defaultOptions = getFetchOptions();
 
-  expect(defaultOptioins).toEqual({
+  expect(defaultOptions).toEqual({
     referrerPolicy: 'origin',
     headers: {
       'x-hiro-product': 'stacksjs',
