@@ -196,6 +196,33 @@ export const validateStacksAddress = (address: string): boolean => {
   }
 };
 
+/**
+ * Validates a contract name according to Clarity naming rules.
+ * @param name - The contract name to validate
+ */
+export const validateContractName = (name: string): boolean => {
+  if (!name || name.length === 0) return false;
+  return isClarityName(name);
+};
+
+/**
+ * Validates a contract identifier in the format `<address>.<contract-name>`.
+ * @param contractId - The contract identifier to validate
+ */
+export const validateContractId = (contractId: string): boolean => {
+  if (!contractId || typeof contractId !== 'string') return false;
+
+  const dotIndex = contractId.indexOf('.');
+  if (dotIndex === -1) return false;
+
+  const address = contractId.substring(0, dotIndex);
+  const name = contractId.substring(dotIndex + 1);
+
+  if (name.includes('.')) return false;
+
+  return validateStacksAddress(address) && validateContractName(name);
+};
+
 /** @ignore */
 export function parseContractId(contractId: ContractIdString) {
   const [address, name] = contractId.split('.');
