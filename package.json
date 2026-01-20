@@ -73,6 +73,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hirosystems/stacks.js.git"
-  }
+    "url": "git+https://github.com/AdekunleBamz/stacks.js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AdekunleBamz/stacks.js/issues"
+  },
+  "homepage": "https://github.com/AdekunleBamz/stacks.js#readme"
 }
