@@ -18,15 +18,53 @@ export { verify as verifySignature } from '@noble/secp256k1';
  */
 export const randomBytes = (bytesLength?: number): Uint8Array => utils.randomBytes(bytesLength);
 
+/**
+ * Left-pads a hex string with a leading zero if the string has an odd length.
+ * This ensures the hex string represents complete bytes.
+ * @param hexString - The hex string to pad
+ * @returns The padded hex string with even length
+ * @example
+ * ```ts
+ * leftPadHex('abc'); // '0abc'
+ * leftPadHex('abcd'); // 'abcd'
+ * ```
+ */
 export const leftPadHex = (hexString: string): string =>
   hexString.length % 2 ? `0${hexString}` : hexString;
 
+/**
+ * Left-pads a hex string with zeros to reach the specified length.
+ * @param hexString - The hex string to pad
+ * @param length - The desired total length of the resulting string
+ * @returns The padded hex string
+ * @example
+ * ```ts
+ * leftPadHexToLength('ff', 4); // '00ff'
+ * ```
+ */
 export const leftPadHexToLength = (hexString: string, length: number): string =>
   hexString.padStart(length, '0');
 
+/**
+ * Right-pads a hex string with zeros to reach the specified length.
+ * @param hexString - The hex string to pad
+ * @param length - The desired total length of the resulting string
+ * @returns The padded hex string
+ * @example
+ * ```ts
+ * rightPadHexToLength('ff', 4); // 'ff00'
+ * ```
+ */
 export const rightPadHexToLength = (hexString: string, length: number): string =>
   hexString.padEnd(length, '0');
 
+/**
+ * Checks if a string exceeds the specified maximum length in bytes when
+ * encoded as UTF-8. Useful for validating Clarity string length constraints.
+ * @param string - The string to check
+ * @param maxLengthBytes - The maximum allowed byte length
+ * @returns `true` if the string exceeds the maximum byte length, `false` otherwise
+ */
 export const exceedsMaxLengthBytes = (string: string, maxLengthBytes: number): boolean =>
   string ? utf8ToBytes(string).length > maxLengthBytes : false;
 
@@ -43,6 +81,12 @@ export function omit<T, K extends keyof any>(obj: T, prop: K): Omit<T, K> {
   return clone;
 }
 
+/**
+ * Computes the HASH160 of the input bytes (SHA-256 followed by RIPEMD-160).
+ * This is the standard hash used for Bitcoin/Stacks address derivation.
+ * @param input - The bytes to hash
+ * @returns The 20-byte HASH160 digest
+ */
 export const hash160 = (input: Uint8Array): Uint8Array => {
   return ripemd160(sha256(input));
 };
@@ -136,6 +180,20 @@ export const hashP2WSH = (numSigs: number, pubKeys: Uint8Array[]): string => {
   return bytesToHex(redeemScriptHash);
 };
 
+/**
+ * Validates whether a string is a valid Clarity name.
+ * Clarity names must start with a letter (or be a special operator),
+ * can contain alphanumeric characters and special symbols, and must
+ * be less than 128 characters long.
+ * @param name - The string to validate as a Clarity name
+ * @returns `true` if the string is a valid Clarity name, `false` otherwise
+ * @example
+ * ```ts
+ * isClarityName('my-contract'); // true
+ * isClarityName(''); // false
+ * isClarityName('123invalid'); // false
+ * ```
+ */
 export function isClarityName(name: string) {
   const regex = /^[a-zA-Z]([a-zA-Z0-9]|[-_!?+<>=/*])*$|^[-+=/*]$|^[<>]=?$/;
   return regex.test(name) && name.length < 128;
@@ -187,6 +245,17 @@ export const parseReadOnlyResponse = (response: ReadOnlyFunctionResponse): Clari
   throw new Error(response.cause);
 };
 
+/**
+ * Validates whether a string is a valid Stacks (c32check) address.
+ * Uses `c32addressDecode` to verify the address format and checksum.
+ * @param address - The Stacks address string to validate (e.g., `SP...` or `ST...`)
+ * @returns `true` if the address is valid, `false` otherwise
+ * @example
+ * ```ts
+ * validateStacksAddress('SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7'); // true
+ * validateStacksAddress('invalid'); // false
+ * ```
+ */
 export const validateStacksAddress = (address: string): boolean => {
   try {
     c32addressDecode(address);
