@@ -1,4 +1,4 @@
-import { IntegerType, intToBigInt } from '@stacks/common';
+import { IntegerType } from '@stacks/common';
 import { ClarityValue } from './clarity';
 import {
   FungibleComparator,
@@ -11,7 +11,7 @@ import {
 import { AddressString, AssetString, ContractIdString } from './types';
 import { parseContractId, validateStacksAddress } from './utils';
 import { deserializePostConditionWire } from './wire';
-import { wireToPostCondition } from './postcondition';
+import { parsePostConditionAmount, wireToPostCondition } from './postcondition';
 
 /// `Pc.` Post Condition Builder
 //
@@ -188,7 +188,7 @@ class PartialPcFtWithCode {
       type: 'stx-postcondition',
       address: this.address,
       condition: this.code,
-      amount: intToBigInt(this.amount).toString(),
+      amount: parsePostConditionAmount(this.amount).toString(),
     };
   }
 
@@ -208,7 +208,7 @@ class PartialPcFtWithCode {
       type: 'ft-postcondition',
       address: this.address,
       condition: this.code,
-      amount: intToBigInt(this.amount).toString(),
+      amount: parsePostConditionAmount(this.amount).toString(),
       asset: `${contractId}::${tokenName}`,
     };
   }

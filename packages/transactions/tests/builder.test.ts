@@ -43,7 +43,6 @@ import {
   publicKeyIsCompressed,
   publicKeyToHex,
   serializePayloadBytes,
-  serializePostConditionWireBytes,
   serializePublicKeyBytes,
 } from '../src';
 import { BytesReader } from '../src/BytesReader';
@@ -2465,12 +2464,12 @@ test('Post-conditions with amount larger than 8 bytes throw an error', () => {
   };
 
   expect(() => {
-    serializePostConditionWireBytes(postConditionToWire(stxPc));
-  }).toThrowError('The post-condition amount may not be larger than 8 bytes');
+    postConditionToWire(stxPc);
+  }).toThrowError(/Post-condition amount must be between 0 and 18446744073709551615/);
 
   expect(() => {
-    serializePostConditionWireBytes(postConditionToWire(fungiblePc));
-  }).toThrowError('The post-condition amount may not be larger than 8 bytes');
+    postConditionToWire(fungiblePc);
+  }).toThrowError(/Post-condition amount must be between 0 and 18446744073709551615/);
 });
 
 test('StacksTransaction serialize/deserialize equality with an empty memo', async () => {

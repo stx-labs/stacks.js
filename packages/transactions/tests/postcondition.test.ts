@@ -445,3 +445,119 @@ describe('Pc.fromHex', () => {
     expect(() => Pc.fromHex(invalidHex)).toThrow();
   });
 });
+
+describe('post-condition amount u64 validation', () => {
+  const MAX_U64 = BigInt('18446744073709551615'); // 2^64 - 1
+  const OVER_U64 = MAX_U64 + 1n;
+  const address = 'STB44HYPYAT2BB2QE513NSP81HTMYWBJP02HPGK6';
+  const ftContract = 'STB44HYPYAT2BB2QE513NSP81HTMYWBJP02HPGK6.token';
+  const ftAsset = `${ftContract}::tok`;
+
+  describe('Pc builder rejects amounts exceeding u64', () => {
+    test('ustx rejects amount > u64 max', () => {
+      expect(() => Pc.principal(address).willSendEq(OVER_U64).ustx()).toThrow();
+    });
+
+    test('ft rejects amount > u64 max', () => {
+      expect(() => Pc.principal(address).willSendEq(OVER_U64).ft(ftContract, 'tok')).toThrow();
+    });
+
+    test('ustx rejects negative amount', () => {
+      expect(() => Pc.principal(address).willSendEq(-1n).ustx()).toThrow();
+    });
+
+    test('ft rejects negative amount', () => {
+      expect(() => Pc.principal(address).willSendEq(-1n).ft(ftContract, 'tok')).toThrow();
+    });
+
+    test('ustx accepts u64 max exactly', () => {
+      const pc = Pc.principal(address).willSendEq(MAX_U64).ustx();
+      expect(pc.amount).toBe(MAX_U64.toString());
+    });
+
+    test('ft accepts u64 max exactly', () => {
+      const pc = Pc.principal(address).willSendEq(MAX_U64).ft(ftContract, 'tok');
+      expect(pc.amount).toBe(MAX_U64.toString());
+    });
+  });
+
+  describe('postConditionToWire rejects amounts exceeding u64', () => {
+    test('STX post condition rejects amount > u64 max', () => {
+      expect(() =>
+        postConditionToWire({
+          type: 'stx-postcondition',
+          address,
+          condition: 'eq',
+          amount: OVER_U64,
+        })
+      ).toThrow();
+    });
+
+    test('FT post condition rejects amount > u64 max', () => {
+      expect(() =>
+        postConditionToWire({
+          type: 'ft-postcondition',
+          address,
+          condition: 'eq',
+          amount: OVER_U64,
+          asset: ftAsset as any,
+        })
+      ).toThrow();
+    });
+
+    test('STX post condition rejects negative amount', () => {
+      expect(() =>
+        postConditionToWire({
+          type: 'stx-postcondition',
+          address,
+          condition: 'eq',
+          amount: -1n,
+        })
+      ).toThrow();
+    });
+
+    test('FT post condition rejects negative amount', () => {
+      expect(() =>
+        postConditionToWire({
+          type: 'ft-postcondition',
+          address,
+          condition: 'eq',
+          amount: -1n,
+          asset: ftAsset as any,
+        })
+      ).toThrow();
+    });
+
+    test('STX post condition accepts u64 max exactly', () => {
+      const wire = postConditionToWire({
+        type: 'stx-postcondition',
+        address,
+        condition: 'eq',
+        amount: MAX_U64,
+      }) as STXPostConditionWire;
+      expect(wire.amount).toBe(MAX_U64);
+    });
+
+    test('FT post condition accepts u64 max exactly', () => {
+      const wire = postConditionToWire({
+        type: 'ft-postcondition',
+        address,
+        condition: 'eq',
+        amount: MAX_U64,
+        asset: ftAsset as any,
+      }) as FungiblePostConditionWire;
+      expect(wire.amount).toBe(MAX_U64);
+    });
+
+    test('STX post condition rejects string amount > u64 max', () => {
+      expect(() =>
+        postConditionToWire({
+          type: 'stx-postcondition',
+          address,
+          condition: 'eq',
+          amount: '18446744073709551616',
+        })
+      ).toThrow();
+    });
+  });
+});
