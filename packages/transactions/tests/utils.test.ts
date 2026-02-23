@@ -1,4 +1,71 @@
-import { validateStacksAddress } from '../src/utils';
+import { cloneDeep, validateStacksAddress } from '../src/utils';
+
+describe(cloneDeep.name, () => {
+  test('primitives and bigint pass through', () => {
+    expect(cloneDeep(null)).toBeNull();
+    expect(cloneDeep(42)).toBe(42);
+    expect(cloneDeep('hello')).toBe('hello');
+    expect(cloneDeep(true)).toBe(true);
+    expect(cloneDeep(100n)).toBe(100n);
+  });
+
+  test('Uint8Array is copied, not aliased', () => {
+    const original = new Uint8Array([1, 2, 3]);
+    const copy = cloneDeep(original);
+    expect(copy).toEqual(original);
+    expect(copy).not.toBe(original);
+    copy[0] = 99;
+    expect(original[0]).toBe(1);
+  });
+
+  test('arrays are deep copied', () => {
+    const original = [{ n: 1n }, { n: 2n }];
+    const copy = cloneDeep(original);
+    expect(copy).toEqual(original);
+    expect(copy).not.toBe(original);
+    copy[0].n = 99n;
+    expect(original[0].n).toBe(1n);
+  });
+
+  test('plain objects with bigint fields are deep copied', () => {
+    // mirrors SpendingCondition: { nonce, fee, signature }
+    const condition = { nonce: 0n, fee: 500n, signature: { data: 'aabbcc' } };
+    const copy = cloneDeep(condition);
+    expect(copy).toEqual(condition);
+    expect(copy).not.toBe(condition);
+    copy.fee = 999n;
+    copy.signature.data = 'ff';
+    expect(condition.fee).toBe(500n);
+    expect(condition.signature.data).toBe('aabbcc');
+  });
+
+  test('Uint8Array nested in object is copied, not aliased', () => {
+    // mirrors PublicKeyWire: { type, data: Uint8Array }
+    const key = { type: 4, data: new Uint8Array([0xde, 0xad]) };
+    const copy = cloneDeep(key);
+    expect(copy.data).toEqual(key.data);
+    expect(copy.data).not.toBe(key.data);
+    copy.data[0] = 0xff;
+    expect(key.data[0]).toBe(0xde);
+  });
+
+  test('class instance prototype is preserved', () => {
+    // mirrors StacksTransactionWire: class whose methods must work after clone
+    class Tx {
+      version = 1;
+      auth = { nonce: 0n };
+      txid() {
+        return `v${this.version}`;
+      }
+    }
+    const tx = new Tx();
+    const copy = cloneDeep(tx);
+    expect(copy).not.toBe(tx);
+    expect(copy.txid()).toBe('v1');
+    copy.auth.nonce = 99n;
+    expect(tx.auth.nonce).toBe(0n);
+  });
+});
 
 describe(validateStacksAddress.name, () => {
   test('it returns true for a legit address', () => {

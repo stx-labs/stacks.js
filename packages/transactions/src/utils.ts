@@ -4,7 +4,6 @@ import { sha512_256 } from '@noble/hashes/sha512';
 import { utils } from '@noble/secp256k1';
 import { bytesToHex, concatArray, concatBytes, utf8ToBytes } from '@stacks/common';
 import { c32addressDecode } from 'c32check';
-import lodashCloneDeep from 'lodash.clonedeep';
 import { ClarityValue, deserializeCV, serializeCV } from './clarity';
 import { ContractIdString } from './types';
 
@@ -32,7 +31,13 @@ export const exceedsMaxLengthBytes = (string: string, maxLengthBytes: number): b
 
 /** @internal @deprecated */
 export function cloneDeep<T>(obj: T): T {
-  return lodashCloneDeep(obj);
+  if (obj === null || typeof obj !== 'object') return obj;
+  if (obj instanceof Uint8Array) return new Uint8Array(obj) as unknown as T;
+  if (Array.isArray(obj)) return obj.map(cloneDeep) as unknown as T;
+  const o = obj as Record<string, unknown>;
+  const clone: Record<string, unknown> = Object.create(Object.getPrototypeOf(obj));
+  for (const key of Object.keys(o)) clone[key] = cloneDeep(o[key]);
+  return clone as T;
 }
 
 // todo: remove this function and instead delete param without clone (if possible)?
