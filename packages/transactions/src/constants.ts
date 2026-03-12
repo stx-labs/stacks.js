@@ -103,6 +103,8 @@ export enum PostConditionMode {
   Allow = 0x01,
   /** `Deny` — Do not allow unspecified transfers */
   Deny = 0x02,
+  /** `Originator` — Deny for the transaction origin, Allow for everyone else (SIP-040) */
+  Originator = 0x03,
 }
 
 /**
@@ -183,6 +185,8 @@ export enum FungibleConditionCode {
 export enum NonFungibleConditionCode {
   Sends = 0x10,
   DoesNotSend = 0x11,
+  /** `MaybeSent` — The NFT may or may not be sent; always passes (SIP-040) */
+  MaybeSent = 0x12,
 }
 
 /**

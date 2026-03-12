@@ -166,6 +166,15 @@ class PartialPcWithPrincipal {
   willNotSendAsset() {
     return new PartialPcNftWithCode(this.address, 'not-sent');
   }
+
+  /**
+   * ### NFT Post Condition
+   * A post-condition where the NFT `NonFungibleConditionCode.MaybeSent` (may or may not be sent).
+   * Finalize with the chained `.nft(…)` method.
+   */
+  willMaybeSendAsset() {
+    return new PartialPcNftWithCode(this.address, 'maybe-sent');
+  }
 }
 
 /**

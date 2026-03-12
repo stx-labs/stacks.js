@@ -25,7 +25,7 @@ export type FungiblePostCondition = {
   amount: string | bigint | number;
 };
 
-export type NonFungibleComparator = 'sent' | 'not-sent';
+export type NonFungibleComparator = 'sent' | 'not-sent' | 'maybe-sent';
 
 export type NonFungiblePostCondition = {
   type: 'nft-postcondition';
@@ -41,4 +41,4 @@ export type NonFungiblePostCondition = {
 
 export type PostCondition = StxPostCondition | FungiblePostCondition | NonFungiblePostCondition;
 
-export type PostConditionModeName = 'allow' | 'deny';
+export type PostConditionModeName = 'allow' | 'deny' | 'originator';

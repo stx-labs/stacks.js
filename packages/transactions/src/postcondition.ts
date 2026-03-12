@@ -47,6 +47,7 @@ enum PostConditionCodeWireType {
 
   sent = NonFungibleConditionCode.Sends,
   'not-sent' = NonFungibleConditionCode.DoesNotSend,
+  'maybe-sent' = NonFungibleConditionCode.MaybeSent,
 }
 
 export function postConditionToWire(postcondition: PostCondition): PostConditionWire {
@@ -178,6 +179,7 @@ export function postConditionModeFrom(
   if (typeof mode === 'number') return mode;
   if (mode === 'allow') return PostConditionMode.Allow;
   if (mode === 'deny') return PostConditionMode.Deny;
+  if (mode === 'originator') return PostConditionMode.Originator;
   throw new Error(`Invalid post condition mode: ${mode}`);
 }
 

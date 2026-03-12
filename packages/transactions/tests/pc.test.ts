@@ -242,6 +242,20 @@ describe('pc -- post condition builder', () => {
         } as NonFungiblePostCondition;
         expect(pc).toEqual(postCondition);
       });
+
+      test('will maybe send nft', () => {
+        const pc = Pc.principal(STANDARD_ADDRESS)
+          .willMaybeSendAsset()
+          .nft(`${NFT_CONTRACT_ADDRESS}.${NFT_CONTRACT_NAME}`, NFT_TOKEN_NAME, NFT_ASSET_ID);
+        const postCondition = {
+          type: 'nft-postcondition',
+          address: STANDARD_ADDRESS,
+          condition: 'maybe-sent',
+          asset: `${NFT_CONTRACT_ADDRESS}.${NFT_CONTRACT_NAME}::${NFT_TOKEN_NAME}`,
+          assetId: NFT_ASSET_ID,
+        } as NonFungiblePostCondition;
+        expect(pc).toEqual(postCondition);
+      });
     });
   });
 
@@ -403,6 +417,20 @@ describe('pc -- post condition builder', () => {
         } as NonFungiblePostCondition;
         expect(pc).toEqual(postCondition);
       });
+
+      test('will maybe send nft', () => {
+        const pc = Pc.principal(`${CONTRACT_ADDRESS}.${CONTRACT_NAME}`)
+          .willMaybeSendAsset()
+          .nft(`${NFT_CONTRACT_ADDRESS}.${NFT_CONTRACT_NAME}`, NFT_TOKEN_NAME, NFT_ASSET_ID);
+        const postCondition = {
+          type: 'nft-postcondition',
+          address: `${CONTRACT_ADDRESS}.${CONTRACT_NAME}`,
+          condition: 'maybe-sent',
+          asset: `${NFT_CONTRACT_ADDRESS}.${NFT_CONTRACT_NAME}::${NFT_TOKEN_NAME}`,
+          assetId: NFT_ASSET_ID,
+        } as NonFungiblePostCondition;
+        expect(pc).toEqual(postCondition);
+      });
     });
   });
 
@@ -414,6 +442,19 @@ describe('pc -- post condition builder', () => {
         address: 'origin',
         condition: 'eq',
         amount: '12345',
+      });
+    });
+
+    test('origin will maybe send nft', () => {
+      const pc = Pc.origin()
+        .willMaybeSendAsset()
+        .nft(`${NFT_CONTRACT_ADDRESS}.${NFT_CONTRACT_NAME}`, NFT_TOKEN_NAME, NFT_ASSET_ID);
+      expect(pc).toEqual({
+        type: 'nft-postcondition',
+        address: 'origin',
+        condition: 'maybe-sent',
+        asset: `${NFT_CONTRACT_ADDRESS}.${NFT_CONTRACT_NAME}::${NFT_TOKEN_NAME}`,
+        assetId: NFT_ASSET_ID,
       });
     });
   });
