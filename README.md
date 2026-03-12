@@ -7,6 +7,96 @@
 
 Welcome to the Stacks.js repository, your one-stop solution for working with the Stacks blockchain using JavaScript/TypeScript. This repository nests a collection of packages designed to provide you with the essential building blocks to work with the [Stacks blockchain](https://www.stacks.co/what-is-stacks) from JavaScript/TypeScript.
 
+## Quick Start
+
+Get started with Stacks.js in minutes:
+
+```bash
+# Install core packages
+npm install @stacks/transactions @stacks/network @stacks/wallet-sdk
+```
+
+### Send STX Tokens
+
+```typescript
+import { makeSTXTokenTransfer, broadcastTransaction } from '@stacks/transactions';
+import { StacksMainnet } from '@stacks/network';
+
+const transaction = await makeSTXTokenTransfer({
+  recipient: 'SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7',
+  amount: 1000000n, // 1 STX = 1,000,000 microSTX
+  senderKey: 'your-private-key-here',
+  network: new StacksMainnet(),
+});
+
+const result = await broadcastTransaction(transaction);
+console.log('Transaction ID:', result.txid);
+```
+
+### Deploy a Smart Contract
+
+```typescript
+import { makeContractDeploy, broadcastTransaction } from '@stacks/transactions';
+import { StacksMainnet } from '@stacks/network';
+
+const contractCode = `
+(define-data-var counter uint u0)
+(define-public (increment)
+  (begin
+    (var-set counter (+ (var-get counter) u1))
+    (ok (var-get counter))))
+(define-read-only (get-counter)
+  (var-get counter))
+`;
+
+const transaction = await makeContractDeploy({
+  contractName: 'my-counter',
+  codeBody: contractCode,
+  senderKey: 'your-private-key-here',
+  network: new StacksMainnet(),
+});
+
+const result = await broadcastTransaction(transaction);
+console.log('Contract deployed:', result.txid);
+```
+
+### Call a Smart Contract Function
+
+```typescript
+import { makeContractCall, broadcastTransaction, uintCV } from '@stacks/transactions';
+import { StacksMainnet } from '@stacks/network';
+
+const transaction = await makeContractCall({
+  contractAddress: 'SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7',
+  contractName: 'my-counter',
+  functionName: 'increment',
+  functionArgs: [],
+  senderKey: 'your-private-key-here',
+  network: new StacksMainnet(),
+});
+
+const result = await broadcastTransaction(transaction);
+console.log('Function called:', result.txid);
+```
+
+### Generate a Wallet
+
+```typescript
+import { generateWallet, getStxAddress } from '@stacks/wallet-sdk';
+
+const wallet = await generateWallet({
+  secretKey: 'your-24-word-mnemonic-phrase-here',
+  password: 'optional-password',
+});
+
+// Get address for the first account
+const address = getStxAddress({ 
+  account: wallet.accounts[0], 
+  transactionVersion: 22 // 22 for mainnet, 26 for testnet
+});
+console.log('Wallet address:', address);
+```
+
 ## Packages
 
 For installation instructions and usage guidelines, refer to the respective `README` in each package directory.
