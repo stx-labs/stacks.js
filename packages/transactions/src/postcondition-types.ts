@@ -25,6 +25,18 @@ export type FungiblePostCondition = {
   amount: string | bigint | number;
 };
 
+/**
+ * The type of non-fungible token post-condition comparison.
+ *
+ * - `sent`: The NFT MUST have been sent by the principal.
+ * - `not-sent`: The NFT MUST NOT have been sent by the principal.
+ * - `maybe-sent`: The NFT may or may not have been sent by the principal.
+ *
+ * **⚠︎ Attention**: `maybe-sent` is only enabled starting with [Epoch 3.4](https://forum.stacks.org/t/clarity-5-and-epoch-3-4/18659)
+ *
+ * @see [SIP-039](https://github.com/stacksgov/sips/pull/256/changes)
+ * @see [SIP-040](https://github.com/stacksgov/sips/pull/257/changes)
+ */
 export type NonFungibleComparator = 'sent' | 'not-sent' | 'maybe-sent';
 
 export type NonFungiblePostCondition = {
@@ -41,4 +53,17 @@ export type NonFungiblePostCondition = {
 
 export type PostCondition = StxPostCondition | FungiblePostCondition | NonFungiblePostCondition;
 
+/**
+ * Describes how unspecified asset transfers are handled in a transaction:
+ * - `'allow'`: Allow unspecified asset transfers.
+ * - `'deny'`: Do not allow unspecified asset transfers.
+ * - `'originator'`: Deny unspecified asset transfers for the transaction origin, allow for others (e.g. smart contracts).
+ *
+ * **Note**: Specified post-conditions are always checked, regardless of _mode_.
+ *
+ * **⚠︎ Attention**: `originator` is only enabled starting with [Epoch 3.4](https://forum.stacks.org/t/clarity-5-and-epoch-3-4/18659)
+ *
+ * @see {@link https://github.com/stacksgov/sips/pull/256/changes SIP-039}
+ * @see {@link https://github.com/stacksgov/sips/pull/257/changes SIP-040}
+ */
 export type PostConditionModeName = 'allow' | 'deny' | 'originator';

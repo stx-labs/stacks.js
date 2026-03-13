@@ -171,6 +171,11 @@ class PartialPcWithPrincipal {
    * ### NFT Post Condition
    * A post-condition where the NFT `NonFungibleConditionCode.MaybeSent` (may or may not be sent).
    * Finalize with the chained `.nft(…)` method.
+   *
+   * **⚠︎ Attention**: Enabled with [Epoch 3.4](https://forum.stacks.org/t/clarity-5-and-epoch-3-4/18659)
+   *
+   * @see [SIP-039](https://github.com/stacksgov/sips/pull/256/changes)
+   * @see [SIP-040](https://github.com/stacksgov/sips/pull/257/changes)
    */
   willMaybeSendAsset() {
     return new PartialPcNftWithCode(this.address, 'maybe-sent');
