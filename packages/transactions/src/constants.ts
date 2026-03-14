@@ -41,13 +41,18 @@ export enum PayloadType {
 
 /**
  * The version of Clarity used to deploy a smart contract.
- * Most methods will default to the latest available version of Clarity.
+ * Most methods will default to the latest available version of Clarity (at the time of package publishing).
+ *
+ * **⚠︎ Attention**: `Clarity5` enabled starting with [Epoch 3.4](https://forum.stacks.org/t/clarity-5-and-epoch-3-4/18659)
+ *
+ * @see [SIP-039](https://github.com/stacksgov/sips/pull/256/changes)
  */
 export enum ClarityVersion {
   Clarity1 = 1,
   Clarity2 = 2,
   Clarity3 = 3,
   Clarity4 = 4,
+  Clarity5 = 5,
 }
 
 /**
