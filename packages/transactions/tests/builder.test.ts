@@ -2971,3 +2971,26 @@ describe('multi-sig', () => {
     await expect(txMismatch).rejects.toThrow();
   });
 });
+
+test('Build transaction with originator post-condition mode', async () => {
+  const senderKey = 'edf9aee84d9b7abc145504dde6726c64f369d37ee34ded868fabd876c26570bc01';
+  const publicKey = privateKeyToPublic(senderKey);
+
+  const transaction = await makeUnsignedContractCall({
+    contractAddress: 'SP3FGQ8Z7JY9BWYZ5WM53E0M9NK7WHJF0691NZ159',
+    contractName: 'test-contract',
+    functionName: 'test-function',
+    functionArgs: [],
+    publicKey,
+    fee: 0,
+    nonce: 0,
+    network: STACKS_TESTNET,
+    postConditionMode: 'originator',
+  });
+
+  const serialized = transaction.serializeBytes();
+  const deserializedTx = deserializeTransaction(new BytesReader(serialized));
+
+  expect(deserializedTx.postConditionMode).toBe(PostConditionMode.Originator);
+  expect(deserializedTx.postConditionMode).toBe(0x03);
+});
