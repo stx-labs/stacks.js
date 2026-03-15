@@ -651,17 +651,17 @@ export const CLI_ARGS = {
       minItems: 1,
       maxItems: 1,
       help:
-        'Encrypt a 12-word backup phrase, which can be decrypted later with the ' +
-        '`decrypt_backup_phrase` command.  The password will be prompted if not given.\n' +
+        'Request free Stacks tokens (STX) from the testnet faucet for the specified address. ' +
+        'This command only works on testnet and is useful for testing and development purposes.\n' +
         '\n' +
         'Example:\n' +
         '\n' +
         '```console\n' +
-        '     $ # password is "asdf"\n' +
-        '     $ blockstack-cli encrypt_keychain "section amount spend resemble spray verify night immune tattoo best emotion parrot"\n' +
-        '     Enter password:\n' +
-        '     Enter password again:\n' +
-        '     M+DnBHYb1fgw4N3oZ+5uTEAua5bAWkgTW/SjmmBhGGbJtjOtqVV+RrLJEJOgT35hBon4WKdGWye2vTdgqDo7+HIobwJwkQtN2YF9g3zPsKk=' +
+        '     $ stx faucet ST3PWZ5M026785YW8YKKEH316DYPE4AC7NNTD9ADN\n' +
+        '     {\n' +
+        "       txid: '0xd33672dd4dbb0b88f733bc67b938359843123ca3be550ca87d487d067bd1b3c3',\n" +
+        "       transaction: 'https://explorer.hiro.so/txid/0xd33672dd4dbb0b88f733bc67b938359843123ca3be550ca87d487d067bd1b3c3?chain=testnet'\n" +
+        '     }\n' +
         '```\n',
       group: 'Key Management',
     },
