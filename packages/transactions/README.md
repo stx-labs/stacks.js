@@ -512,3 +512,20 @@ import { cvToJSON, hexToCV } from '@stacks/transactions';
 
 cvToJSON(hexToCV(tx.tx_result.hex));
 ```
+### Handling BigInt Serialization
+
+When working with Stacks.js, you will frequently encounter native JavaScript `BigInt` values (e.g., transaction fees, token balances). Standard `JSON.stringify()` cannot serialize `BigInt` values and will throw a `TypeError: Do not know how to serialize a BigInt`.
+
+To fix this, use a custom replacer function when stringifying your data:
+
+```typescript
+const data = {
+  amount: 12345n,
+  fee: 500n
+};
+
+// Use a replacer function to convert BigInt to string
+const jsonString = JSON.stringify(data, (key, value) =>
+  typeof value === 'bigint' ? value.toString() : value
+);
+// Result: '{"amount":"12345","fee":"500"}'
