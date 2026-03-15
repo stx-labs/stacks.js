@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
-## [7.3.1](https://github.com/stx-labs/stacks.js/compare/v7.3.0...v7.3.1) (2025-12-16)
+## [7.3.1](https://github.com/hirosystems/stacks.js/compare/v7.3.0...v7.3.1) (2025-12-16)
 
 **Note:** Version bump only for package @stacks/wallet-sdk
 
@@ -11,7 +11,7 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 
 
-## [7.3.0](https://github.com/stx-labs/stacks.js/compare/v7.2.0...v7.3.0) (2025-11-12)
+## [7.3.0](https://github.com/hirosystems/stacks.js/compare/v7.2.0...v7.3.0) (2025-11-12)
 
 **Note:** Version bump only for package @stacks/wallet-sdk
 

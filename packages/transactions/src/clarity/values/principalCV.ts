@@ -32,7 +32,7 @@ export function principalCV(principal: string): PrincipalCV {
  * ```
  *
  * @see
- * {@link https://github.com/stx-labs/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
+ * {@link https://github.com/hirosystems/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
  */
 export function standardPrincipalCV(addressString: string): StandardPrincipalCV {
   const addr = createAddress(addressString);
@@ -59,7 +59,7 @@ export function standardPrincipalCV(addressString: string): StandardPrincipalCV 
  * ```
  *
  * @see
- * {@link https://github.com/stx-labs/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
+ * {@link https://github.com/hirosystems/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
  */
 export function standardPrincipalCVFromAddress(address: AddressWire): StandardPrincipalCV {
   return { type: ClarityType.PrincipalStandard, value: addressToString(address) };
@@ -80,7 +80,7 @@ export function standardPrincipalCVFromAddress(address: AddressWire): StandardPr
  * ```
  *
  * @see
- * {@link https://github.com/stx-labs/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
+ * {@link https://github.com/hirosystems/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
  */
 export function contractPrincipalCV(
   addressString: string,
@@ -107,7 +107,7 @@ export function contractPrincipalCV(
  * ```
  *
  * @see
- * {@link https://github.com/stx-labs/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
+ * {@link https://github.com/hirosystems/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
  */
 export function contractPrincipalCVFromAddress(
   address: AddressWire,
