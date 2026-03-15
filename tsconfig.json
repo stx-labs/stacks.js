@@ -45,11 +45,11 @@
     "replaceText": {
       "replacements": [
         {
-          "pattern": "https://github.com/stx-labs/stacks.js/tree/main/packages/wallet-sdk",
+          "pattern": "https://github.com/hirosystems/stacks.js/tree/main/packages/wallet-sdk",
           "replace": "/modules/_stacks_wallet_sdk"
         },
         {
-          "pattern": "https://github.com/stx-labs/stacks.js/tree/main/packages/",
+          "pattern": "https://github.com/hirosystems/stacks.js/tree/main/packages/",
           "replace": "/modules/_stacks_"
         }
       ]

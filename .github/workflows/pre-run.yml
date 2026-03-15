@@ -23,4 +23,4 @@ jobs:
       is_not_fork: ${{ steps.check.outputs.is_not_fork }}
     steps:
       - id: check
-        run: echo "::set-output name=is_not_fork::${{ github.repository_owner == 'stx-labs' }}"
+        run: echo "::set-output name=is_not_fork::${{ github.repository_owner == 'hirosystems' }}"

@@ -16,7 +16,7 @@ import { NoneCV, OptionalCV } from '../types';
  * ```
  *
  * @see
- * {@link https://github.com/stx-labs/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
+ * {@link https://github.com/hirosystems/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
  */
 export function noneCV(): NoneCV {
   return { type: ClarityType.OptionalNone };
@@ -38,7 +38,7 @@ export function noneCV(): NoneCV {
  * ```
  *
  * @see
- * {@link https://github.com/stx-labs/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
+ * {@link https://github.com/hirosystems/stacks.js/blob/main/packages/transactions/tests/clarity.test.ts | clarity test cases for more examples}
  */
 export function someCV<T extends ClarityValue = ClarityValue>(value: T): OptionalCV<T> {
   return { type: ClarityType.OptionalSome, value };
