@@ -512,3 +512,9 @@ import { cvToJSON, hexToCV } from '@stacks/transactions';
 
 cvToJSON(hexToCV(tx.tx_result.hex));
 ```
+## Troubleshooting Common Errors
+
+| Error Message | Likely Cause | Solution |
+| :--- | :--- | :--- |
+| `mandatory-script-verify-flag-failed` | Bitcoin anchor transaction validation failed. | This often means your transaction payload is too large or the fee is insufficient for the Bitcoin network. Reduce payload size or increase the fee. |
+| `Conflict` / `Bad Request` | Nonce mismatch. | You are likely reusing a nonce or sending transactions too quickly. Ensure you are incrementing nonces correctly. |
