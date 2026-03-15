@@ -16,6 +16,7 @@ This library supports the creation of the following Stacks transaction types:
 2. Smart contract deploy
 3. Smart contract function call
 
+
 ## Key Generation
 
 ```typescript
@@ -30,6 +31,15 @@ const publicKey = getPublicKey(privateKey);
 const key = 'b244296d5907de9864c0b0d51f98a13c52890be0404e83f273144cd5b9960eed01';
 const privateKey = createStacksPrivateKey(key);
 ```
+## Message Signing Standards
+
+When implementing message signing (e.g., for authentication), prefer SIP-018 over legacy methods.
+
+| Standard | Prefix | Recommended For |
+| :--- | :--- | :--- |
+| **SIP-018 (Structured)** | `SIP018` | **New Apps** (Leather, Xverse compatible) |
+| Legacy | `\x17Stacks Signed Message...` | Legacy support only |
+
 
 ## STX Token Transfer Transaction
 
