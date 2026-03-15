@@ -18,9 +18,9 @@ import {
   deserializePayload,
   randomBytes,
   serializePayload,
-} from '../src';
-import { contractPrincipalCV, falseCV, standardPrincipalCV, trueCV } from '../src/clarity';
-import { serializeDeserialize } from './macros';
+} from '../../src';
+import { contractPrincipalCV, falseCV, standardPrincipalCV, trueCV } from '../../src/clarity';
+import { serializeDeserialize } from '../macros';
 
 test('STX token transfer payload serialization and deserialization', () => {
   const recipient = standardPrincipalCV('SP3FGQ8Z7JY9BWYZ5WM53E0M9NK7WHJF0691NZ159');
