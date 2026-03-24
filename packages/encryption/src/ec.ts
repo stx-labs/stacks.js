@@ -21,7 +21,7 @@ import {
   signatureRsvToVrs,
   utf8ToBytes,
 } from '@stacks/common';
-import { fromByteArray, toByteArray } from 'base64-js';
+import { base64 } from '@scure/base';
 import { createCipher } from './aesCipher';
 import { getPublicKeyFromPrivate } from './keys';
 import { encodeMessage, hashMessage } from './messageSignature';
@@ -386,7 +386,7 @@ export async function encryptECIES(
   if (!cipherTextEncoding || cipherTextEncoding === 'hex') {
     cipherTextString = bytesToHex(cipherText);
   } else if (cipherTextEncoding === 'base64') {
-    cipherTextString = fromByteArray(cipherText);
+    cipherTextString = base64.encode(cipherText);
   } else {
     throw new Error(`Unexpected cipherTextEncoding "${cipherTextEncoding}"`);
   }
@@ -437,7 +437,7 @@ export async function decryptECIES(
   if (!cipherObject.cipherTextEncoding || cipherObject.cipherTextEncoding === 'hex') {
     cipherTextBytes = hexToBytes(cipherObject.cipherText);
   } else if (cipherObject.cipherTextEncoding === 'base64') {
-    cipherTextBytes = toByteArray(cipherObject.cipherText);
+    cipherTextBytes = base64.decode(cipherObject.cipherText);
   } else {
     throw new Error(`Unexpected cipherTextEncoding "${cipherObject.cipherText}"`);
   }

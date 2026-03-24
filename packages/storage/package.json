@@ -20,11 +20,11 @@
     "typecheck:watch": "npm run typecheck -- --watch"
   },
   "dependencies": {
+    "@scure/base": "^1.2.6",
     "@stacks/auth": "^7.4.0",
     "@stacks/common": "^7.3.1",
     "@stacks/encryption": "^7.4.0",
     "@stacks/network": "^7.3.1",
-    "base64-js": "^1.5.1",
     "jsontokens": "^4.0.1"
   },
   "devDependencies": {

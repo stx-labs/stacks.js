@@ -16,7 +16,7 @@ import {
   verifySignature,
 } from '@stacks/encryption';
 import { createFetchFn } from '@stacks/common';
-import { toByteArray } from 'base64-js';
+import { base64 } from '@scure/base';
 import * as crypto from 'crypto';
 import fetchMock from 'jest-fetch-mock';
 import * as jsdom from 'jsdom';
@@ -2120,7 +2120,7 @@ test('connectToGaiaHub call makeLegacyAuthToken and verify token', async () => {
   // Get the base64 encoded token string
   const { token } = config;
   // Decode the base64 token and get the DER encoded signature value
-  const decodedToken = bytesToUtf8(toByteArray(token));
+  const decodedToken = bytesToUtf8(base64.decode(token));
   // Convert decodedToken string to json
   const payload = JSON.parse(decodedToken);
   // Get the hash of original payload for verification with noble-secp256k1
@@ -2137,7 +2137,7 @@ test('Verify compatibility of bitcoinjs DER encoding with noble-secp256k1', () =
   const encodedSignatureByBitcoinjs =
     'eyJwdWJsaWNrZXkiOiIwMjdkMjhmOTk1MWNlNDY1Mzg5NTFlMzY5N2M2MjU4OGE4N2YxZjFmMjk1ZGU0YTE0ZmRkNGM3ODBmYzUyY2ZlNjkiLCJzaWduYXR1cmUiOiIzMDQ0MDIyMDQ1NGE1NTMwYTBmOWY3YjdjMDMyOWE1MTFmOWJlNWVkZTFmNjU4ZDQ5MGY0OGRjNDE4YTgwYjNlNmJiNDJjZWIwMjIwMzVmMTRiMTU0NmE3NjkxNmJjOWJmNWNjMTk5YzQ3MTY5MGYzYmNiMWE2NmU3ZTQ5ZDZhNzY5NDJiM2FhZmM1ZiJ9';
   // Decode the base64 token and get the DER encoded signature value
-  const decodedToken = bytesToUtf8(toByteArray(encodedSignatureByBitcoinjs));
+  const decodedToken = bytesToUtf8(base64.decode(encodedSignatureByBitcoinjs));
   // Convert decodedToken string to json
   const payload = JSON.parse(decodedToken);
   // Get the hash of original payload for verification with noble-secp256k1
