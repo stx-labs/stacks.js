@@ -47,8 +47,7 @@ export interface NamedIdentityType {
   idAddress: string;
   privateKey: string;
   index: number;
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  profile: Object;
+  profile: object;
   profileUrl: string;
 }
 

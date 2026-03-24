@@ -85,7 +85,7 @@ export async function uploadToGaiaHub(
   const response = await fetchFn(`${hubConfig.server}/store/${hubConfig.address}/${filename}`, {
     method: 'POST',
     headers,
-    body: contents,
+    body: contents as BodyInit,
   });
   if (!response.ok) {
     throw await getBlockstackErrorFromResponse(
