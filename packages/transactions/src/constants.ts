@@ -41,13 +41,18 @@ export enum PayloadType {
 
 /**
  * The version of Clarity used to deploy a smart contract.
- * Most methods will default to the latest available version of Clarity.
+ * Most methods will default to the latest available version of Clarity (at the time of package publishing).
+ *
+ * **⚠︎ Attention**: `Clarity5` enabled starting with [Epoch 3.4](https://forum.stacks.org/t/clarity-5-and-epoch-3-4/18659)
+ *
+ * @see [SIP-039](https://github.com/stacksgov/sips/pull/256/changes)
  */
 export enum ClarityVersion {
   Clarity1 = 1,
   Clarity2 = 2,
   Clarity3 = 3,
   Clarity4 = 4,
+  Clarity5 = 5,
 }
 
 /**
@@ -103,6 +108,15 @@ export enum PostConditionMode {
   Allow = 0x01,
   /** `Deny` — Do not allow unspecified transfers */
   Deny = 0x02,
+  /**
+   * `Originator` (SIP-040) — Deny for the transaction origin, Allow for everyone else
+   *
+   * **⚠︎ Attention**: Enabled with [Epoch 3.4](https://forum.stacks.org/t/clarity-5-and-epoch-3-4/18659)
+   *
+   * @see [SIP-039](https://github.com/stacksgov/sips/pull/256/changes)
+   * @see [SIP-040](https://github.com/stacksgov/sips/pull/257/changes)
+   */
+  Originator = 0x03,
 }
 
 /**
@@ -183,6 +197,15 @@ export enum FungibleConditionCode {
 export enum NonFungibleConditionCode {
   Sends = 0x10,
   DoesNotSend = 0x11,
+  /**
+   * `MaybeSent` (SIP-040) — The NFT may or may not be sent; always passes
+   *
+   * **⚠︎ Attention**: Enabled with [Epoch 3.4](https://forum.stacks.org/t/clarity-5-and-epoch-3-4/18659)
+   *
+   * @see [SIP-039](https://github.com/stacksgov/sips/pull/256/changes)
+   * @see [SIP-040](https://github.com/stacksgov/sips/pull/257/changes)
+   */
+  MaybeSent = 0x12,
 }
 
 /**

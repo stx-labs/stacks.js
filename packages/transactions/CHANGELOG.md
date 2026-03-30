@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [7.4.0](https://github.com/stx-labs/stacks.js/compare/v7.3.1...v7.4.0) (2026-03-23)
+
+
+### Features
+
+* Add originator post-condition mode and maybe-sent condition ([#1841](https://github.com/stx-labs/stacks.js/issues/1841)) ([3c7d75c](https://github.com/stx-labs/stacks.js/commit/3c7d75c0835b9cd9fd1401e52087a0137c6b8696))
+
+
+### Bug Fixes
+
+* Add Clarity5 option (without defaulting to it yet) ([#1843](https://github.com/stx-labs/stacks.js/issues/1843)) ([b31202a](https://github.com/stx-labs/stacks.js/commit/b31202a4dd5029058db5c1861b7ca8a0af06a81c))
+* Throw on post-condition amounts not in valid range ([#1839](https://github.com/stx-labs/stacks.js/issues/1839)) ([6cbbdb7](https://github.com/stx-labs/stacks.js/commit/6cbbdb75a03ac1425b63ef194b77c655d4be5f9d))
+
+
+
 ## [7.3.1](https://github.com/stx-labs/stacks.js/compare/v7.3.0...v7.3.1) (2025-12-16)
 
 
