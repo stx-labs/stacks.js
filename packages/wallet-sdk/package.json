@@ -64,5 +64,9 @@
   "files": [
     "dist",
     "src"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stx-labs/stacks.js.git"
+  }
 }
