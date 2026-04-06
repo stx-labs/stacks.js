@@ -88,3 +88,8 @@ export * as Cl from './cl';
  * ```
  */
 export * as Pc from './pc';
+
+// todo: remove again
+export const testConst = (foo: string) => {
+  return 1 + foo;
+};
