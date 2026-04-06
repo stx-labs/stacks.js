@@ -806,6 +806,7 @@ const TEST_CASES_PARSER = [
     expected: Cl.address('SP2JXKMSH007NPYAQHKJPQMAQYAD90NQGTVJVQ02B.my-long-contract-name-99'),
   },
   // clTuple: colon and comma separators must still work
+  // todo: parser requires whitespace after colon, '{a:1,b:2,c:3}' should also work
   {
     input: '{a: 1,b: 2,c: 3}',
     expected: Cl.tuple({ a: Cl.int(1), b: Cl.int(2), c: Cl.int(3) }),
