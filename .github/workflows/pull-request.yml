@@ -37,7 +37,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - uses: janniks/ts-shape-action@5e66123dfb91cb4186f80dbe5df789aa954dc1d4
+      - uses: janniks/ts-shape-action@a737f60498598371127829644cf96f5ae2fe0d76
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
