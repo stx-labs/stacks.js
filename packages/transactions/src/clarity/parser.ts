@@ -334,6 +334,7 @@ function clValue(map: (combinator: Combinator) => Combinator = v => v) {
  */
 export function parse(clarityValueString: string): ClarityValue {
   const result = clValue(entire)(clarityValueString);
+  // eslint-disable-next-line @typescript-eslint/only-throw-error
   if (!result.success || !result.capture) throw 'Parse error'; // todo: we can add better error messages and add position tracking
   return result.capture as ClarityValue;
 }
@@ -345,6 +346,7 @@ export function internal_parseCommaSeparated(clarityValueString: string): Clarit
   );
   const result = combinator(clarityValueString);
   if (!result.success || !result.capture)
+    // eslint-disable-next-line @typescript-eslint/only-throw-error
     throw `Error trying to parse string: ${clarityValueString}`;
   return (result.capture as ListCV<ClarityValue>).value;
 }
