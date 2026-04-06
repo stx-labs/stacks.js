@@ -11,6 +11,10 @@ on:
 
   workflow_dispatch:
 
+permissions:
+  contents: write
+  pull-requests: write
+
 env:
   COMMIT_USER: Hiro DevOps
   COMMIT_EMAIL: 45208873+blockstack-devops@users.noreply.github.com
