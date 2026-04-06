@@ -40,7 +40,7 @@ test('getPublicKeyFromPrivate matches bitcoinjs', () => {
   const privateKey = makeECPrivateKey();
   const privateKeyCompressed = `${privateKey}01`;
 
-  // eslint-disable-next-line node/prefer-global/buffer
+
   const keyPairCompressed = ECPair.fromPrivateKey(Buffer.from(privateKey, 'hex'), {
     compressed: true,
   });
@@ -54,7 +54,7 @@ test('getPublicKeyFromPrivate matches bitcoinjs', () => {
 test('getPublicKeyFromPrivate with bitcoinjs private key matches bitcoinjs', () => {
   const privateKey = ECPair.makeRandom().privateKey!.toString('hex');
 
-  // eslint-disable-next-line node/prefer-global/buffer
+
   const bitcoinJsKeyPair = ECPair.fromPrivateKey(Buffer.from(privateKey, 'hex'), {
     compressed: true,
   });
@@ -68,7 +68,7 @@ test('publicKeyToBtcAddress matches bitcoinjs', () => {
 
   const publicKeyHash160 = hashRipemd160(hashSha256Sync(hexToBytes(publicKey)));
   const bitcoinJsAddress = address.toBase58Check(
-    // eslint-disable-next-line node/prefer-global/buffer
+  
     Buffer.from(publicKeyHash160),
     networks.bitcoin.pubKeyHash
   );

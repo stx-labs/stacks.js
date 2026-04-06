@@ -362,7 +362,6 @@ export async function encryptECIES(
 ): Promise<CipherObject> {
   const validity = isValidPublicKey(publicKey);
   if (!validity.result) {
-    // eslint-disable-next-line @typescript-eslint/only-throw-error
     throw validity;
   }
   const ephemeralPrivateKey = utils.randomPrivateKey();

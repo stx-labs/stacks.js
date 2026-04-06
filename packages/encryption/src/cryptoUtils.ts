@@ -14,7 +14,6 @@ export function isNodeCryptoAvailable<T>(
     if (!resolvedResult) {
       return false;
     }
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const cryptoModule = require('crypto') as typeof import('crypto');
     if (!cryptoModule) {
       return false;
@@ -43,7 +42,6 @@ export interface NodeCryptoLib {
 }
 
 // Make async for future version which may lazy load.
-// eslint-disable-next-line @typescript-eslint/require-await
 export async function getCryptoLib(): Promise<WebCryptoLib | NodeCryptoLib> {
   if (isSubtleCryptoAvailable()) {
     return {
@@ -52,7 +50,6 @@ export async function getCryptoLib(): Promise<WebCryptoLib | NodeCryptoLib> {
     };
   } else {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const nodeCrypto = require('crypto') as typeof import('crypto');
       return {
         lib: nodeCrypto,
