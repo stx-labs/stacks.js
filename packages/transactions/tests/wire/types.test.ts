@@ -15,11 +15,11 @@ import {
   createLPString,
   deserializeLPList,
   serializeStacksWireBytes,
-} from '../src';
-import { BytesReader } from '../src/BytesReader';
-import { AddressHashMode } from '../src/constants';
-import { createStacksPublicKey } from '../src/keys';
-import { serializeDeserialize } from './macros';
+} from '../../src';
+import { BytesReader } from '../../src/BytesReader';
+import { AddressHashMode } from '../../src/constants';
+import { createStacksPublicKey } from '../../src/keys';
+import { serializeDeserialize } from '../macros';
 
 test('Length prefixed strings serialization and deserialization', () => {
   const testString = 'test message string';
