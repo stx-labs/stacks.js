@@ -22,7 +22,7 @@
     "pack": "lerna run pack",
     "test": "lerna run test",
     "typecheck": "lerna run typecheck --parallel --no-bail --stream",
-    "prepare": "husky install .github/.husky"
+    "prepare": "husky .github/.husky"
   },
   "devDependencies": {
     "@changesets/cli": "^2.26.2",
@@ -42,7 +42,7 @@
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-import": "^2.28.0",
     "eslint-plugin-node": "^11.1.0",
-    "husky": "^8.0.3",
+    "husky": "^9.0.1",
     "inspectpack": "^4.7.1",
     "jest": "^29.6.2",
     "jest-fetch-mock": "^3.0.3",
