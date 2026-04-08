@@ -6,7 +6,8 @@ import {
   utf8ToBytes,
 } from '@stacks/common';
 import { ECPair, address, networks } from 'bitcoinjs-lib';
-import bs58check from 'bs58check';
+import { createBase58check } from '@scure/base';
+import { sha256 } from '@noble/hashes/sha256';
 import { SECP256K1Client } from 'jsontokens';
 import {
   base58Encode,
@@ -91,7 +92,7 @@ test('publicKeyToBtcAddress', () => {
 test('hashToBase58Check', () => {
   // originalHash from 'bs58Check' reference
   const originalHash = '5Kd3NBUAdUnhyzenEwVLy9pBKxSwXvE9FMPyR4UKZvpe6E3AgLr';
-  const decodedBase58Check = bs58check.decode(originalHash);
+  const decodedBase58Check = createBase58check(sha256).decode(originalHash);
 
   expect(base58Encode(decodedBase58Check)).toBe(originalHash);
 });

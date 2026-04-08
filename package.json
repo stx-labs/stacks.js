@@ -30,7 +30,6 @@
     "@commitlint/config-conventional": "^17.7.0",
     "@stacks/eslint-config": "^2.0.0",
     "@stacks/prettier-config": "^0.0.10",
-    "@types/bs58check": "^2.1.0",
     "@types/jest": "^29.5.3",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
