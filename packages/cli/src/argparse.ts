@@ -663,7 +663,7 @@ export const CLI_ARGS = {
         '       "transaction": "https://explorer.hiro.so/txid/0xd33672dd4dbb0b88f733bc67b938359843123ca3be550ca87d487d067bd1b3c3?chain=testnet"\n' +
         '     }\n' +
         '```\n',
-      group: 'Key Management',
+      group: 'Utilities',
     },
     gaia_dump_bucket: {
       type: 'array',
