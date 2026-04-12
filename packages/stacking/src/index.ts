@@ -407,14 +407,11 @@ export class StackingClient {
 
   /** Get reward cycle duration in seconds */
   async getCycleDuration(): Promise<number> {
-    const poxInfoPromise = this.getPoxInfo();
-    const targetBlockTimePromise = await this.getTargetBlockTime();
-
-    return Promise.all([poxInfoPromise, targetBlockTimePromise]).then(
-      ([poxInfo, targetBlockTime]) => {
-        return poxInfo.reward_cycle_length * targetBlockTime;
-      }
-    );
+    const [poxInfo, targetBlockTime] = await Promise.all([
+      this.getPoxInfo(),
+      this.getTargetBlockTime(),
+    ]);
+    return poxInfo.reward_cycle_length * targetBlockTime;
   }
 
   /** Get the total burnchain rewards total for the set address */

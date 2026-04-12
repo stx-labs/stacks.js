@@ -68,13 +68,13 @@ export class WebCryptoPbkdf2 implements Pbkdf2 {
 
     const passwordBytes = utf8ToBytes(password);
     try {
-      const key = await this.subtleCrypto.importKey('raw', passwordBytes, 'PBKDF2', false, [
+      const key = await this.subtleCrypto.importKey('raw', passwordBytes as any, 'PBKDF2', false, [
         'deriveBits',
       ]);
       const result = await this.subtleCrypto.deriveBits(
         {
           name: 'PBKDF2',
-          salt,
+          salt: salt as any,
           iterations,
           hash: { name: algo },
         },
@@ -131,10 +131,10 @@ export class WebCryptoPartialPbkdf2 implements Pbkdf2 {
 
     for (let i = 1; i <= l; i++) {
       writeUInt32BE(block1, i, saltLength);
-      const T = await hmacDigest(passwordBytes, block1);
+      const T = await hmacDigest(passwordBytes as any, block1 as any);
       let U = T;
       for (let j = 1; j < iterations; j++) {
-        U = await hmacDigest(passwordBytes, U);
+        U = await hmacDigest(passwordBytes as any, U as any);
         for (let k = 0; k < hLen; k++) {
           T[k] ^= U[k];
         }

@@ -157,7 +157,7 @@ export function createFetchFn(...middleware: FetchMiddleware[]): FetchFn;
 export function createFetchFn(...args: any[]): FetchFn {
   const { fetchLib, middlewares } = argsForCreateFetchFn(args);
 
-  const fetchFn = async (url: string, init?: RequestInit | undefined): Promise<Response> => {
+  const fetchFn = async (url: string, init?: RequestInit): Promise<Response> => {
     let fetchParams = { url, init: init ?? {} };
 
     for (const middleware of middlewares) {

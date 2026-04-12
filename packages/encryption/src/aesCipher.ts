@@ -85,10 +85,18 @@ export class WebCryptoAesCipher implements AesCipher {
     } else {
       throw new Error(`Unsupported cipher algorithm "${algorithm}"`);
     }
-    const cryptoKey = await this.subtleCrypto.importKey('raw', key, { name: algo, length }, false, [
-      'encrypt',
-    ]);
-    const result = await this.subtleCrypto.encrypt({ name: algo, iv }, cryptoKey, data);
+    const cryptoKey = await this.subtleCrypto.importKey(
+      'raw',
+      key as any,
+      { name: algo, length },
+      false,
+      ['encrypt']
+    );
+    const result = await this.subtleCrypto.encrypt(
+      { name: algo, iv: iv as any },
+      cryptoKey,
+      data as any
+    );
     return new Uint8Array(result);
   }
 
@@ -109,10 +117,18 @@ export class WebCryptoAesCipher implements AesCipher {
     } else {
       throw new Error(`Unsupported cipher algorithm "${algorithm}"`);
     }
-    const cryptoKey = await this.subtleCrypto.importKey('raw', key, { name: algo, length }, false, [
-      'decrypt',
-    ]);
-    const result = await this.subtleCrypto.decrypt({ name: algo, iv }, cryptoKey, data);
+    const cryptoKey = await this.subtleCrypto.importKey(
+      'raw',
+      key as any,
+      { name: algo, length },
+      false,
+      ['decrypt']
+    );
+    const result = await this.subtleCrypto.decrypt(
+      { name: algo, iv: iv as any },
+      cryptoKey,
+      data as any
+    );
     return new Uint8Array(result);
   }
 }

@@ -1,3 +1,4 @@
+import { IntegerType, intToBigInt } from '@stacks/common';
 import {
   FungibleConditionCode,
   NonFungibleConditionCode,
@@ -23,6 +24,19 @@ import {
   serializePostConditionWire,
 } from './wire';
 
+const MAX_U64 = BigInt('18446744073709551615'); // 2^64 - 1
+
+/** @internal Parses a post-condition amount to bigint, throws if outside u64 range. */
+export function parsePostConditionAmount(amount: IntegerType): bigint {
+  const value = intToBigInt(amount);
+  if (value < 0n || value > MAX_U64) {
+    throw new RangeError(
+      `Post-condition amount must be between 0 and ${MAX_U64} (u64 max), received: ${value}`
+    );
+  }
+  return value;
+}
+
 /** @internal */
 enum PostConditionCodeWireType {
   eq = FungibleConditionCode.Equal,
@@ -33,6 +47,7 @@ enum PostConditionCodeWireType {
 
   sent = NonFungibleConditionCode.Sends,
   'not-sent' = NonFungibleConditionCode.DoesNotSend,
+  'maybe-sent' = NonFungibleConditionCode.MaybeSent,
 }
 
 export function postConditionToWire(postcondition: PostCondition): PostConditionWire {
@@ -46,7 +61,7 @@ export function postConditionToWire(postcondition: PostCondition): PostCondition
             ? { type: StacksWireType.Principal, prefix: PostConditionPrincipalId.Origin }
             : parsePrincipalString(postcondition.address),
         conditionCode: conditionTypeToByte(postcondition.condition) as FungibleConditionCode,
-        amount: BigInt(postcondition.amount),
+        amount: parsePostConditionAmount(postcondition.amount),
       };
     case 'ft-postcondition':
       return {
@@ -57,7 +72,7 @@ export function postConditionToWire(postcondition: PostCondition): PostCondition
             ? { type: StacksWireType.Principal, prefix: PostConditionPrincipalId.Origin }
             : parsePrincipalString(postcondition.address),
         conditionCode: conditionTypeToByte(postcondition.condition) as FungibleConditionCode,
-        amount: BigInt(postcondition.amount),
+        amount: parsePostConditionAmount(postcondition.amount),
         asset: parseAssetString(postcondition.asset),
       };
     case 'nft-postcondition':
@@ -164,6 +179,7 @@ export function postConditionModeFrom(
   if (typeof mode === 'number') return mode;
   if (mode === 'allow') return PostConditionMode.Allow;
   if (mode === 'deny') return PostConditionMode.Deny;
+  if (mode === 'originator') return PostConditionMode.Originator;
   throw new Error(`Invalid post condition mode: ${mode}`);
 }
 

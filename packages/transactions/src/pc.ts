@@ -1,4 +1,4 @@
-import { IntegerType, intToBigInt } from '@stacks/common';
+import { IntegerType } from '@stacks/common';
 import { ClarityValue } from './clarity';
 import {
   FungibleComparator,
@@ -11,7 +11,7 @@ import {
 import { AddressString, AssetString, ContractIdString } from './types';
 import { parseContractId, validateStacksAddress } from './utils';
 import { deserializePostConditionWire } from './wire';
-import { wireToPostCondition } from './postcondition';
+import { parsePostConditionAmount, wireToPostCondition } from './postcondition';
 
 /// `Pc.` Post Condition Builder
 //
@@ -166,6 +166,20 @@ class PartialPcWithPrincipal {
   willNotSendAsset() {
     return new PartialPcNftWithCode(this.address, 'not-sent');
   }
+
+  /**
+   * ### NFT Post Condition
+   * A post-condition where the NFT `NonFungibleConditionCode.MaybeSent` (may or may not be sent).
+   * Finalize with the chained `.nft(…)` method.
+   *
+   * **⚠︎ Attention**: Enabled with [Epoch 3.4](https://forum.stacks.org/t/clarity-5-and-epoch-3-4/18659)
+   *
+   * @see [SIP-039](https://github.com/stacksgov/sips/pull/256/changes)
+   * @see [SIP-040](https://github.com/stacksgov/sips/pull/257/changes)
+   */
+  willMaybeSendAsset() {
+    return new PartialPcNftWithCode(this.address, 'maybe-sent');
+  }
 }
 
 /**
@@ -188,7 +202,7 @@ class PartialPcFtWithCode {
       type: 'stx-postcondition',
       address: this.address,
       condition: this.code,
-      amount: intToBigInt(this.amount).toString(),
+      amount: parsePostConditionAmount(this.amount).toString(),
     };
   }
 
@@ -208,7 +222,7 @@ class PartialPcFtWithCode {
       type: 'ft-postcondition',
       address: this.address,
       condition: this.code,
-      amount: intToBigInt(this.amount).toString(),
+      amount: parsePostConditionAmount(this.amount).toString(),
       asset: `${contractId}::${tokenName}`,
     };
   }
