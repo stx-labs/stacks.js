@@ -29,7 +29,7 @@ import {
 
 import { StacksNetwork, TransactionVersion } from '@stacks/network';
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const ZoneFile = require('zone-file');
 
 import {
@@ -383,8 +383,7 @@ export function hash160(buff: Buffer): Buffer {
 /*
  * Sign a profile into a JWT
  */
-// eslint-disable-next-line @typescript-eslint/ban-types
-export function makeProfileJWT(profileData: Object, privateKey: string): string {
+export function makeProfileJWT(profileData: object, privateKey: string): string {
   const signedToken = blockstack.signProfileToken(profileData, privateKey);
   const wrappedToken = blockstack.wrapProfileToken(signedToken);
   const tokenRecords = [wrappedToken];

@@ -1,7 +1,7 @@
 import { asciiToBytes, bytesToUtf8, concatBytes, hexToBytes, utf8ToBytes } from '@stacks/common';
 import assert from 'assert';
-import { Cl, deserializeAddress } from '../src';
-import { BytesReader } from '../src/BytesReader';
+import { Cl, deserializeAddress } from '../../src';
+import { BytesReader } from '../../src/BytesReader';
 import {
   BufferCV,
   ClarityType,
@@ -37,15 +37,15 @@ import {
   trueCV,
   tupleCV,
   uintCV,
-} from '../src/clarity';
+} from '../../src/clarity';
 import {
   cvToJSON,
   cvToString,
   cvToValue,
   getCVTypeString,
   isClarityType,
-} from '../src/clarity/clarityValue';
-import { parse } from '../src/clarity/parser';
+} from '../../src/clarity/clarityValue';
+import { parse } from '../../src/clarity/parser';
 
 const ADDRESS = 'SP2JXKMSH007NPYAQHKJPQMAQYAD90NQGTVJVQ02B';
 

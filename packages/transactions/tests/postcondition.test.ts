@@ -13,12 +13,14 @@ import { BufferCV, bufferCVFromString } from '../src/clarity';
 import {
   FungibleConditionCode,
   NonFungibleConditionCode,
+  PostConditionMode,
   PostConditionPrincipalId,
   PostConditionType,
 } from '../src/constants';
 import {
   conditionByteToType,
   conditionTypeToByte,
+  postConditionModeFrom,
   postConditionToHex,
   postConditionToWire,
   wireToPostCondition,
@@ -131,6 +133,44 @@ test('Non-fungible post condition serialization and deserialization', () => {
   expect(bytesToUtf8(hexToBytes((deserialized.assetName as BufferCV).value))).toEqual(nftAssetName);
 });
 
+test('Non-fungible post condition with maybe-sent serialization and deserialization', () => {
+  const postConditionType = PostConditionType.NonFungible;
+
+  const address = 'SP2JXKMSH007NPYAQHKJPQMAQYAD90NQGTVJVQ02B';
+  const contractName = 'contract-name';
+
+  const conditionCode = NonFungibleConditionCode.MaybeSent;
+
+  const assetAddress = 'SP2ZP4GJDZJ1FDHTQ963F0292PE9J9752TZJ68F21';
+  const assetContractName = 'contract_name';
+  const assetName = 'asset_name';
+
+  const nftAssetName = 'nft_asset_name';
+
+  const postCondition = postConditionToWire({
+    type: 'nft-postcondition',
+    address: `${address}.${contractName}`,
+    condition: 'maybe-sent',
+    asset: `${assetAddress}.${assetContractName}::${assetName}`,
+    assetId: bufferCVFromString(nftAssetName),
+  });
+
+  const deserialized = serializeDeserialize(
+    postCondition,
+    StacksWireType.PostCondition
+  ) as NonFungiblePostConditionWire;
+  expect(deserialized.conditionType).toBe(postConditionType);
+  expect(deserialized.principal.prefix).toBe(PostConditionPrincipalId.Contract);
+  if (!('address' in deserialized.principal)) throw TypeError;
+  expect(addressToString(deserialized.principal.address)).toBe(address);
+  expect((deserialized.principal as ContractPrincipalWire).contractName.content).toBe(contractName);
+  expect(deserialized.conditionCode).toBe(conditionCode);
+  expect(addressToString(deserialized.asset.address)).toBe(assetAddress);
+  expect(deserialized.asset.contractName.content).toBe(assetContractName);
+  expect(deserialized.asset.assetName.content).toBe(assetName);
+  expect(bytesToUtf8(hexToBytes((deserialized.assetName as BufferCV).value))).toEqual(nftAssetName);
+});
+
 test('Non-fungible post condition with string IDs serialization and deserialization', () => {
   const postConditionType = PostConditionType.NonFungible;
 
@@ -202,11 +242,40 @@ describe(postConditionToHex.name, () => {
       expected:
         '02021a164247d6f2b425ac5771423ae6c80c754f7172b01a164247d6f2b425ac5771423ae6c80c754f7172b005746f6b656e03746f6b010000000000000000000000000000002011',
     },
+    {
+      repr: {
+        type: 'nft-postcondition',
+        address: 'STB44HYPYAT2BB2QE513NSP81HTMYWBJP02HPGK6',
+        condition: 'maybe-sent',
+        asset: 'STB44HYPYAT2BB2QE513NSP81HTMYWBJP02HPGK6.token::tok',
+        assetId: Cl.uint(32),
+      } as const,
+      expected:
+        '02021a164247d6f2b425ac5771423ae6c80c754f7172b01a164247d6f2b425ac5771423ae6c80c754f7172b005746f6b656e03746f6b010000000000000000000000000000002012',
+    },
   ];
 
   test.each(TEST_CASES)('postConditionToHex %p', ({ repr, expected }) => {
     const hex = postConditionToHex(repr);
     expect(hex).toBe(expected);
+  });
+});
+
+describe('postConditionModeFrom', () => {
+  test('converts originator string to PostConditionMode.Originator', () => {
+    expect(postConditionModeFrom('originator')).toBe(PostConditionMode.Originator);
+  });
+
+  test('converts allow string to PostConditionMode.Allow', () => {
+    expect(postConditionModeFrom('allow')).toBe(PostConditionMode.Allow);
+  });
+
+  test('converts deny string to PostConditionMode.Deny', () => {
+    expect(postConditionModeFrom('deny')).toBe(PostConditionMode.Deny);
+  });
+
+  test('passes through numeric enum values', () => {
+    expect(postConditionModeFrom(PostConditionMode.Originator)).toBe(PostConditionMode.Originator);
   });
 });
 
@@ -322,6 +391,7 @@ describe('conditionTypeToByte', () => {
   const nonFungibleTestCases = [
     { name: 'sent', expectedCode: NonFungibleConditionCode.Sends },
     { name: 'not-sent', expectedCode: NonFungibleConditionCode.DoesNotSend },
+    { name: 'maybe-sent', expectedCode: NonFungibleConditionCode.MaybeSent },
   ] as const;
 
   test.each(fungibleTestCases)(
@@ -353,6 +423,7 @@ describe('conditionBytesToType', () => {
   const nonFungibleTestCases = [
     { code: NonFungibleConditionCode.Sends, expectedName: 'sent' },
     { code: NonFungibleConditionCode.DoesNotSend, expectedName: 'not-sent' },
+    { code: NonFungibleConditionCode.MaybeSent, expectedName: 'maybe-sent' },
   ] as const;
 
   test.each(fungibleTestCases)(
@@ -443,5 +514,196 @@ describe('Pc.fromHex', () => {
   test('rejects invalid hex with descriptive error', () => {
     const invalidHex = 'not-a-valid-hex-string';
     expect(() => Pc.fromHex(invalidHex)).toThrow();
+  });
+});
+
+describe('post-condition amount u64 validation', () => {
+  const MAX_U64 = BigInt('18446744073709551615'); // 2^64 - 1
+  const OVER_U64 = MAX_U64 + 1n;
+  const address = 'STB44HYPYAT2BB2QE513NSP81HTMYWBJP02HPGK6';
+  const ftContract = 'STB44HYPYAT2BB2QE513NSP81HTMYWBJP02HPGK6.token';
+  const ftAsset = `${ftContract}::tok`;
+
+  describe('Pc builder rejects amounts exceeding u64', () => {
+    test('ustx rejects amount > u64 max', () => {
+      expect(() => Pc.principal(address).willSendEq(OVER_U64).ustx()).toThrow();
+    });
+
+    test('ft rejects amount > u64 max', () => {
+      expect(() => Pc.principal(address).willSendEq(OVER_U64).ft(ftContract, 'tok')).toThrow();
+    });
+
+    test('ustx rejects negative amount', () => {
+      expect(() => Pc.principal(address).willSendEq(-1n).ustx()).toThrow();
+    });
+
+    test('ft rejects negative amount', () => {
+      expect(() => Pc.principal(address).willSendEq(-1n).ft(ftContract, 'tok')).toThrow();
+    });
+
+    test('ustx accepts u64 max exactly', () => {
+      const pc = Pc.principal(address).willSendEq(MAX_U64).ustx();
+      expect(pc.amount).toBe(MAX_U64.toString());
+    });
+
+    test('ft accepts u64 max exactly', () => {
+      const pc = Pc.principal(address).willSendEq(MAX_U64).ft(ftContract, 'tok');
+      expect(pc.amount).toBe(MAX_U64.toString());
+    });
+  });
+
+  describe('postConditionToWire rejects amounts exceeding u64', () => {
+    test('STX post condition rejects amount > u64 max', () => {
+      expect(() =>
+        postConditionToWire({
+          type: 'stx-postcondition',
+          address,
+          condition: 'eq',
+          amount: OVER_U64,
+        })
+      ).toThrow();
+    });
+
+    test('FT post condition rejects amount > u64 max', () => {
+      expect(() =>
+        postConditionToWire({
+          type: 'ft-postcondition',
+          address,
+          condition: 'eq',
+          amount: OVER_U64,
+          asset: ftAsset as any,
+        })
+      ).toThrow();
+    });
+
+    test('STX post condition rejects negative amount', () => {
+      expect(() =>
+        postConditionToWire({
+          type: 'stx-postcondition',
+          address,
+          condition: 'eq',
+          amount: -1n,
+        })
+      ).toThrow();
+    });
+
+    test('FT post condition rejects negative amount', () => {
+      expect(() =>
+        postConditionToWire({
+          type: 'ft-postcondition',
+          address,
+          condition: 'eq',
+          amount: -1n,
+          asset: ftAsset as any,
+        })
+      ).toThrow();
+    });
+
+    test('STX post condition accepts u64 max exactly', () => {
+      const wire = postConditionToWire({
+        type: 'stx-postcondition',
+        address,
+        condition: 'eq',
+        amount: MAX_U64,
+      }) as STXPostConditionWire;
+      expect(wire.amount).toBe(MAX_U64);
+    });
+
+    test('FT post condition accepts u64 max exactly', () => {
+      const wire = postConditionToWire({
+        type: 'ft-postcondition',
+        address,
+        condition: 'eq',
+        amount: MAX_U64,
+        asset: ftAsset as any,
+      }) as FungiblePostConditionWire;
+      expect(wire.amount).toBe(MAX_U64);
+    });
+
+    test('STX post condition rejects string amount > u64 max', () => {
+      expect(() =>
+        postConditionToWire({
+          type: 'stx-postcondition',
+          address,
+          condition: 'eq',
+          amount: '18446744073709551616',
+        })
+      ).toThrow();
+    });
+  });
+});
+
+describe('SIP-040 stacks-core test vectors', () => {
+  test('Vector 1: Originator mode + STX SentEq post-condition', () => {
+    const txHex =
+      '80800000000400143e543243dfcd8c02a12ad7ea371bd07bc91df90000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003030000000100010100000000000003e801047465737400000009286f6b207472756529';
+    const tx = deserializeTransaction(txHex);
+    expect(tx.postConditionMode).toBe(PostConditionMode.Originator);
+    expect(tx.postConditions.values).toHaveLength(1);
+    const pc = wireToPostCondition(tx.postConditions.values[0]);
+    expect(pc.type).toBe('stx-postcondition');
+    expect(pc.address).toBe('origin');
+    expect(pc.condition).toBe('eq');
+    expect((pc as StxPostCondition).amount).toBe('1000');
+  });
+
+  test('Vector 2: Originator mode + Fungible SentGe post-condition', () => {
+    const txHex =
+      '80800000000400143e543243dfcd8c02a12ad7ea371bd07bc91df900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030300000001010101aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0d746573742d636f6e747261637408746573742d6e667403000000000000138801047465737400000009286f6b207472756529';
+    const tx = deserializeTransaction(txHex);
+    expect(tx.postConditionMode).toBe(PostConditionMode.Originator);
+    const pc = wireToPostCondition(tx.postConditions.values[0]);
+    expect(pc.type).toBe('ft-postcondition');
+    expect(pc.address).toBe('origin');
+    expect(pc.condition).toBe('gte');
+  });
+
+  test('Vector 3: Originator mode + NFT MaybeSent post-condition', () => {
+    const txHex =
+      '80800000000400143e543243dfcd8c02a12ad7ea371bd07bc91df900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030300000001020101aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0d746573742d636f6e747261637408746573742d6e667401000000000000000000000000000000011201047465737400000009286f6b207472756529';
+    const tx = deserializeTransaction(txHex);
+    expect(tx.postConditionMode).toBe(PostConditionMode.Originator);
+    const pc = wireToPostCondition(tx.postConditions.values[0]);
+    expect(pc.type).toBe('nft-postcondition');
+    expect(pc.address).toBe('origin');
+    expect(pc.condition).toBe('maybe-sent');
+  });
+
+  test('Vector 4: Deny mode + NFT MaybeSent post-condition', () => {
+    const txHex =
+      '80800000000400143e543243dfcd8c02a12ad7ea371bd07bc91df900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030200000001020101aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0d746573742d636f6e747261637408746573742d6e667401000000000000000000000000000000011201047465737400000009286f6b207472756529';
+    const tx = deserializeTransaction(txHex);
+    expect(tx.postConditionMode).toBe(PostConditionMode.Deny);
+    const pc = wireToPostCondition(tx.postConditions.values[0]);
+    expect(pc.type).toBe('nft-postcondition');
+    expect(pc.condition).toBe('maybe-sent');
+  });
+
+  test('Vector 5: Originator mode + multiple post-conditions (STX + NFT MaybeSent)', () => {
+    const txHex =
+      '80800000000400143e543243dfcd8c02a12ad7ea371bd07bc91df90000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003030000000200010500000000000007d0020101aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0d746573742d636f6e747261637408746573742d6e6674010000000000000000000000000000002a1201047465737400000009286f6b207472756529';
+    const tx = deserializeTransaction(txHex);
+    expect(tx.postConditionMode).toBe(PostConditionMode.Originator);
+    expect(tx.postConditions.values).toHaveLength(2);
+    const pc0 = wireToPostCondition(tx.postConditions.values[0]);
+    expect(pc0.type).toBe('stx-postcondition');
+    expect(pc0.address).toBe('origin');
+    expect(pc0.condition).toBe('lte');
+    expect((pc0 as StxPostCondition).amount).toBe('2000');
+    const pc1 = wireToPostCondition(tx.postConditions.values[1]);
+    expect(pc1.type).toBe('nft-postcondition');
+    expect(pc1.address).toBe('origin');
+    expect(pc1.condition).toBe('maybe-sent');
+  });
+
+  test('Vector 6: Standalone MaybeSent NFT post-condition bytes', () => {
+    const hex =
+      '020101aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0d746573742d636f6e747261637408746573742d6e6674010000000000000000000000000000000112';
+    const pc = Pc.fromHex(hex);
+    expect(pc.type).toBe('nft-postcondition');
+    expect(pc.condition).toBe('maybe-sent');
+    if (pc.type === 'nft-postcondition') {
+      expect(pc.assetId).toEqual(Cl.uint(1));
+    }
   });
 });

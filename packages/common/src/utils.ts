@@ -259,6 +259,7 @@ export function getGlobalObject<K extends Extract<keyof Window, string>>(
       }
     }
   } catch (error) {
+    // eslint-disable-next-line  @typescript-eslint/no-base-to-string
     Logger.error(`Error getting object '${name}' from global scope '${globalScope}': ${error}`);
   }
   if (throwIfUnavailable) {
@@ -292,6 +293,7 @@ export function getGlobalObjects<K extends Extract<keyof Window, string>>(
     if (throwIfUnavailable) {
       const errMsg = getAPIUsageErrorMessage(globalScope, names[0].toString(), usageDesc);
       Logger.error(errMsg);
+      // eslint-disable-next-line  @typescript-eslint/only-throw-error
       throw errMsg;
     } else if (returnEmptyObject) {
       globalScope = {} as any;
@@ -442,6 +444,7 @@ export function toTwos(value: bigint, width: bigint): bigint {
     value < -(BigInt(1) << (width - BigInt(1))) ||
     (BigInt(1) << (width - BigInt(1))) - BigInt(1) < value
   ) {
+    // eslint-disable-next-line  @typescript-eslint/only-throw-error
     throw `Unable to represent integer in width: ${width}`;
   }
   if (value >= BigInt(0)) {

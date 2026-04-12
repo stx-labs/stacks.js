@@ -34,7 +34,7 @@ export function getStxAddress(
 ): string;
 export function getStxAddress({
   account,
-  network = 'mainnet',
+  network,
 }: {
   account: Account;
 } & NetworkParam): string;
@@ -78,6 +78,7 @@ export const getAppPrivateKey = ({
   const appIndex = hashCode(hash);
   const appsNode = HDKey.fromExtendedKey(account.appsKey);
   const appKeychain = appsNode.deriveChild(appIndex + HARDENED_OFFSET);
+  // eslint-disable-next-line @typescript-eslint/only-throw-error
   if (!appKeychain.privateKey) throw 'Needs private key';
   return bytesToHex(appKeychain.privateKey);
 };

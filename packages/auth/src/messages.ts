@@ -13,7 +13,7 @@ import {
   makeECPrivateKey,
   publicKeyToBtcAddress,
 } from '@stacks/encryption';
-import { SECP256K1Client, TokenSigner } from 'jsontokens';
+import { Json, SECP256K1Client, TokenSigner } from 'jsontokens';
 import { AuthScope, DEFAULT_SCOPE } from './constants';
 import { makeDIDFromAddress } from './dids';
 
@@ -186,8 +186,7 @@ export async function decryptPrivateKey(
  */
 export async function makeAuthResponse(
   privateKey: string,
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  profile: {} = {},
+  profile: object = {},
   metadata: AuthMetadata | null,
   coreToken: string | null = null,
   appPrivateKey: string | null = null,
@@ -245,5 +244,5 @@ export async function makeAuthResponse(
 
   /* Sign and return the token */
   const tokenSigner = new TokenSigner('ES256k', privateKey);
-  return tokenSigner.sign(payload);
+  return tokenSigner.sign(payload as Json);
 }
