@@ -1,14 +1,9 @@
 import { hexToBytes } from '@stacks/common';
 import {
+  Cl,
   type ClarityValue,
   type StacksTransactionWire,
-  bufferCV,
-  contractPrincipalCV,
   makeUnsignedContractCall,
-  noneCV,
-  principalCV,
-  someCV,
-  uintCV,
 } from '@stacks/transactions';
 import { toPoxTuple } from './btc-address';
 import { POX_5_CONTRACT } from './constants';
@@ -36,13 +31,7 @@ function normalizeUnlockBytes(unlockBytes: Uint8Array | string): Uint8Array {
 }
 
 function optionalSigCV(sig?: string): ClarityValue {
-  return sig ? someCV(bufferCV(hexToBytes(sig))) : noneCV();
-}
-
-function splitContractPrincipal(principal: string) {
-  const [addr, name] = principal.split('.');
-  if (!addr || !name) throw new Error(`Invalid contract principal: ${principal}`);
-  return contractPrincipalCV(addr, name);
+  return sig ? Cl.some(Cl.bufferFromHex(sig)) : Cl.none();
 }
 
 async function callPox5(
@@ -73,15 +62,15 @@ export async function buildStakeTx(
   return callPox5(
     'stake',
     [
-      uintCV(args.amountUstx),
+      Cl.uint(args.amountUstx),
       toPoxTuple(args.poxAddress),
-      uintCV(args.startBurnHt),
-      uintCV(args.numCycles),
+      Cl.uint(args.startBurnHt),
+      Cl.uint(args.numCycles),
       optionalSigCV(args.signerSignature),
-      bufferCV(hexToBytes(args.signerKey)),
-      uintCV(args.maxAmount),
-      uintCV(args.authId),
-      bufferCV(normalizeUnlockBytes(args.unlockBytes)),
+      Cl.bufferFromHex(args.signerKey),
+      Cl.uint(args.maxAmount),
+      Cl.uint(args.authId),
+      Cl.buffer(normalizeUnlockBytes(args.unlockBytes)),
     ],
     args
   );
@@ -92,19 +81,19 @@ export async function buildStakeExtendTx(
   args: BuildStakeExtendTxArgs & TxParams
 ): Promise<StacksTransactionWire> {
   const functionArgs: ClarityValue[] = [
-    uintCV(args.numCycles),
-    bufferCV(normalizeUnlockBytes(args.unlockBytes)),
+    Cl.uint(args.numCycles),
+    Cl.buffer(normalizeUnlockBytes(args.unlockBytes)),
     toPoxTuple(args.poxAddress),
     optionalSigCV(args.signerSignature),
-    bufferCV(hexToBytes(args.signerKey)),
-    uintCV(args.maxAmount),
-    uintCV(args.authId),
+    Cl.bufferFromHex(args.signerKey),
+    Cl.uint(args.maxAmount),
+    Cl.uint(args.authId),
   ];
 
   if (args.amountUstx !== undefined) {
-    functionArgs.push(someCV(uintCV(args.amountUstx)));
+    functionArgs.push(Cl.some(Cl.uint(args.amountUstx)));
   } else {
-    functionArgs.push(noneCV());
+    functionArgs.push(Cl.none());
   }
 
   return callPox5('stake-extend', functionArgs, args);
@@ -117,15 +106,15 @@ export async function buildStakeUpdateTx(
   const functionArgs: ClarityValue[] = [
     toPoxTuple(args.poxAddress),
     optionalSigCV(args.signerSignature),
-    bufferCV(hexToBytes(args.signerKey)),
-    uintCV(args.maxAmount),
-    uintCV(args.authId),
+    Cl.bufferFromHex(args.signerKey),
+    Cl.uint(args.maxAmount),
+    Cl.uint(args.authId),
   ];
 
   if (args.increaseBy !== undefined) {
-    functionArgs.push(someCV(uintCV(args.increaseBy)));
+    functionArgs.push(Cl.some(Cl.uint(args.increaseBy)));
   } else {
-    functionArgs.push(noneCV());
+    functionArgs.push(Cl.none());
   }
 
   return callPox5('stake-update', functionArgs, args);
@@ -142,11 +131,11 @@ export async function buildStakePooledTx(
   return callPox5(
     'stake-pooled',
     [
-      uintCV(args.amountUstx),
-      uintCV(args.numCycles),
-      bufferCV(normalizeUnlockBytes(args.unlockBytes)),
-      uintCV(args.startBurnHt),
-      splitContractPrincipal(args.poolOwner),
+      Cl.uint(args.amountUstx),
+      Cl.uint(args.numCycles),
+      Cl.buffer(normalizeUnlockBytes(args.unlockBytes)),
+      Cl.uint(args.startBurnHt),
+      Cl.address(args.poolOwner),
     ],
     args
   );
@@ -157,15 +146,15 @@ export async function buildStakeExtendPooledTx(
   args: BuildStakeExtendPooledTxArgs & TxParams
 ): Promise<StacksTransactionWire> {
   const functionArgs: ClarityValue[] = [
-    uintCV(args.numCycles),
-    bufferCV(normalizeUnlockBytes(args.unlockBytes)),
-    splitContractPrincipal(args.poolOwner),
+    Cl.uint(args.numCycles),
+    Cl.buffer(normalizeUnlockBytes(args.unlockBytes)),
+    Cl.address(args.poolOwner),
   ];
 
   if (args.amountUstx !== undefined) {
-    functionArgs.push(someCV(uintCV(args.amountUstx)));
+    functionArgs.push(Cl.some(Cl.uint(args.amountUstx)));
   } else {
-    functionArgs.push(noneCV());
+    functionArgs.push(Cl.none());
   }
 
   return callPox5('stake-extend-pooled', functionArgs, args);
@@ -175,12 +164,12 @@ export async function buildStakeExtendPooledTx(
 export async function buildStakeUpdatePooledTx(
   args: BuildStakeUpdatePooledTxArgs & TxParams
 ): Promise<StacksTransactionWire> {
-  const functionArgs: ClarityValue[] = [splitContractPrincipal(args.poolOwner)];
+  const functionArgs: ClarityValue[] = [Cl.address(args.poolOwner)];
 
   if (args.increaseBy !== undefined) {
-    functionArgs.push(someCV(uintCV(args.increaseBy)));
+    functionArgs.push(Cl.some(Cl.uint(args.increaseBy)));
   } else {
-    functionArgs.push(noneCV());
+    functionArgs.push(Cl.none());
   }
 
   return callPox5('stake-update-pooled', functionArgs, args);
@@ -197,11 +186,11 @@ export async function buildGrantSignerKeyTx(
   return callPox5(
     'grant-signer-key',
     [
-      bufferCV(hexToBytes(args.signerKey)),
-      principalCV(args.staker),
-      args.poxAddress ? someCV(toPoxTuple(args.poxAddress)) : noneCV(),
-      uintCV(args.authId),
-      bufferCV(hexToBytes(args.signerSignature)),
+      Cl.bufferFromHex(args.signerKey),
+      Cl.address(args.staker),
+      args.poxAddress ? Cl.some(toPoxTuple(args.poxAddress)) : Cl.none(),
+      Cl.uint(args.authId),
+      Cl.bufferFromHex(args.signerSignature),
     ],
     args
   );
@@ -213,7 +202,7 @@ export async function buildRevokeSignerKeyTx(
 ): Promise<StacksTransactionWire> {
   return callPox5(
     'revoke-signer-key',
-    [principalCV(args.staker), bufferCV(hexToBytes(args.signerKey))],
+    [Cl.address(args.staker), Cl.bufferFromHex(args.signerKey)],
     args
   );
 }
@@ -229,11 +218,11 @@ export async function buildRegisterPoolTx(
   return callPox5(
     'register-pool',
     [
-      splitContractPrincipal(args.poolOwnerContract),
-      bufferCV(hexToBytes(args.signerKey)),
+      Cl.address(args.poolOwnerContract),
+      Cl.bufferFromHex(args.signerKey),
       toPoxTuple(args.poxAddress),
-      bufferCV(hexToBytes(args.signerSignature)),
-      uintCV(args.authId),
+      Cl.bufferFromHex(args.signerSignature),
+      Cl.uint(args.authId),
     ],
     args
   );

@@ -3,11 +3,10 @@ import type { PrivateKey } from '@stacks/common';
 import { verifyMessageSignatureRsv } from '@stacks/encryption';
 import { networkFrom } from '@stacks/network';
 import {
+  Cl,
+  type ClarityValue,
   encodeStructuredDataBytes,
   signStructuredData,
-  stringAsciiCV,
-  tupleCV,
-  uintCV,
 } from '@stacks/transactions';
 import { toPoxTuple } from './btc-address';
 import type { Pox5SignatureOptions, SignerKeyGrantOptions } from './types';
@@ -19,18 +18,18 @@ import type { Pox5SignatureOptions, SignerKeyGrantOptions } from './types';
 /** Build the SIP-018 structured data message + domain for a PoX-5 signer authorization. */
 export function pox5SignatureMessage(opts: Pox5SignatureOptions) {
   const network = networkFrom(opts.network);
-  const message = tupleCV({
+  const message = Cl.tuple({
     'pox-addr': toPoxTuple(opts.poxAddress),
-    'reward-cycle': uintCV(opts.rewardCycle),
-    topic: stringAsciiCV(opts.topic),
-    period: uintCV(opts.period),
-    'max-amount': uintCV(opts.maxAmount),
-    'auth-id': uintCV(opts.authId),
+    'reward-cycle': Cl.uint(opts.rewardCycle),
+    topic: Cl.stringAscii(opts.topic),
+    period: Cl.uint(opts.period),
+    'max-amount': Cl.uint(opts.maxAmount),
+    'auth-id': Cl.uint(opts.authId),
   });
-  const domain = tupleCV({
-    name: stringAsciiCV('pox-5-signer'),
-    version: stringAsciiCV('1.0.0'),
-    'chain-id': uintCV(network.chainId),
+  const domain = Cl.tuple({
+    name: Cl.stringAscii('pox-5-signer'),
+    version: Cl.stringAscii('1.0.0'),
+    'chain-id': Cl.uint(network.chainId),
   });
   return { message, domain };
 }
@@ -39,19 +38,19 @@ export function pox5SignatureMessage(opts: Pox5SignatureOptions) {
 export function signerKeyGrantMessage(opts: SignerKeyGrantOptions) {
   const network = networkFrom(opts.network);
 
-  const messageFields: Record<string, ReturnType<typeof uintCV> | ReturnType<typeof stringAsciiCV>> = {
-    staker: stringAsciiCV(opts.staker),
-    'auth-id': uintCV(opts.authId),
+  const messageFields: Record<string, ClarityValue> = {
+    staker: Cl.stringAscii(opts.staker),
+    'auth-id': Cl.uint(opts.authId),
   };
 
   const message = opts.poxAddress
-    ? tupleCV({ ...messageFields, 'pox-addr': toPoxTuple(opts.poxAddress) })
-    : tupleCV(messageFields);
+    ? Cl.tuple({ ...messageFields, 'pox-addr': toPoxTuple(opts.poxAddress) })
+    : Cl.tuple(messageFields);
 
-  const domain = tupleCV({
-    name: stringAsciiCV('pox-5-signer'),
-    version: stringAsciiCV('1.0.0'),
-    'chain-id': uintCV(network.chainId),
+  const domain = Cl.tuple({
+    name: Cl.stringAscii('pox-5-signer'),
+    version: Cl.stringAscii('1.0.0'),
+    'chain-id': Cl.uint(network.chainId),
   });
   return { message, domain };
 }

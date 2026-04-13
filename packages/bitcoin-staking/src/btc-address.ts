@@ -2,14 +2,12 @@ import { bech32, bech32m } from '@scure/base';
 import { bigIntToBytes, hexToBytes } from '@stacks/common';
 import { base58CheckDecode, base58CheckEncode } from '@stacks/encryption';
 import type { StacksNetwork, StacksNetworkName } from '@stacks/network';
-import { STACKS_DEVNET, STACKS_MAINNET, STACKS_MOCKNET } from '@stacks/network';
 import {
   type BufferCV,
+  Cl,
   ClarityType,
   type ClarityValue,
   type TupleCV,
-  bufferCV,
-  tupleCV,
 } from '@stacks/transactions';
 import {
   B58_ADDR_PREFIXES,
@@ -22,38 +20,12 @@ import {
   SEGWIT_V1_ADDR_PREFIX,
   SegwitPrefix,
 } from './constants';
+import { resolveNetworkName } from './network';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-/** Parsed representation of a Bitcoin address. */
 export interface BtcAddressRepr {
   version: PoXAddressVersion;
   data: Uint8Array;
 }
-
-// ---------------------------------------------------------------------------
-// Error
-// ---------------------------------------------------------------------------
-
-export class InvalidAddressError extends Error {
-  innerError?: Error;
-  constructor(address: string, innerError?: Error) {
-    const msg = `'${address}' is not a valid P2PKH/P2SH/P2WPKH/P2WSH/P2TR address`;
-    super(msg);
-    this.message = msg;
-    this.name = this.constructor.name;
-    this.innerError = innerError;
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, this.constructor);
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
 
 function btcAddressVersionToLegacyHashMode(btcAddressVersion: number): PoXAddressVersion {
   switch (btcAddressVersion) {
@@ -118,14 +90,6 @@ function legacyHashModeToBtcAddressVersion(
   }
 }
 
-function resolveNetworkName(network: StacksNetworkName | StacksNetwork): StacksNetworkName {
-  if (typeof network === 'string') return network;
-  if (network.chainId === STACKS_MAINNET.chainId) return 'mainnet';
-  if (network.magicBytes === STACKS_DEVNET.magicBytes) return 'devnet';
-  if (network.magicBytes === STACKS_MOCKNET.magicBytes) return 'mocknet';
-  return 'testnet';
-}
-
 function extractPoxTupleFields(poxAddrClarityValue: ClarityValue): {
   version: number;
   hashBytes: Uint8Array;
@@ -142,19 +106,13 @@ function extractPoxTupleFields(poxAddrClarityValue: ClarityValue): {
   const versionCV = cv.value['version'] as BufferCV;
   const hashBytesCV = cv.value['hashbytes'] as BufferCV;
   if (versionCV.type !== ClarityType.Buffer || hashBytesCV.type !== ClarityType.Buffer) {
-    throw new Error(
-      'Invalid argument, expected `version` and `hashbytes` to be buffer values'
-    );
+    throw new Error('Invalid argument, expected `version` and `hashbytes` to be buffer values');
   }
   return {
     version: hexToBytes(versionCV.value)[0],
     hashBytes: hexToBytes(hashBytesCV.value),
   };
 }
-
-// ---------------------------------------------------------------------------
-// Public namespace API
-// ---------------------------------------------------------------------------
 
 /**
  * Parse a Bitcoin address string into its PoX version and hash bytes.
@@ -175,17 +133,20 @@ export function parse(btcAddress: string): BtcAddressRepr {
         version: btcAddressVersionToLegacyHashMode(b58.version),
         data: b58.hash,
       };
-    } else if (SEGWIT_ADDR_PREFIXES.test(btcAddress)) {
+    }
+    if (SEGWIT_ADDR_PREFIXES.test(btcAddress)) {
       const b32 = decodeNativeSegwitBtcAddress(btcAddress);
       return {
         version: nativeAddressToSegwitVersion(b32.witnessVersion, b32.data.length),
         data: b32.data,
       };
     }
-    throw new Error('Unknown BTC address prefix.');
-  } catch (error) {
-    throw new InvalidAddressError(btcAddress, error as Error);
+  } catch (cause) {
+    throw new Error(`'${btcAddress}' is not a valid P2PKH/P2SH/P2WPKH/P2WSH/P2TR address`, {
+      cause,
+    });
   }
+  throw new Error(`'${btcAddress}' is not a valid P2PKH/P2SH/P2WPKH/P2WSH/P2TR address`);
 }
 
 /**
@@ -257,13 +218,13 @@ export function stringify(
  * import { BtcAddress } from '@stacks/bitcoin-staking';
  *
  * const tuple = BtcAddress.toPoxTuple('bc1q...');
- * // tupleCV({ version: bufferCV(...), hashbytes: bufferCV(...) })
+ * // Cl.tuple({ version: Cl.buffer(...), hashbytes: Cl.buffer(...) })
  * ```
  */
 export function toPoxTuple(btcAddress: string) {
   const { version, data } = parse(btcAddress);
-  return tupleCV({
-    version: bufferCV(bigIntToBytes(BigInt(version), 1)),
-    hashbytes: bufferCV(data),
+  return Cl.tuple({
+    version: Cl.buffer(bigIntToBytes(BigInt(version), 1)),
+    hashbytes: Cl.buffer(data),
   });
 }

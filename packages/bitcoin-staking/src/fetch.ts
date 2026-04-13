@@ -1,6 +1,7 @@
 import type { NetworkClientParam } from '@stacks/network';
 import { clientFromNetwork, networkFrom } from '@stacks/network';
 import {
+  Cl,
   ClarityType,
   type ClarityValue,
   type OptionalCV,
@@ -9,10 +10,8 @@ import {
   type BufferCV,
   type ResponseCV,
   fetchCallReadOnlyFunction,
-  principalCV,
-  uintCV,
 } from '@stacks/transactions';
-import { hexToBytes } from '@stacks/common';
+import { stringify as btcAddressStringify } from './btc-address';
 import { POX_5_CONTRACT } from './constants';
 import type { PoxInfo, StakerInfo } from './types';
 
@@ -45,12 +44,12 @@ export async function fetchPoxInfo(opts: NetworkClientParam = {}): Promise<PoxIn
     rewardSlots: data.reward_slots,
     currentCycle: {
       id: data.current_cycle.id,
-      stackedUstx: BigInt(data.current_cycle.stacked_ustx),
+      stakedUstx: BigInt(data.current_cycle.stacked_ustx),
       isPoxActive: data.current_cycle.is_pox_active,
     },
     nextCycle: {
       id: data.next_cycle.id,
-      stackedUstx: BigInt(data.next_cycle.stacked_ustx),
+      stakedUstx: BigInt(data.next_cycle.stacked_ustx),
       isPoxActive: data.next_cycle.is_pox_active,
     },
   };
@@ -67,22 +66,20 @@ export async function fetchStakerInfo(
     contractAddress: CONTRACT_ADDRESS,
     contractName: CONTRACT_NAME,
     functionName: 'get-staker-info',
-    functionArgs: [principalCV(opts.address)],
+    functionArgs: [Cl.address(opts.address)],
     senderAddress: opts.address,
     network: opts.network,
     client: opts.client,
   });
 
   const optional = result as OptionalCV<TupleCV>;
-  if (optional.type === ClarityType.OptionalNone) {
-    return { staked: false };
-  }
+  if (optional.type === ClarityType.OptionalNone) return { staked: false };
 
   const tuple = optional.value;
   const numCycles = Number((tuple.value['num-cycles'] as UIntCV).value);
   const amountUstx = BigInt((tuple.value['amount-ustx'] as UIntCV).value);
   const firstRewardCycle = Number((tuple.value['first-reward-cycle'] as UIntCV).value);
-  const unlockBytes = hexToBytes((tuple.value['unlock-bytes'] as BufferCV).value);
+  const unlockBytesHex = (tuple.value['unlock-bytes'] as BufferCV).value;
 
   // Discriminate solo vs pooled via the `pool-or-solo-info` response field
   const poolOrSolo = tuple.value['pool-or-solo-info'] as ResponseCV;
@@ -97,7 +94,7 @@ export async function fetchStakerInfo(
         numCycles,
         amountUstx,
         firstRewardCycle,
-        unlockBytes,
+        unlockBytesHex,
         poolOwner,
       },
     };
@@ -106,9 +103,11 @@ export async function fetchStakerInfo(
   // solo — err value is the solo info tuple
   const soloTuple = poolOrSolo.value as TupleCV;
   const poxAddr = soloTuple.value['pox-addr'] as TupleCV;
-  const version = hexToBytes((poxAddr.value['version'] as BufferCV).value)[0];
-  const hashbytes = hexToBytes((poxAddr.value['hashbytes'] as BufferCV).value);
-  const signerKey = hexToBytes((soloTuple.value['signer-key'] as BufferCV).value);
+  const signerKey = (soloTuple.value['signer-key'] as BufferCV).value;
+  const poxAddress = btcAddressStringify({
+    poxAddr,
+    network: opts.network ?? 'mainnet',
+  });
 
   return {
     staked: true,
@@ -117,22 +116,22 @@ export async function fetchStakerInfo(
       numCycles,
       amountUstx,
       firstRewardCycle,
-      unlockBytes,
-      poxAddress: { version, hashbytes },
+      unlockBytesHex,
+      poxAddress,
       signerKey,
     },
   };
 }
 
-/** Check whether an address is stacking in a specific cycle. */
-export async function fetchStackerInCycle(
+/** Check whether an address is staking in a specific cycle. */
+export async function fetchStakerInCycle(
   opts: { address: string; cycle: number } & NetworkClientParam
 ): Promise<boolean> {
   const result = await fetchCallReadOnlyFunction({
     contractAddress: CONTRACT_ADDRESS,
     contractName: CONTRACT_NAME,
-    functionName: 'get-stacker-in-cycle',
-    functionArgs: [principalCV(opts.address), uintCV(opts.cycle)],
+    functionName: 'get-staker-in-cycle',
+    functionArgs: [Cl.address(opts.address), Cl.uint(opts.cycle)],
     senderAddress: opts.address,
     network: opts.network,
     client: opts.client,

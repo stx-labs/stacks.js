@@ -13,6 +13,8 @@ export enum Pox5SignatureTopic {
 
 /** Address versions corresponding to the pox-5 contract `pox-addr` tuple */
 export enum PoXAddressVersion {
+  // Taken from https://github.com/stx-labs/stacks.js/blob/efd2255f979ed64b90ac33246d99cd4809620400/packages/stacking/src/constants.ts#L1-L17
+
   /** p2pkh — 20-byte hash160 of a single public key */
   P2PKH = 0x00,
   /** p2sh — 20-byte hash160 of a redeemScript */
@@ -40,8 +42,8 @@ export const BitcoinNetworkVersion = {
 /** Regex matching base58 (legacy) BTC address prefixes */
 export const B58_ADDR_PREFIXES = /^(1|3|m|n|2)/;
 
-/** Regex matching any segwit BTC address prefix */
-export const SEGWIT_ADDR_PREFIXES = /^(bc|tb)/i;
+/** Regex matching any segwit BTC address prefix (mainnet, testnet, regtest) */
+export const SEGWIT_ADDR_PREFIXES = /^(bc|tb|bcrt)/i;
 
 /** Segwit v0 address prefix regex */
 export const SEGWIT_V0_ADDR_PREFIX = /^(bc1q|tb1q|bcrt1q)/i;

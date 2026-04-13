@@ -31,7 +31,7 @@ export interface PoxInfo {
 
 export interface CycleInfo {
   id: number;
-  stackedUstx: bigint;
+  stakedUstx: bigint;
   isPoxActive: boolean;
 }
 
@@ -45,9 +45,12 @@ export interface StakerDetailsSolo {
   numCycles: number;
   amountUstx: bigint;
   firstRewardCycle: number;
-  unlockBytes: Uint8Array;
-  poxAddress: { version: number; hashbytes: Uint8Array };
-  signerKey: Uint8Array;
+  /** The arbitrary unlock script (hex) — last section of the L1 locking script. */
+  unlockBytesHex: string;
+  /** The staker's BTC reward address. */
+  poxAddress: string;
+  /** The signer's 33-byte compressed public key (hex). */
+  signerKey: string;
 }
 
 export interface StakerDetailsPooled {
@@ -55,7 +58,9 @@ export interface StakerDetailsPooled {
   numCycles: number;
   amountUstx: bigint;
   firstRewardCycle: number;
-  unlockBytes: Uint8Array;
+  /** The arbitrary unlock script (hex) — last section of the L1 locking script. */
+  unlockBytesHex: string;
+  /** Contract principal (address) of the pool owner. */
   poolOwner: string;
 }
 
