@@ -53,7 +53,7 @@ function nativeAddressToSegwitVersion(
 }
 
 function bech32Decode(btcAddress: string) {
-  const { words } = bech32.decode(btcAddress);
+  const { words } = bech32.decode(btcAddress as `${string}1${string}`);
   const witnessVersion = words[0];
   if (witnessVersion > 0)
     throw new Error('Addresses with a witness version >= 1 should be encoded in bech32m');
@@ -61,7 +61,7 @@ function bech32Decode(btcAddress: string) {
 }
 
 function bech32MDecode(btcAddress: string) {
-  const { words } = bech32m.decode(btcAddress);
+  const { words } = bech32m.decode(btcAddress as `${string}1${string}`);
   const witnessVersion = words[0];
   if (witnessVersion === 0)
     throw new Error('Addresses with witness version 0 should be encoded in bech32');
