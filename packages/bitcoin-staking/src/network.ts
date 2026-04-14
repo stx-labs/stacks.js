@@ -8,7 +8,7 @@ import { STACKS_DEVNET, STACKS_MAINNET } from '@stacks/network';
  * (same `magicBytes` and `chainId`), so object inputs collapse to `'devnet'`.
  * @ignore
  */
-export function networkFrom(network: StacksNetworkName | StacksNetwork): StacksNetworkName {
+export function networkNameFrom(network: StacksNetworkName | StacksNetwork): StacksNetworkName {
   if (typeof network === 'string') return network;
   if (network.chainId === STACKS_MAINNET.chainId) return 'mainnet';
   if (network.magicBytes === STACKS_DEVNET.magicBytes) return 'devnet';

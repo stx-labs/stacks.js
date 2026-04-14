@@ -20,7 +20,7 @@ import {
   SEGWIT_V1_ADDR_PREFIX,
   SegwitPrefix,
 } from './constants';
-import { networkFrom } from './network';
+import { networkNameFrom } from './network';
 
 export interface BtcAddressRepr {
   version: PoXAddressVersion;
@@ -90,11 +90,8 @@ function legacyHashModeToBtcAddressVersion(
   }
 }
 
-function extractPoxTupleFields(poxAddrClarityValue: ClarityValue): {
-  version: number;
-  hashBytes: Uint8Array;
-} {
-  const cv = poxAddrClarityValue as TupleCV;
+function fromPoxTuple(poxAddr: ClarityValue): BtcAddressRepr {
+  const cv = poxAddr as TupleCV;
   if (cv.type !== ClarityType.Tuple || !cv.value) {
     throw new Error('Invalid argument, expected ClarityValue to be a TupleCV');
   }
@@ -109,8 +106,8 @@ function extractPoxTupleFields(poxAddrClarityValue: ClarityValue): {
     throw new Error('Invalid argument, expected `version` and `hashbytes` to be buffer values');
   }
   return {
-    version: hexToBytes(versionCV.value)[0],
-    hashBytes: hexToBytes(hashBytesCV.value),
+    version: hexToBytes(versionCV.value)[0] as PoXAddressVersion,
+    data: hexToBytes(hashBytesCV.value),
   };
 }
 
@@ -157,53 +154,38 @@ export function parse(btcAddress: string): BtcAddressRepr {
  * import { BtcAddress, PoXAddressVersion } from '@stacks/bitcoin-staking';
  *
  * // From parsed components:
- * BtcAddress.stringify({ version: PoXAddressVersion.P2WPKH, data, network: 'mainnet' });
+ * BtcAddress.stringify({ version: PoXAddressVersion.P2WPKH, data }, 'mainnet');
  *
  * // Round-trip:
- * BtcAddress.stringify({ ...BtcAddress.parse('bc1q...'), network: 'mainnet' });
+ * BtcAddress.stringify(BtcAddress.parse('bc1q...'), 'mainnet');
  *
  * // From a PoX Clarity tuple:
- * BtcAddress.stringify({ poxAddr: tuple, network: 'mainnet' });
- *
- * // Works with a StacksNetwork object too:
- * BtcAddress.stringify({ ...parsed, network: STACKS_MAINNET });
+ * BtcAddress.stringify(poxAddrTuple, 'testnet');
  * ```
  */
 export function stringify(
-  address:
-    | (BtcAddressRepr & { network: StacksNetworkName | StacksNetwork })
-    | { poxAddr: TupleCV; network: StacksNetworkName | StacksNetwork }
+  address: BtcAddressRepr | TupleCV,
+  network: StacksNetworkName | StacksNetwork
 ): string {
-  const network = networkFrom(address.network);
-
-  let version: PoXAddressVersion;
-  let data: Uint8Array;
-
-  if ('poxAddr' in address) {
-    const fields = extractPoxTupleFields(address.poxAddr);
-    version = fields.version as PoXAddressVersion;
-    data = fields.hashBytes;
-  } else {
-    version = address.version;
-    data = address.data;
-  }
+  const networkName = networkNameFrom(network);
+  const { version, data } = 'type' in address ? fromPoxTuple(address) : address;
 
   switch (version) {
     case PoXAddressVersion.P2PKH:
     case PoXAddressVersion.P2SH:
     case PoXAddressVersion.P2SHP2WPKH:
     case PoXAddressVersion.P2SHP2WSH: {
-      const btcAddrVersion = legacyHashModeToBtcAddressVersion(version, network);
+      const btcAddrVersion = legacyHashModeToBtcAddressVersion(version, networkName);
       return base58CheckEncode(btcAddrVersion, data);
     }
     case PoXAddressVersion.P2WPKH:
     case PoXAddressVersion.P2WSH: {
       const words = bech32.toWords(data);
-      return bech32.encode(SegwitPrefix[network], [SEGWIT_V0, ...words]);
+      return bech32.encode(SegwitPrefix[networkName], [SEGWIT_V0, ...words]);
     }
     case PoXAddressVersion.P2TR: {
       const words = bech32m.toWords(data);
-      return bech32m.encode(SegwitPrefix[network], [SEGWIT_V1, ...words]);
+      return bech32m.encode(SegwitPrefix[networkName], [SEGWIT_V1, ...words]);
     }
     default:
       throw new Error(`Unexpected address version: ${version}`);
@@ -223,6 +205,18 @@ export function stringify(
  */
 export function toPoxTuple(btcAddress: string) {
   const { version, data } = parse(btcAddress);
+
+  // Mirror the contract's check-pox-addr: version <= 6, hashbytes 20 or 32
+  const expectedLen = version <= PoXAddressVersion.P2WPKH ? 20 : 32;
+  if (version > PoXAddressVersion.P2TR) {
+    throw new Error(`Invalid PoX address version: ${version}`);
+  }
+  if (data.length !== expectedLen) {
+    throw new Error(
+      `Expected ${expectedLen}-byte hashbytes for version ${version}, got ${data.length}`
+    );
+  }
+
   return Cl.tuple({
     version: Cl.buffer(bigIntToBytes(BigInt(version), 1)),
     hashbytes: Cl.buffer(data),

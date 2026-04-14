@@ -16,10 +16,10 @@ export * from './fetch';
  * import { BtcAddress } from '@stacks/bitcoin-staking';
  *
  * const parsed = BtcAddress.parse('bc1q...');
- * const btcAddr = BtcAddress.stringify({ ...parsed, network: 'mainnet' });
+ * const btcAddr = BtcAddress.stringify(parsed, 'mainnet');
  *
  * const tuple = BtcAddress.toPoxTuple('bc1q...');
- * const addr = BtcAddress.stringify({ poxAddr: tuple, network: 'mainnet' });
+ * const addr = BtcAddress.stringify(poxAddrTuple, 'mainnet');
  * ```
  */
 export * as BtcAddress from './btc-address';

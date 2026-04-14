@@ -98,10 +98,7 @@ export async function fetchStakerInfo(
   const soloTuple = poolOrSolo.value as TupleCV;
   const poxAddr = soloTuple.value['pox-addr'] as TupleCV;
   const signerKey = (soloTuple.value['signer-key'] as BufferCV).value;
-  const poxAddress = btcAddressStringify({
-    poxAddr,
-    network: opts.network ?? 'mainnet',
-  });
+  const poxAddress = btcAddressStringify(poxAddr, opts.network ?? 'mainnet');
 
   return {
     staked: true,
