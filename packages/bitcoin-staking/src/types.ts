@@ -81,23 +81,23 @@ export interface BuildStakeTxArgs {
 }
 
 export interface BuildStakeExtendTxArgs {
-  numCycles: number;
-  unlockBytes: Uint8Array | string;
+  amountUstx: IntegerType;
   poxAddress: string;
   signerKey: string;
   signerSignature?: string;
   maxAmount: IntegerType;
   authId: IntegerType;
-  amountUstx?: IntegerType;
+  numCycles: number;
+  unlockBytes: Uint8Array | string;
 }
 
 export interface BuildStakeUpdateTxArgs {
+  amountUstxIncrease: IntegerType;
   poxAddress: string;
   signerKey: string;
   signerSignature?: string;
   maxAmount: IntegerType;
   authId: IntegerType;
-  increaseBy?: IntegerType;
 }
 
 // ---------------------------------------------------------------------------
@@ -113,15 +113,15 @@ export interface BuildStakePooledTxArgs {
 }
 
 export interface BuildStakeExtendPooledTxArgs {
+  poolOwner: string;
+  amountUstx: IntegerType;
   numCycles: number;
   unlockBytes: Uint8Array | string;
-  poolOwner: string;
-  amountUstx?: IntegerType;
 }
 
 export interface BuildStakeUpdatePooledTxArgs {
   poolOwner: string;
-  increaseBy?: IntegerType;
+  amountUstxIncrease: IntegerType;
 }
 
 // ---------------------------------------------------------------------------

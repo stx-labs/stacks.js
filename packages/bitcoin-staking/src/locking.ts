@@ -2,7 +2,7 @@ import * as btc from '@scure/btc-signer';
 import { hexToBytes } from '@stacks/common';
 import type { StacksNetwork, StacksNetworkName } from '@stacks/network';
 import { Address } from '@stacks/transactions';
-import { resolveNetworkName } from './network';
+import { networkFrom } from './network';
 
 const REGTEST_NETWORK = { bech32: 'bcrt', pubKeyHash: 111, scriptHash: 196, wif: 239 };
 
@@ -109,7 +109,7 @@ export function lockingScriptToP2wsh(
   script: Uint8Array,
   network: StacksNetworkName | StacksNetwork
 ): string {
-  const btcNetwork = BTC_NETWORKS[resolveNetworkName(network)];
+  const btcNetwork = BTC_NETWORKS[networkFrom(network)];
   const result = btc.p2wsh({ type: 'wsh', script }, btcNetwork);
   if (!result.address) throw new Error('Failed to derive P2WSH address');
   return result.address;

@@ -6,8 +6,9 @@ import { STACKS_DEVNET, STACKS_MAINNET } from '@stacks/network';
  *
  * Note: devnet and mocknet are indistinguishable at the network-object level
  * (same `magicBytes` and `chainId`), so object inputs collapse to `'devnet'`.
+ * @ignore
  */
-export function resolveNetworkName(network: StacksNetworkName | StacksNetwork): StacksNetworkName {
+export function networkFrom(network: StacksNetworkName | StacksNetwork): StacksNetworkName {
   if (typeof network === 'string') return network;
   if (network.chainId === STACKS_MAINNET.chainId) return 'mainnet';
   if (network.magicBytes === STACKS_DEVNET.magicBytes) return 'devnet';

@@ -20,7 +20,7 @@ import {
   SEGWIT_V1_ADDR_PREFIX,
   SegwitPrefix,
 } from './constants';
-import { resolveNetworkName } from './network';
+import { networkFrom } from './network';
 
 export interface BtcAddressRepr {
   version: PoXAddressVersion;
@@ -174,7 +174,7 @@ export function stringify(
     | (BtcAddressRepr & { network: StacksNetworkName | StacksNetwork })
     | { poxAddr: TupleCV; network: StacksNetworkName | StacksNetwork }
 ): string {
-  const network = resolveNetworkName(address.network);
+  const network = networkFrom(address.network);
 
   let version: PoXAddressVersion;
   let data: Uint8Array;

@@ -1,6 +1,11 @@
 /** PoX-5 contract identifier (placeholder — update when deployed) */
 export const POX_5_CONTRACT = 'SP000000000000000000002Q6VF78.pox-5';
 
+/** @ignore */
+export const CONTRACT_ADDRESS = POX_5_CONTRACT.split('.')[0];
+/** @ignore */
+export const CONTRACT_NAME = POX_5_CONTRACT.split('.')[1];
+
 /** Maximum number of cycles for PoX-5 staking (≈ 1 year) */
 export const MAX_CYCLES = 24;
 

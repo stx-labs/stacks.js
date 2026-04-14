@@ -1,4 +1,4 @@
-import { sha256 } from '@noble/hashes/sha256';
+import { sha256 } from '@noble/hashes/sha2.js';
 import type { PrivateKey } from '@stacks/common';
 import { verifyMessageSignatureRsv } from '@stacks/encryption';
 import { networkFrom } from '@stacks/network';
@@ -39,7 +39,7 @@ export function signerKeyGrantMessage(opts: SignerKeyGrantOptions) {
   const network = networkFrom(opts.network);
 
   const messageFields: Record<string, ClarityValue> = {
-    staker: Cl.stringAscii(opts.staker),
+    staker: Cl.address(opts.staker),
     'auth-id': Cl.uint(opts.authId),
   };
 

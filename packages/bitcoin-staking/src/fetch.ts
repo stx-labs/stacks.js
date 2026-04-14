@@ -12,14 +12,8 @@ import {
   fetchCallReadOnlyFunction,
 } from '@stacks/transactions';
 import { stringify as btcAddressStringify } from './btc-address';
-import { POX_5_CONTRACT } from './constants';
+import { CONTRACT_ADDRESS, CONTRACT_NAME } from './constants';
 import type { PoxInfo, StakerInfo } from './types';
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
-const [CONTRACT_ADDRESS, CONTRACT_NAME] = POX_5_CONTRACT.split('.');
 
 // ---------------------------------------------------------------------------
 // Public fetch functions

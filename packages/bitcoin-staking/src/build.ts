@@ -5,8 +5,8 @@ import {
   type StacksTransactionWire,
   makeUnsignedContractCall,
 } from '@stacks/transactions';
-import { toPoxTuple } from './btc-address';
-import { POX_5_CONTRACT } from './constants';
+import { BtcAddress } from '.';
+import { CONTRACT_ADDRESS, CONTRACT_NAME } from './constants';
 import type {
   BuildGrantSignerKeyTxArgs,
   BuildRegisterPoolTxArgs,
@@ -20,20 +20,17 @@ import type {
   TxParams,
 } from './types';
 
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
-const [CONTRACT_ADDRESS, CONTRACT_NAME] = POX_5_CONTRACT.split('.');
-
+/** @ignore */
 function normalizeUnlockBytes(unlockBytes: Uint8Array | string): Uint8Array {
   return typeof unlockBytes === 'string' ? hexToBytes(unlockBytes) : unlockBytes;
 }
 
-function optionalSigCV(sig?: string): ClarityValue {
-  return sig ? Cl.some(Cl.bufferFromHex(sig)) : Cl.none();
+/** @ignore */
+function clOptionalBuffer(hex?: string): ClarityValue {
+  return hex ? Cl.some(Cl.bufferFromHex(hex)) : Cl.none();
 }
 
+/** @ignore */
 async function callPox5(
   functionName: string,
   functionArgs: ClarityValue[],
@@ -63,13 +60,13 @@ export async function buildStakeTx(
     'stake',
     [
       Cl.uint(args.amountUstx),
-      toPoxTuple(args.poxAddress),
+      BtcAddress.toPoxTuple(args.poxAddress),
       Cl.uint(args.startBurnHt),
-      Cl.uint(args.numCycles),
-      optionalSigCV(args.signerSignature),
+      clOptionalBuffer(args.signerSignature),
       Cl.bufferFromHex(args.signerKey),
       Cl.uint(args.maxAmount),
       Cl.uint(args.authId),
+      Cl.uint(args.numCycles),
       Cl.buffer(normalizeUnlockBytes(args.unlockBytes)),
     ],
     args
@@ -80,44 +77,38 @@ export async function buildStakeTx(
 export async function buildStakeExtendTx(
   args: BuildStakeExtendTxArgs & TxParams
 ): Promise<StacksTransactionWire> {
-  const functionArgs: ClarityValue[] = [
-    Cl.uint(args.numCycles),
-    Cl.buffer(normalizeUnlockBytes(args.unlockBytes)),
-    toPoxTuple(args.poxAddress),
-    optionalSigCV(args.signerSignature),
-    Cl.bufferFromHex(args.signerKey),
-    Cl.uint(args.maxAmount),
-    Cl.uint(args.authId),
-  ];
-
-  if (args.amountUstx !== undefined) {
-    functionArgs.push(Cl.some(Cl.uint(args.amountUstx)));
-  } else {
-    functionArgs.push(Cl.none());
-  }
-
-  return callPox5('stake-extend', functionArgs, args);
+  return callPox5(
+    'stake-extend',
+    [
+      Cl.uint(args.amountUstx),
+      BtcAddress.toPoxTuple(args.poxAddress),
+      clOptionalBuffer(args.signerSignature),
+      Cl.bufferFromHex(args.signerKey),
+      Cl.uint(args.maxAmount),
+      Cl.uint(args.authId),
+      Cl.uint(args.numCycles),
+      Cl.buffer(normalizeUnlockBytes(args.unlockBytes)),
+    ],
+    args
+  );
 }
 
 /** Build an unsigned `stake-update` transaction (solo — change signer/address/increase mid-stake). */
 export async function buildStakeUpdateTx(
   args: BuildStakeUpdateTxArgs & TxParams
 ): Promise<StacksTransactionWire> {
-  const functionArgs: ClarityValue[] = [
-    toPoxTuple(args.poxAddress),
-    optionalSigCV(args.signerSignature),
-    Cl.bufferFromHex(args.signerKey),
-    Cl.uint(args.maxAmount),
-    Cl.uint(args.authId),
-  ];
-
-  if (args.increaseBy !== undefined) {
-    functionArgs.push(Cl.some(Cl.uint(args.increaseBy)));
-  } else {
-    functionArgs.push(Cl.none());
-  }
-
-  return callPox5('stake-update', functionArgs, args);
+  return callPox5(
+    'stake-update',
+    [
+      Cl.uint(args.amountUstxIncrease),
+      BtcAddress.toPoxTuple(args.poxAddress),
+      Cl.bufferFromHex(args.signerKey),
+      clOptionalBuffer(args.signerSignature),
+      Cl.uint(args.maxAmount),
+      Cl.uint(args.authId),
+    ],
+    args
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -131,11 +122,11 @@ export async function buildStakePooledTx(
   return callPox5(
     'stake-pooled',
     [
+      Cl.address(args.poolOwner),
       Cl.uint(args.amountUstx),
       Cl.uint(args.numCycles),
       Cl.buffer(normalizeUnlockBytes(args.unlockBytes)),
       Cl.uint(args.startBurnHt),
-      Cl.address(args.poolOwner),
     ],
     args
   );
@@ -145,34 +136,27 @@ export async function buildStakePooledTx(
 export async function buildStakeExtendPooledTx(
   args: BuildStakeExtendPooledTxArgs & TxParams
 ): Promise<StacksTransactionWire> {
-  const functionArgs: ClarityValue[] = [
-    Cl.uint(args.numCycles),
-    Cl.buffer(normalizeUnlockBytes(args.unlockBytes)),
-    Cl.address(args.poolOwner),
-  ];
-
-  if (args.amountUstx !== undefined) {
-    functionArgs.push(Cl.some(Cl.uint(args.amountUstx)));
-  } else {
-    functionArgs.push(Cl.none());
-  }
-
-  return callPox5('stake-extend-pooled', functionArgs, args);
+  return callPox5(
+    'stake-extend-pooled',
+    [
+      Cl.address(args.poolOwner),
+      Cl.uint(args.amountUstx),
+      Cl.uint(args.numCycles),
+      Cl.buffer(normalizeUnlockBytes(args.unlockBytes)),
+    ],
+    args
+  );
 }
 
 /** Build an unsigned `stake-update-pooled` transaction. */
 export async function buildStakeUpdatePooledTx(
   args: BuildStakeUpdatePooledTxArgs & TxParams
 ): Promise<StacksTransactionWire> {
-  const functionArgs: ClarityValue[] = [Cl.address(args.poolOwner)];
-
-  if (args.increaseBy !== undefined) {
-    functionArgs.push(Cl.some(Cl.uint(args.increaseBy)));
-  } else {
-    functionArgs.push(Cl.none());
-  }
-
-  return callPox5('stake-update-pooled', functionArgs, args);
+  return callPox5(
+    'stake-update-pooled',
+    [Cl.address(args.poolOwner), Cl.uint(args.amountUstxIncrease)],
+    args
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -188,7 +172,7 @@ export async function buildGrantSignerKeyTx(
     [
       Cl.bufferFromHex(args.signerKey),
       Cl.address(args.staker),
-      args.poxAddress ? Cl.some(toPoxTuple(args.poxAddress)) : Cl.none(),
+      args.poxAddress ? Cl.some(BtcAddress.toPoxTuple(args.poxAddress)) : Cl.none(),
       Cl.uint(args.authId),
       Cl.bufferFromHex(args.signerSignature),
     ],
@@ -196,12 +180,12 @@ export async function buildGrantSignerKeyTx(
   );
 }
 
-/** Build an unsigned `revoke-signer-key` transaction. */
+/** Build an unsigned `revoke-signer-grant` transaction. */
 export async function buildRevokeSignerKeyTx(
   args: BuildRevokeSignerKeyTxArgs & TxParams
 ): Promise<StacksTransactionWire> {
   return callPox5(
-    'revoke-signer-key',
+    'revoke-signer-grant',
     [Cl.address(args.staker), Cl.bufferFromHex(args.signerKey)],
     args
   );
@@ -220,7 +204,7 @@ export async function buildRegisterPoolTx(
     [
       Cl.address(args.poolOwnerContract),
       Cl.bufferFromHex(args.signerKey),
-      toPoxTuple(args.poxAddress),
+      BtcAddress.toPoxTuple(args.poxAddress),
       Cl.bufferFromHex(args.signerSignature),
       Cl.uint(args.authId),
     ],
