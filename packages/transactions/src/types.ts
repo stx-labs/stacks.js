@@ -183,6 +183,19 @@ export interface FeeEstimateResponse {
  * @param {StacksNetwork} network - the Stacks blockchain network this transaction is destined for
  * @param {String} senderAddress - the c32check address of the sender
  */
+/**
+ * Options for a read-only contract function call (preferred shape).
+ */
+export type ReadOnlyFunctionParams = {
+  /** the fully-qualified contract identifier as `<address>.<name>` */
+  contract: ContractIdString;
+  functionName: string;
+  functionArgs: ClarityValue[];
+  /** address of the sender */
+  senderAddress: string;
+} & NetworkClientParam;
+
+/** @deprecated Use {@link ReadOnlyFunctionParams} with the combined `contract` field instead. */
 export type ReadOnlyFunctionOptions = {
   contractName: string;
   contractAddress: string;

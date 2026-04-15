@@ -2994,3 +2994,125 @@ test('Build transaction with originator post-condition mode', async () => {
   expect(deserializedTx.postConditionMode).toBe(PostConditionMode.Originator);
   expect(deserializedTx.postConditionMode).toBe(0x03);
 });
+
+describe('Unified param shapes', () => {
+  test('makeContractCall accepts combined `contract` field and matches legacy shape', async () => {
+    const contractAddress = 'ST3KC0MTNW34S1ZXD36JYKFD3JJMWA01M55DSJ4JE';
+    const contractName = 'kv-store';
+    const functionName = 'get-value';
+    const functionArgs = [bufferCV(utf8ToBytes('foo'))];
+    const senderKey = 'e494f188c2d35887531ba474c433b1e41fadd8eb824aca983447fd4bb8b277a801';
+
+    const legacy = await makeContractCall({
+      contractAddress,
+      contractName,
+      functionName,
+      functionArgs,
+      senderKey,
+      fee: 0,
+      nonce: 1,
+      network: STACKS_TESTNET,
+    });
+
+    const unified = await makeContractCall({
+      contract: `${contractAddress}.${contractName}`,
+      functionName,
+      functionArgs,
+      senderKey,
+      fee: 0,
+      nonce: 1,
+      network: STACKS_TESTNET,
+    });
+
+    expect(unified.serialize()).toBe(legacy.serialize());
+    expect(() => unified.verifyOrigin()).not.toThrow();
+  });
+
+  test('makeUnsignedContractCall accepts combined `contract` field and matches legacy shape', async () => {
+    const contractAddress = 'ST3KC0MTNW34S1ZXD36JYKFD3JJMWA01M55DSJ4JE';
+    const contractName = 'kv-store';
+    const functionName = 'get-value';
+    const functionArgs = [bufferCV(utf8ToBytes('foo'))];
+    const publicKey = '03ef788b3830c00abe8f64f62dc32fc863bc0b2cafeb073b6c8e1c7657d9c2c3ab';
+
+    const legacy = await makeUnsignedContractCall({
+      contractAddress,
+      contractName,
+      functionName,
+      functionArgs,
+      publicKey,
+      fee: 0,
+      nonce: 1,
+      network: STACKS_TESTNET,
+    });
+
+    const unified = await makeUnsignedContractCall({
+      contract: `${contractAddress}.${contractName}`,
+      functionName,
+      functionArgs,
+      publicKey,
+      fee: 0,
+      nonce: 1,
+      network: STACKS_TESTNET,
+    });
+
+    expect(unified.serialize()).toBe(legacy.serialize());
+  });
+
+  test('makeContractDeploy accepts `name`/`clarityCode` and matches legacy shape', async () => {
+    const contractName = 'kv-store';
+    const codeBody = fs.readFileSync('./tests/contracts/kv-store.clar').toString();
+    const senderKey = 'e494f188c2d35887531ba474c433b1e41fadd8eb824aca983447fd4bb8b277a801';
+
+    const legacy = await makeContractDeploy({
+      contractName,
+      codeBody,
+      senderKey,
+      fee: 0,
+      nonce: 0,
+      network: STACKS_TESTNET,
+      clarityVersion: ClarityVersion.Clarity2,
+    });
+
+    const unified = await makeContractDeploy({
+      name: contractName,
+      clarityCode: codeBody,
+      senderKey,
+      fee: 0,
+      nonce: 0,
+      network: STACKS_TESTNET,
+      clarityVersion: ClarityVersion.Clarity2,
+    });
+
+    expect(unified.serialize()).toBe(legacy.serialize());
+    expect(() => unified.verifyOrigin()).not.toThrow();
+  });
+
+  test('makeUnsignedContractDeploy accepts `name`/`clarityCode` and matches legacy shape', async () => {
+    const contractName = 'kv-store';
+    const codeBody = fs.readFileSync('./tests/contracts/kv-store.clar').toString();
+    const publicKey = '03ef788b3830c00abe8f64f62dc32fc863bc0b2cafeb073b6c8e1c7657d9c2c3ab';
+
+    const legacy = await makeUnsignedContractDeploy({
+      contractName,
+      codeBody,
+      publicKey,
+      fee: 0,
+      nonce: 0,
+      network: STACKS_TESTNET,
+      clarityVersion: ClarityVersion.Clarity2,
+    });
+
+    const unified = await makeUnsignedContractDeploy({
+      name: contractName,
+      clarityCode: codeBody,
+      publicKey,
+      fee: 0,
+      nonce: 0,
+      network: STACKS_TESTNET,
+      clarityVersion: ClarityVersion.Clarity2,
+    });
+
+    expect(unified.serialize()).toBe(legacy.serialize());
+  });
+});
