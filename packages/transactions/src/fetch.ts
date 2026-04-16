@@ -9,9 +9,10 @@ import {
   estimateTransactionByteLength,
 } from './transaction';
 import {
-  ContractIdString,
   FeeEstimateResponse,
   FeeEstimation,
+  ReadOnlyFunctionOptions,
+  ReadOnlyFunctionParams,
   TxBroadcastResult,
   TxBroadcastResultOk,
   TxBroadcastResultRejected,
@@ -286,35 +287,11 @@ export async function fetchAbi({
  * Calls a function as read-only from a contract interface.
  * It is not necessary that the function is defined as read-only in the contract
  *
- * Accepts either the preferred `contract: "<address>.<name>"` combined
- * identifier, or the legacy split `contractAddress` + `contractName` fields.
- *
- * @param opts.contract - The fully-qualified contract identifier (`<address>.<name>`)
- * @param opts.functionName - The contract function name
- * @param opts.functionArgs - The contract function arguments
- * @param opts.senderAddress - The address of the (simulated) sender
- * @param opts.api - Optional API info (`.url` & `.fetch`) used for fetch call
  * @return Returns an object with a status bool (okay) and a result string that
  * is a serialized clarity value in hex format.
  */
 export async function fetchCallReadOnlyFunction(
-  opts: (
-    | {
-        /** the fully-qualified contract identifier as `<address>.<name>` */
-        contract: ContractIdString;
-      }
-    | {
-        /** @deprecated Use `contract` instead. */
-        contractName: string;
-        /** @deprecated Use `contract` instead. */
-        contractAddress: string;
-      }
-  ) & {
-    functionName: string;
-    functionArgs: ClarityValue[];
-    /** address of the sender */
-    senderAddress: string;
-  } & NetworkClientParam
+  opts: ReadOnlyFunctionParams | ReadOnlyFunctionOptions
 ): Promise<ClarityValue> {
   const [contractAddress, contractName] =
     'contract' in opts ? parseContractId(opts.contract) : [opts.contractAddress, opts.contractName];
