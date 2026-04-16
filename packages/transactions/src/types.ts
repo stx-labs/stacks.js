@@ -176,7 +176,7 @@ export interface FeeEstimateResponse {
 /**
  * Options for a read-only contract function call (preferred shape).
  */
-export type ReadOnlyFunctionParams = {
+export type PreferredReadOnlyFunctionOptions = {
   /** the fully-qualified contract identifier as `<address>.<name>` */
   contract: ContractIdString;
   functionName: string;
@@ -185,8 +185,8 @@ export type ReadOnlyFunctionParams = {
   senderAddress: string;
 } & NetworkClientParam;
 
-/** @deprecated Use {@link ReadOnlyFunctionParams} with the combined `contract` field instead. */
-export type ReadOnlyFunctionOptions = {
+/** @deprecated Use {@link ReadOnlyFunctionOptions} with the combined `contract` field instead. */
+export type LegacyReadOnlyFunctionOptions = {
   contractName: string;
   contractAddress: string;
   functionName: string;
@@ -194,3 +194,10 @@ export type ReadOnlyFunctionOptions = {
   /** address of the sender */
   senderAddress: string;
 } & NetworkClientParam;
+
+export type ReadOnlyFunctionOptions =
+  | PreferredReadOnlyFunctionOptions
+  | LegacyReadOnlyFunctionOptions;
+
+/** @deprecated Use {@link ReadOnlyFunctionOptions} instead. */
+export type ReadOnlyFunctionParams = PreferredReadOnlyFunctionOptions;
