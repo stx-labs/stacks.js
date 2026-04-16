@@ -2,9 +2,9 @@ import * as btc from '@scure/btc-signer';
 import { bytesToHex, hexToBytes } from '@stacks/common';
 import {
   buildDefaultUnlockScript,
+  buildLockingBitcoinAddress,
   buildLockingScript,
   computeUnlockHeight,
-  lockingScriptToP2wsh,
   parseDefaultUnlockScript,
 } from '../src/locking';
 
@@ -146,44 +146,40 @@ describe('buildLockingScript', () => {
   });
 });
 
-describe('lockingScriptToP2wsh', () => {
+describe('buildLockingBitcoinAddress', () => {
   const unlockBytes = buildDefaultUnlockScript(TEST_PUBKEY);
-  const script = buildLockingScript({
+  const baseOpts = {
     stxAddress: TEST_STX_ADDRESS,
     unlockHeight: 850_000,
     unlockBytes,
-  });
+  };
 
   it('produces a mainnet bc1q address', () => {
-    const address = lockingScriptToP2wsh(script, 'mainnet');
+    const address = buildLockingBitcoinAddress({ ...baseOpts, network: 'mainnet' });
     expect(address).toMatch(/^bc1q/);
   });
 
   it('produces a testnet tb1q address', () => {
-    const address = lockingScriptToP2wsh(script, 'testnet');
+    const address = buildLockingBitcoinAddress({ ...baseOpts, network: 'testnet' });
     expect(address).toMatch(/^tb1q/);
   });
 
   it('produces a devnet bcrt1q address', () => {
-    const address = lockingScriptToP2wsh(script, 'devnet');
+    const address = buildLockingBitcoinAddress({ ...baseOpts, network: 'devnet' });
     expect(address).toMatch(/^bcrt1q/);
   });
 
   it('is deterministic', () => {
-    const a = lockingScriptToP2wsh(script, 'mainnet');
-    const b = lockingScriptToP2wsh(script, 'mainnet');
+    const a = buildLockingBitcoinAddress({ ...baseOpts, network: 'mainnet' });
+    const b = buildLockingBitcoinAddress({ ...baseOpts, network: 'mainnet' });
     expect(a).toBe(b);
   });
 
   it('changes with different scripts', () => {
     const otherUnlock = buildDefaultUnlockScript(new Uint8Array(33).fill(0x03));
-    const otherScript = buildLockingScript({
-      stxAddress: TEST_STX_ADDRESS,
-      unlockHeight: 850_000,
-      unlockBytes: otherUnlock,
-    });
-    expect(lockingScriptToP2wsh(script, 'mainnet')).not.toBe(
-      lockingScriptToP2wsh(otherScript, 'mainnet')
+    const otherOpts = { ...baseOpts, unlockBytes: otherUnlock };
+    expect(buildLockingBitcoinAddress({ ...baseOpts, network: 'mainnet' })).not.toBe(
+      buildLockingBitcoinAddress({ ...otherOpts, network: 'mainnet' })
     );
   });
 });

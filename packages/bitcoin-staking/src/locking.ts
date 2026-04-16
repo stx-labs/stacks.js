@@ -103,13 +103,18 @@ export function buildLockingScript(opts: {
 }
 
 /**
- * Derive the P2WSH address for a locking script.
+ * Build the P2WSH Bitcoin address for a PoX-5 locking script.
+ *
+ * Combines {@link buildLockingScript} and P2WSH derivation into a single call.
  */
-export function lockingScriptToP2wsh(
-  script: Uint8Array,
-  network: StacksNetworkName | StacksNetwork
-): string {
-  const btcNetwork = BTC_NETWORKS[networkNameFrom(network)];
+export function buildLockingBitcoinAddress(opts: {
+  stxAddress: string;
+  unlockHeight: number;
+  unlockBytes: Uint8Array | string;
+  network: StacksNetworkName | StacksNetwork;
+}): string {
+  const script = buildLockingScript(opts);
+  const btcNetwork = BTC_NETWORKS[networkNameFrom(opts.network)];
   const result = btc.p2wsh({ type: 'wsh', script }, btcNetwork);
   if (!result.address) throw new Error('Failed to derive P2WSH address');
   return result.address;
