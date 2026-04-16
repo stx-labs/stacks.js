@@ -248,7 +248,7 @@ type PreferredContractDeployOptions = {
   /** the transaction nonce, which must be increased monotonically with each new transaction */
   nonce?: IntegerType;
   /** the post condition mode, specifying whether or not post-conditions must fully cover all
-   * transfered assets */
+   * transferred assets */
   postConditionMode?: PostConditionModeName | PostConditionMode;
   /** a list of post conditions to add to the transaction */
   postConditions?: (PostCondition | PostConditionWire | string)[];
@@ -276,7 +276,7 @@ type LegacyContractDeployOptions = {
   /** the transaction nonce, which must be increased monotonically with each new transaction */
   nonce?: IntegerType;
   /** the post condition mode, specifying whether or not post-conditions must fully cover all
-   * transfered assets */
+   * transferred assets */
   postConditionMode?: PostConditionModeName | PostConditionMode;
   /** a list of post conditions to add to the transaction */
   postConditions?: (PostCondition | PostConditionWire | string)[];
@@ -487,7 +487,7 @@ type PreferredContractCallOptions = {
   /** the transaction nonce, which must be increased monotonically with each new transaction */
   nonce?: IntegerType;
   /** the post condition mode, specifying whether or not post-conditions must fully cover all
-   * transfered assets */
+   * transferred assets */
   postConditionMode?: PostConditionModeName | PostConditionMode;
   /** a list of post conditions to add to the transaction */
   postConditions?: (PostCondition | PostConditionWire | string)[];
@@ -519,7 +519,7 @@ type LegacyContractCallOptions = {
   /** the transaction nonce, which must be increased monotonically with each new transaction */
   nonce?: IntegerType;
   /** the post condition mode, specifying whether or not post-conditions must fully cover all
-   * transfered assets */
+   * transferred assets */
   postConditionMode?: PostConditionModeName | PostConditionMode;
   /** a list of post conditions to add to the transaction */
   postConditions?: (PostCondition | PostConditionWire | string)[];
