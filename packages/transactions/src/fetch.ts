@@ -12,7 +12,6 @@ import {
   FeeEstimateResponse,
   FeeEstimation,
   ReadOnlyFunctionOptions,
-  ReadOnlyFunctionParams,
   TxBroadcastResult,
   TxBroadcastResultOk,
   TxBroadcastResultRejected,
@@ -291,7 +290,7 @@ export async function fetchAbi({
  * is a serialized clarity value in hex format.
  */
 export async function fetchCallReadOnlyFunction(
-  opts: ReadOnlyFunctionParams | ReadOnlyFunctionOptions
+  opts: ReadOnlyFunctionOptions
 ): Promise<ClarityValue> {
   const [contractAddress, contractName] =
     'contract' in opts ? parseContractId(opts.contract) : [opts.contractAddress, opts.contractName];

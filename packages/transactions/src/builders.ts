@@ -284,36 +284,51 @@ type LegacyContractDeployOptions = {
   sponsored?: boolean;
 } & NetworkClientParam;
 
-export type ContractDeployOptions = PreferredContractDeployOptions | LegacyContractDeployOptions;
-
 type LegacyUnsignedContractDeployOptions = LegacyContractDeployOptions &
   ({ publicKey: PublicKey } | UnsignedMultiSigOptions);
 
 type LegacySignedContractDeployOptions = LegacyContractDeployOptions &
   ({ senderKey: PrivateKey } | SignedMultiSigOptions);
 
+type PreferredUnsignedMultiSigContractDeployOptions = PreferredContractDeployOptions &
+  UnsignedMultiSigOptions;
+
+type PreferredSignedMultiSigContractDeployOptions = PreferredContractDeployOptions &
+  SignedMultiSigOptions;
+
+type PreferredUnsignedSingleSigContractDeployOptions = PreferredContractDeployOptions & {
+  publicKey: PublicKey;
+};
+
+type PreferredSignedSingleSigContractDeployOptions = PreferredContractDeployOptions & {
+  senderKey: PrivateKey;
+};
+
+type LegacyUnsignedSingleSigContractDeployOptions = LegacyContractDeployOptions & {
+  publicKey: PublicKey;
+};
+
+type LegacySignedSingleSigContractDeployOptions = LegacyContractDeployOptions & {
+  senderKey: PrivateKey;
+};
+
+export type ContractDeployOptions = SignedContractDeployOptions;
+
 export type UnsignedContractDeployOptions =
-  | PreferredUnsignedContractDeployOptions
-  | LegacyUnsignedContractDeployOptions;
+  | PreferredUnsignedSingleSigContractDeployOptions
+  | LegacyUnsignedSingleSigContractDeployOptions;
 
 export type SignedContractDeployOptions =
-  | PreferredSignedContractDeployOptions
-  | LegacySignedContractDeployOptions;
+  | PreferredSignedSingleSigContractDeployOptions
+  | LegacySignedSingleSigContractDeployOptions;
 
-/**
- * @deprecated Use {@link ContractDeployOptions} instead.
- */
-export type ContractDeployParams = PreferredContractDeployOptions;
+export type UnsignedMultiSigContractDeployOptions =
+  | PreferredUnsignedMultiSigContractDeployOptions
+  | (LegacyContractDeployOptions & UnsignedMultiSigOptions);
 
-/**
- * @deprecated Use {@link UnsignedContractDeployOptions} instead.
- */
-export type UnsignedContractDeployParams = UnsignedContractDeployOptions;
-
-/**
- * @deprecated Use {@link SignedContractDeployOptions} instead.
- */
-export type SignedContractDeployParams = SignedContractDeployOptions;
+export type SignedMultiSigContractDeployOptions =
+  | PreferredSignedMultiSigContractDeployOptions
+  | (LegacyContractDeployOptions & SignedMultiSigOptions);
 
 /** @internal If both shapes are provided, `name`/`clarityCode` take precedence. */
 function toLegacyContractDeployOptions<
@@ -329,9 +344,8 @@ function toLegacyContractDeployOptions<
 /**
  * Generates a Clarity smart contract deploy transaction.
  *
- * Accepts either the preferred {@link ContractDeployOptions} shape (with `name`
- * and `clarityCode`) or the legacy {@link LegacyContractDeployOptions} shape
- * (with `contractName` and `codeBody`).
+ * Accepts either `name`/`clarityCode` or the legacy `contractName`/`codeBody`
+ * fields.
  *
  * Returns a signed Stacks smart contract deploy transaction.
  *
@@ -374,9 +388,8 @@ export async function makeContractDeploy(
 /**
  * Generates an unsigned Clarity smart contract deploy transaction.
  *
- * Accepts either the preferred {@link ContractDeployOptions} shape (with `name`
- * and `clarityCode`) or the legacy {@link LegacyContractDeployOptions} shape
- * (with `contractName` and `codeBody`).
+ * Accepts either `name`/`clarityCode` or the legacy `contractName`/`codeBody`
+ * fields.
  */
 export async function makeUnsignedContractDeploy(
   txOptions: UnsignedContractDeployOptions
@@ -498,15 +511,8 @@ type PreferredContractCallOptions = {
   sponsored?: boolean;
 } & NetworkClientParam;
 
-type PreferredUnsignedContractCallOptions = PreferredContractCallOptions &
-  ({ publicKey: PublicKey } | UnsignedMultiSigOptions);
-
-type PreferredSignedContractCallOptions = PreferredContractCallOptions &
-  ({ senderKey: PrivateKey } | SignedMultiSigOptions);
-
 /**
  * Contract function call transaction options (legacy shape, split contract identifier).
- * @deprecated Use {@link ContractCallOptions} with the combined `contract` field instead.
  */
 type LegacyContractCallOptions = {
   /** the Stacks address of the contract */
@@ -532,34 +538,43 @@ type LegacyContractCallOptions = {
 
 export type ContractCallOptions = PreferredContractCallOptions | LegacyContractCallOptions;
 
-type LegacyUnsignedContractCallOptions = LegacyContractCallOptions &
-  ({ publicKey: PrivateKey } | UnsignedMultiSigOptions);
+type PreferredUnsignedSingleSigContractCallOptions = PreferredContractCallOptions & {
+  publicKey: PublicKey;
+};
 
-type LegacySignedContractCallOptions = LegacyContractCallOptions &
-  ({ senderKey: PublicKey } | SignedMultiSigOptions);
+type PreferredSignedSingleSigContractCallOptions = PreferredContractCallOptions & {
+  senderKey: PrivateKey;
+};
+
+type PreferredUnsignedMultiSigContractCallOptions = PreferredContractCallOptions &
+  UnsignedMultiSigOptions;
+
+type PreferredSignedMultiSigContractCallOptions = PreferredContractCallOptions &
+  SignedMultiSigOptions;
+
+type LegacyUnsignedSingleSigContractCallOptions = LegacyContractCallOptions & {
+  publicKey: PrivateKey;
+};
+
+type LegacySignedSingleSigContractCallOptions = LegacyContractCallOptions & {
+  senderKey: PublicKey;
+};
 
 export type UnsignedContractCallOptions =
-  | PreferredUnsignedContractCallOptions
-  | LegacyUnsignedContractCallOptions;
+  | PreferredUnsignedSingleSigContractCallOptions
+  | LegacyUnsignedSingleSigContractCallOptions;
 
 export type SignedContractCallOptions =
-  | PreferredSignedContractCallOptions
-  | LegacySignedContractCallOptions;
+  | PreferredSignedSingleSigContractCallOptions
+  | LegacySignedSingleSigContractCallOptions;
 
-/**
- * @deprecated Use {@link ContractCallOptions} instead.
- */
-export type ContractCallParams = PreferredContractCallOptions;
+export type UnsignedMultiSigContractCallOptions =
+  | PreferredUnsignedMultiSigContractCallOptions
+  | (LegacyContractCallOptions & UnsignedMultiSigOptions);
 
-/**
- * @deprecated Use {@link UnsignedContractCallOptions} instead.
- */
-export type UnsignedContractCallParams = UnsignedContractCallOptions;
-
-/**
- * @deprecated Use {@link SignedContractCallOptions} instead.
- */
-export type SignedContractCallParams = SignedContractCallOptions;
+export type SignedMultiSigContractCallOptions =
+  | PreferredSignedMultiSigContractCallOptions
+  | (LegacyContractCallOptions & SignedMultiSigOptions);
 
 /** @internal If both shapes are provided, `contract` takes precedence over `contractAddress`/`contractName`. */
 function toLegacyContractCallOptions<
@@ -577,10 +592,8 @@ function toLegacyContractCallOptions<
 /**
  * Generates an unsigned Clarity smart contract function call transaction.
  *
- * Accepts either the preferred {@link ContractCallOptions} shape (with the
- * combined `contract: "<address>.<name>"` field) or the legacy
- * {@link LegacyContractCallOptions} shape (with split `contractAddress` and
- * `contractName` fields).
+ * Accepts either `contract: "<address>.<name>"` or the legacy split
+ * `contractAddress` and `contractName` fields.
  *
  * @returns {Promise<StacksTransactionWire>}
  */
@@ -698,10 +711,8 @@ export async function makeUnsignedContractCall(
 /**
  * Generates a Clarity smart contract function call transaction.
  *
- * Accepts either the preferred {@link ContractCallOptions} shape (with the
- * combined `contract: "<address>.<name>"` field) or the legacy
- * {@link LegacyContractCallOptions} shape (with split `contractAddress` and
- * `contractName` fields).
+ * Accepts either `contract: "<address>.<name>"` or the legacy split
+ * `contractAddress` and `contractName` fields.
  *
  * Returns a signed Stacks smart contract function call transaction.
  *
