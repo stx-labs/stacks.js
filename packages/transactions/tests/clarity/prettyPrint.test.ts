@@ -1,4 +1,4 @@
-import { Cl } from '../src';
+import { Cl } from '../../src';
 
 describe.only('test format of Stacks.js clarity values into clarity style strings', () => {
   it('formats basic types', () => {
