@@ -8,6 +8,7 @@ export {
   emptyMessageSignature,
   isSingleSig,
 } from './authorization';
+export * from './build';
 export * from './builders';
 export * from './clarity';
 export * from './constants';
