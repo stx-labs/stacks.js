@@ -84,7 +84,7 @@ export type SignedMultiSigOptions = UnsignedMultiSigOptions & {
 export type TokenTransferOptions = {
   /** the address of the recipient of the token transfer */
   recipient: string | PrincipalCV;
-  /** the amount to be transfered in microstacks */
+  /** the amount to be transferred in microstacks */
   amount: IntegerType;
   /** the transaction fee in microstacks */
   fee?: IntegerType;
