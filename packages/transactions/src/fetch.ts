@@ -286,8 +286,8 @@ export async function fetchAbi({
  * Calls a function as read-only from a contract interface.
  * It is not necessary that the function is defined as read-only in the contract
  *
- * @return Returns an object with a status bool (okay) and a result string that
- * is a serialized clarity value in hex format.
+ * @return A promise that resolves to the parsed Clarity value returned by the
+ * read-only function call.
  */
 export async function fetchCallReadOnlyFunction(
   opts: ReadOnlyFunctionOptions
