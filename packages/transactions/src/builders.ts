@@ -553,11 +553,11 @@ type PreferredSignedMultiSigContractCallOptions = PreferredContractCallOptions &
   SignedMultiSigOptions;
 
 type LegacyUnsignedSingleSigContractCallOptions = LegacyContractCallOptions & {
-  publicKey: PrivateKey;
+  publicKey: PublicKey;
 };
 
 type LegacySignedSingleSigContractCallOptions = LegacyContractCallOptions & {
-  senderKey: PublicKey;
+  senderKey: PrivateKey;
 };
 
 export type UnsignedContractCallOptions =
