@@ -3,6 +3,7 @@ import { parseZoneFile } from 'zone-file';
 
 import { getTokenFileUrl, Person } from '../profile';
 import { extractProfile } from '../profileTokens';
+import { LegacyProfile } from './personLegacy';
 
 /**
  *
@@ -13,12 +14,12 @@ import { extractProfile } from '../profileTokens';
  * @ignore
  */
 export function resolveZoneFileToPerson(
-  zoneFile: any,
+  zoneFile: string,
   publicKeyOrAddress: string,
-  callback: (profile: any) => void,
+  callback: (profile: Record<string, unknown> | null) => void,
   fetchFn: FetchFn = createFetchFn()
 ) {
-  let zoneFileJson = null;
+  let zoneFileJson: Record<string, unknown> | null = null;
   try {
     zoneFileJson = parseZoneFile(zoneFile);
     if (!zoneFileJson.hasOwnProperty('$origin')) {
@@ -29,14 +30,14 @@ export function resolveZoneFileToPerson(
     console.error(e);
   }
 
-  let tokenFileUrl = null;
+  let tokenFileUrl: string | null = null;
   if (zoneFileJson && Object.keys(zoneFileJson).length > 0) {
     tokenFileUrl = getTokenFileUrl(zoneFileJson);
   } else {
-    let profile = null;
+    let profile: Record<string, unknown> | null = null;
     try {
-      profile = JSON.parse(zoneFile);
-      const person = Person.fromLegacyFormat(profile);
+      const legacyProfile = JSON.parse(zoneFile) as LegacyProfile;
+      const person = Person.fromLegacyFormat(legacyProfile);
       profile = person.profile();
     } catch (error) {
       console.warn(error);
@@ -47,16 +48,16 @@ export function resolveZoneFileToPerson(
 
   if (tokenFileUrl) {
     fetchFn(tokenFileUrl)
-      .then((response: any) => response.text())
-      .then((responseText: any) => JSON.parse(responseText))
-      .then((responseJson: any) => {
-        const tokenRecords = responseJson;
+      .then(response => response.text())
+      .then(responseText => JSON.parse(responseText) as unknown)
+      .then(responseJson => {
+        const tokenRecords = responseJson as { token: string }[];
         const token = tokenRecords[0].token;
         const profile = extractProfile(token, publicKeyOrAddress);
 
         callback(profile);
       })
-      .catch((error: any) => {
+      .catch((error: unknown) => {
         console.warn(error);
       });
   } else {

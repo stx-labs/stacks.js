@@ -362,27 +362,27 @@ describe('Clarity Types', () => {
       const unsafeMinIntSize = minSafeInt - 1n;
       expect(minSafeInt.toString()).toBe(Number.MIN_SAFE_INTEGER.toString());
 
-      const smallBitsUInt1 = cvToValue(uintCV(maxSafeInt), true);
+      const smallBitsUInt1 = cvToValue(uintCV(maxSafeInt), true) as string | bigint;
       expect(smallBitsUInt1.toString()).toBe(maxSafeInt.toString());
       expect(typeof smallBitsUInt1).toBe('string');
 
-      const smallBitsInt1 = cvToValue(intCV(maxSafeInt), true);
+      const smallBitsInt1 = cvToValue(intCV(maxSafeInt), true) as string | bigint;
       expect(smallBitsInt1.toString()).toBe(maxSafeInt.toString());
       expect(typeof smallBitsInt1).toBe('string');
 
-      const smallBitsInt2 = cvToValue(intCV(minSafeInt), true);
+      const smallBitsInt2 = cvToValue(intCV(minSafeInt), true) as string | bigint;
       expect(smallBitsInt2.toString()).toBe(minSafeInt.toString());
       expect(typeof smallBitsInt2).toBe('string');
 
-      const largeBitsUInt1 = cvToValue(uintCV(unsafeLargeIntSize), true);
+      const largeBitsUInt1 = cvToValue(uintCV(unsafeLargeIntSize), true) as string | bigint;
       expect(largeBitsUInt1.toString()).toBe(unsafeLargeIntSize.toString());
       expect(typeof largeBitsUInt1).toBe('string');
 
-      const largeBitsInt1 = cvToValue(intCV(unsafeLargeIntSize), true);
+      const largeBitsInt1 = cvToValue(intCV(unsafeLargeIntSize), true) as string | bigint;
       expect(largeBitsInt1.toString()).toBe(unsafeLargeIntSize.toString());
       expect(typeof largeBitsInt1).toBe('string');
 
-      const largeBitsInt2 = cvToValue(intCV(unsafeMinIntSize), true);
+      const largeBitsInt2 = cvToValue(intCV(unsafeMinIntSize), true) as string | bigint;
       expect(largeBitsInt2.toString()).toBe(unsafeMinIntSize.toString());
       expect(typeof largeBitsInt2).toBe('string');
     });

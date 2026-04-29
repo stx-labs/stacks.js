@@ -168,19 +168,20 @@ export function isRedirectUriValid(token: string) {
  * @private
  * @ignore
  */
-export async function verifyAuthRequest(token: string): Promise<boolean> {
+export function verifyAuthRequest(token: string): Promise<boolean> {
   if (decodeToken(token).header.alg === 'none') {
     throw new Error('Token must be signed in order to be verified');
   }
-  const values = await Promise.all([
-    isExpirationDateValid(token),
-    isIssuanceDateValid(token),
-    doSignaturesMatchPublicKeys(token),
-    doPublicKeysMatchIssuer(token),
-    isManifestUriValid(token),
-    isRedirectUriValid(token),
-  ]);
-  return values.every(val => val);
+  return Promise.resolve(
+    [
+      isExpirationDateValid(token),
+      isIssuanceDateValid(token),
+      doSignaturesMatchPublicKeys(token),
+      doPublicKeysMatchIssuer(token),
+      isManifestUriValid(token),
+      isRedirectUriValid(token),
+    ].every(val => val)
+  );
 }
 
 /**
@@ -192,7 +193,9 @@ export async function verifyAuthRequest(token: string): Promise<boolean> {
  * @private
  * @ignore
  */
-export async function verifyAuthRequestAndLoadManifest(token: string): Promise<any> {
+export async function verifyAuthRequestAndLoadManifest(
+  token: string
+): Promise<Record<string, unknown>> {
   const valid = await verifyAuthRequest(token);
   if (!valid) {
     throw new Error('Token is an invalid auth request');
@@ -208,12 +211,13 @@ export async function verifyAuthRequestAndLoadManifest(token: string): Promise<a
  * @private
  * @ignore
  */
-export async function verifyAuthResponse(token: string): Promise<boolean> {
-  const conditions = await Promise.all([
-    isExpirationDateValid(token),
-    isIssuanceDateValid(token),
-    doSignaturesMatchPublicKeys(token),
-    doPublicKeysMatchIssuer(token),
-  ]);
-  return conditions.every(val => val);
+export function verifyAuthResponse(token: string): Promise<boolean> {
+  return Promise.resolve(
+    [
+      isExpirationDateValid(token),
+      isIssuanceDateValid(token),
+      doSignaturesMatchPublicKeys(token),
+      doPublicKeysMatchIssuer(token),
+    ].every(val => val)
+  );
 }

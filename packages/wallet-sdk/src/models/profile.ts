@@ -67,7 +67,7 @@ export function signProfileForUpload({
   const privateKey = account.stxPrivateKey;
   const publicKey = getPublicKeyFromPrivate(privateKey.slice(0, 64));
 
-  const token = signProfileToken(profile, privateKey, { publicKey });
+  const token = signProfileToken(profile as Parameters<typeof signProfileToken>[0], privateKey, { publicKey });
   const tokenRecord = wrapProfileToken(token);
   const tokenRecords = [tokenRecord];
   return JSON.stringify(tokenRecords, null, 2);

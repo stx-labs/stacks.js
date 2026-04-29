@@ -82,7 +82,13 @@ export function cvToString(val: ClarityValue, encoding: 'tryAscii' | 'hex' = 'he
  * less than or equal to 53 bit length, otherwise string wrapped integers when larger than 53 bits.
  * If false, they are returned as js native `bigint`s which are _not_ JSON serializable.
  */
-export function cvToValue(val: ClarityValue, strictJsonCompat: boolean = false): any {
+export interface ClarityJson {
+  type: string;
+  value: unknown;
+  success?: boolean;
+}
+
+export function cvToValue(val: ClarityValue, strictJsonCompat: boolean = false): unknown {
   switch (val.type) {
     case ClarityType.BoolTrue:
       return true;
@@ -109,12 +115,13 @@ export function cvToValue(val: ClarityValue, strictJsonCompat: boolean = false):
       return val.value;
     case ClarityType.List:
       return val.value.map(v => cvToJSON(v));
-    case ClarityType.Tuple:
-      const result: { [key: string]: any } = {};
+    case ClarityType.Tuple: {
+      const result: Record<string, unknown> = {};
       Object.keys(val.value).forEach(key => {
         result[key] = cvToJSON(val.value[key]);
       });
       return result;
+    }
     case ClarityType.StringASCII:
       return val.value;
     case ClarityType.StringUTF8:
@@ -122,7 +129,7 @@ export function cvToValue(val: ClarityValue, strictJsonCompat: boolean = false):
   }
 }
 
-export function cvToJSON(val: ClarityValue): any {
+export function cvToJSON(val: ClarityValue): ClarityJson {
   switch (val.type) {
     case ClarityType.ResponseErr:
       return { type: getCVTypeString(val), value: cvToValue(val, true), success: false };

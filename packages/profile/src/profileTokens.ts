@@ -1,4 +1,4 @@
-import { decodeToken, SECP256K1Client, TokenSigner, TokenVerifier } from 'jsontokens';
+import { decodeToken, Json, SECP256K1Client, TokenSigner, TokenVerifier } from 'jsontokens';
 import { TokenInterface } from 'jsontokens/lib/decode';
 import { nextYear, makeUUID4 } from '@stacks/common';
 import { getAddressFromPublicKey } from '@stacks/transactions';
@@ -16,10 +16,10 @@ import { getAddressFromPublicKey } from '@stacks/transactions';
  *
  */
 export function signProfileToken(
-  profile: any,
+  profile: Record<string, Json>,
   privateKey: string,
-  subject?: any,
-  issuer?: any,
+  subject?: { publicKey: string },
+  issuer?: { publicKey: string },
   signingAlgorithm = 'ES256K',
   issuedAt = new Date(),
   expiresAt = nextYear()
@@ -138,7 +138,7 @@ export function verifyProfileToken(token: string, publicKeyOrAddress: string): T
 export function extractProfile(
   token: string,
   publicKeyOrAddress: string | null = null
-): Record<string, any> {
+): Record<string, unknown> {
   let decodedToken;
   if (publicKeyOrAddress) {
     decodedToken = verifyProfileToken(token, publicKeyOrAddress);
@@ -146,14 +146,14 @@ export function extractProfile(
     decodedToken = decodeToken(token);
   }
 
-  let profile = {};
+  let profile: Record<string, unknown> = {};
   if (decodedToken.hasOwnProperty('payload')) {
     const payload = decodedToken.payload;
     if (typeof payload === 'string') {
       throw new Error('Unexpected token payload type of string');
     }
     if (payload.hasOwnProperty('claim')) {
-      profile = payload.claim as Record<string, any>;
+      profile = payload.claim as Record<string, unknown>;
     }
   }
 

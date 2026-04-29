@@ -259,7 +259,7 @@ export function getGlobalObject<K extends Extract<keyof Window, string>>(
       }
     }
   } catch (error) {
-    Logger.error(`Error getting object '${name}' from global scope '${globalScope}': ${error}`);
+    Logger.error(`Error getting object '${String(name)}' from global scope: ${String(error)}`);
   }
   if (throwIfUnavailable) {
     const errMsg = getAPIUsageErrorMessage(globalScope, name.toString(), usageDesc);
@@ -267,7 +267,7 @@ export function getGlobalObject<K extends Extract<keyof Window, string>>(
     throw new Error(errMsg);
   }
   if (returnEmptyObject) {
-    return {} as any;
+    return {} as unknown as Window[K];
   }
   return undefined;
 }
@@ -292,13 +292,13 @@ export function getGlobalObjects<K extends Extract<keyof Window, string>>(
     if (throwIfUnavailable) {
       const errMsg = getAPIUsageErrorMessage(globalScope, names[0].toString(), usageDesc);
       Logger.error(errMsg);
-      throw errMsg;
+      throw new Error(errMsg);
     } else if (returnEmptyObject) {
-      globalScope = {} as any;
+      globalScope = {} as unknown as Window;
     }
   }
 
-  const result: Pick<Window, K> = {} as any;
+  const result: Pick<Window, K> = {} as Pick<Window, K>;
   for (let i = 0; i < names.length; i++) {
     const name = names[i];
     try {
@@ -311,7 +311,7 @@ export function getGlobalObjects<K extends Extract<keyof Window, string>>(
           Logger.error(errMsg);
           throw new Error(errMsg);
         } else if (returnEmptyObject) {
-          result[name] = {} as any;
+          result[name] = {} as unknown as Window[K];
         }
       }
     } catch (error) {
@@ -442,7 +442,7 @@ export function toTwos(value: bigint, width: bigint): bigint {
     value < -(BigInt(1) << (width - BigInt(1))) ||
     (BigInt(1) << (width - BigInt(1))) - BigInt(1) < value
   ) {
-    throw `Unable to represent integer in width: ${width}`;
+    throw new Error(`Unable to represent integer in width: ${width}`);
   }
   if (value >= BigInt(0)) {
     return BigInt(value);
@@ -530,9 +530,6 @@ export function hexToBytes(hex: string): Uint8Array {
   return array;
 }
 
-declare const TextEncoder: any;
-declare const TextDecoder: any;
-
 /**
  * Converts a UTF-8 string to the equivalent bytes
  * @example
@@ -578,7 +575,7 @@ export function asciiToBytes(str: string) {
  * ```
  */
 export function bytesToAscii(arr: Uint8Array) {
-  return String.fromCharCode.apply(null, arr as any as number[]);
+  return String.fromCharCode.apply(null, Array.from(arr));
 }
 
 function isNotOctet(octet: number) {
@@ -624,8 +621,11 @@ export function concatArray(elements: (Uint8Array | number[] | number)[]) {
  * Better `instanceof` check for types in different environments
  * @ignore
  */
-export function isInstance<T>(object: any, clazz: { new (...args: any[]): T }): object is T {
-  return object instanceof clazz || object?.constructor?.name?.toLowerCase() === clazz.name;
+export function isInstance<T>(object: unknown, clazz: { new (...args: any[]): T }): object is T {
+  return (
+    object instanceof clazz ||
+    (object as { constructor?: { name?: string } })?.constructor?.name?.toLowerCase() === clazz.name
+  );
 }
 
 /**

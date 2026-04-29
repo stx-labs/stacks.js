@@ -197,8 +197,9 @@ export class Storage {
     const profile = await lookupProfile({ username, zoneFileLookupURL });
     let bucketUrl: string | undefined;
     if (profile.hasOwnProperty('apps')) {
-      if (profile.apps.hasOwnProperty(appOrigin)) {
-        const url = profile.apps[appOrigin];
+      const apps = profile.apps as Record<string, string>;
+      if (apps.hasOwnProperty(appOrigin)) {
+        const url = apps[appOrigin];
         const bucket = url.replace(/\/?(\?|#|$)/, '/$1');
         bucketUrl = `${bucket}${path}`;
       }
@@ -595,10 +596,10 @@ export class Storage {
 
     try {
       return await uploadFn(gaiaHubConfig);
-    } catch (error: any) {
+    } catch (error: unknown) {
       // If the upload fails on first attempt, it could be due to a recoverable
       // error which may succeed by refreshing the config and retrying.
-      if (isRecoverableGaiaError(error)) {
+      if (isRecoverableGaiaError(error as GaiaHubError)) {
         console.error(error);
         console.error('Possible recoverable error during Gaia upload, retrying...');
         const freshHubConfig = await this.setLocalGaiaHubConnection();

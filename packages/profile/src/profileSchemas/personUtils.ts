@@ -1,4 +1,14 @@
-export function getName(profile: any) {
+import { ProfileImage, PublicPersonProfile } from '../types';
+
+export interface VerificationEntry {
+  valid?: boolean;
+  service?: string;
+  identifier?: string;
+  proofUrl?: string;
+  proof_url?: string;
+}
+
+export function getName(profile: PublicPersonProfile | null | undefined) {
   if (!profile) {
     return null;
   }
@@ -22,7 +32,7 @@ export function getName(profile: any) {
  *
  * @ignore
  */
-export function getGivenName(profile: any) {
+export function getGivenName(profile: PublicPersonProfile | null | undefined) {
   if (!profile) {
     return null;
   }
@@ -41,7 +51,7 @@ export function getGivenName(profile: any) {
  *
  * @ignore
  */
-export function getFamilyName(profile: any) {
+export function getFamilyName(profile: PublicPersonProfile | null | undefined) {
   if (!profile) {
     return null;
   }
@@ -60,7 +70,7 @@ export function getFamilyName(profile: any) {
  *
  * @ignore
  */
-export function getDescription(profile: any) {
+export function getDescription(profile: PublicPersonProfile | null | undefined) {
   if (!profile) {
     return null;
   }
@@ -76,16 +86,16 @@ export function getDescription(profile: any) {
  *
  * @ignore
  */
-export function getAvatarUrl(profile: any) {
+export function getAvatarUrl(profile: PublicPersonProfile | null | undefined) {
   if (!profile) {
     return null;
   }
 
   let avatarContentUrl: string | null = null;
   if (profile.image) {
-    profile.image.map((image: any) => {
+    profile.image.map((image: ProfileImage) => {
       if (image.name === 'avatar') {
-        avatarContentUrl = image.contentUrl;
+        avatarContentUrl = image.contentUrl ?? null;
         return avatarContentUrl;
       } else {
         return null;
@@ -99,16 +109,20 @@ export function getAvatarUrl(profile: any) {
  *
  * @ignore
  */
-export function getVerifiedAccounts(profile: any, verifications?: any[]) {
+export function getVerifiedAccounts(
+  profile: PublicPersonProfile | null | undefined,
+  verifications?: VerificationEntry[]
+) {
   if (!profile) {
     return null;
   }
 
-  const filteredAccounts: any[] = [];
+  type AccountEntry = NonNullable<PublicPersonProfile['account']>[number];
+  const filteredAccounts: AccountEntry[] = [];
   if (profile.hasOwnProperty('account') && verifications) {
-    profile.account.map((account: any) => {
+    profile.account!.map((account: AccountEntry) => {
       let accountIsValid = false;
-      let proofUrl = null;
+      let proofUrl: string | undefined = undefined;
 
       verifications.map(verification => {
         if (verification.hasOwnProperty('proof_url')) {
@@ -144,12 +158,12 @@ export function getVerifiedAccounts(profile: any, verifications?: any[]) {
  *
  * @ignore
  */
-export function getOrganizations(profile: any) {
+export function getOrganizations(profile: PublicPersonProfile | null | undefined) {
   if (!profile) {
     return null;
   }
 
-  const organizations: any[] = [];
+  const organizations: NonNullable<PublicPersonProfile['worksFor']> = [];
 
   if (profile.hasOwnProperty('worksFor')) {
     return profile.worksFor;
@@ -162,15 +176,15 @@ export function getOrganizations(profile: any) {
  *
  * @ignore
  */
-export function getConnections(profile: any) {
+export function getConnections(profile: PublicPersonProfile | null | undefined) {
   if (!profile) {
     return null;
   }
 
-  let connections = [];
+  let connections: NonNullable<PublicPersonProfile['knows']> = [];
 
   if (profile.hasOwnProperty('knows')) {
-    connections = profile.knows;
+    connections = profile.knows!;
   }
 
   return connections;
@@ -180,7 +194,7 @@ export function getConnections(profile: any) {
  *
  * @ignore
  */
-export function getAddress(profile: any) {
+export function getAddress(profile: PublicPersonProfile | null | undefined) {
   if (!profile) {
     return null;
   }
@@ -190,17 +204,17 @@ export function getAddress(profile: any) {
   if (profile.hasOwnProperty('address')) {
     const addressParts = [];
 
-    if (profile.address.hasOwnProperty('streetAddress')) {
-      addressParts.push(profile.address.streetAddress);
+    if (profile.address!.hasOwnProperty('streetAddress')) {
+      addressParts.push(profile.address!.streetAddress);
     }
-    if (profile.address.hasOwnProperty('addressLocality')) {
-      addressParts.push(profile.address.addressLocality);
+    if (profile.address!.hasOwnProperty('addressLocality')) {
+      addressParts.push(profile.address!.addressLocality);
     }
-    if (profile.address.hasOwnProperty('postalCode')) {
-      addressParts.push(profile.address.postalCode);
+    if (profile.address!.hasOwnProperty('postalCode')) {
+      addressParts.push(profile.address!.postalCode);
     }
-    if (profile.address.hasOwnProperty('addressCountry')) {
-      addressParts.push(profile.address.addressCountry);
+    if (profile.address!.hasOwnProperty('addressCountry')) {
+      addressParts.push(profile.address!.addressCountry);
     }
 
     if (addressParts.length) {
@@ -215,7 +229,7 @@ export function getAddress(profile: any) {
  *
  * @ignore
  */
-export function getBirthDate(profile: any) {
+export function getBirthDate(profile: PublicPersonProfile | null | undefined) {
   if (!profile) {
     return null;
   }
@@ -238,7 +252,7 @@ export function getBirthDate(profile: any) {
   let birthDateString = null;
 
   if (profile.hasOwnProperty('birthDate')) {
-    const date = new Date(profile.birthDate);
+    const date = new Date(profile.birthDate as string);
     birthDateString = `${monthNames[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
   }
 

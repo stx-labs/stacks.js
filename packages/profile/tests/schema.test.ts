@@ -94,6 +94,6 @@ test('resolveZoneFileToPerson', () => {
 
   resolveZoneFileToPerson(zoneFile, ownerAddress, profile => {
     expect(profile).toBeTruthy();
-    expect(profile.name).toEqual('Ryan Shea');
+    expect(profile?.name).toEqual('Ryan Shea');
   });
 });

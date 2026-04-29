@@ -1,4 +1,6 @@
+/// <reference path="./vendor.d.ts" />
 import { extractProfile, signProfileToken } from './profileTokens';
+import type { Json } from 'jsontokens';
 
 import { getPersonFromLegacyFormat } from './profileSchemas';
 import {
@@ -12,21 +14,28 @@ import {
   getName,
   getOrganizations,
   getVerifiedAccounts,
+  VerificationEntry,
 } from './profileSchemas/personUtils';
+import { LegacyProfile } from './profileSchemas/personLegacy';
 
 // TODO: bring into this monorepo/convert to ts
-// @ts-ignore
 import { makeZoneFile, parseZoneFile } from 'zone-file';
-
-// Could not find a declaration file for module
-// @ts-ignore
 import * as inspector from 'schema-inspector';
 
 import { Logger } from '@stacks/common';
 import { NetworkClientParam, clientFromNetwork, networkFrom } from '@stacks/network';
-import { PublicPersonProfile } from './types';
+import { PublicPersonProfile, PublicProfileBase } from './types';
 
-const schemaDefinition: { [key: string]: any } = {
+interface ZoneFileJson extends Record<string, unknown> {
+  $origin?: string;
+  uri?: {
+    target?: string;
+    name?: string;
+    [k: string]: unknown;
+  }[];
+}
+
+const schemaDefinition: { [key: string]: unknown } = {
   type: 'object',
   properties: {
     '@context': { type: 'string', optional: true },
@@ -38,9 +47,9 @@ const schemaDefinition: { [key: string]: any } = {
  * Represents a user profile
  */
 export class Profile {
-  _profile: { [key: string]: any };
+  _profile: PublicProfileBase;
 
-  constructor(profile = {}) {
+  constructor(profile: PublicProfileBase = {}) {
     this._profile = Object.assign(
       {},
       {
@@ -55,17 +64,17 @@ export class Profile {
   }
 
   toToken(privateKey: string): string {
-    return signProfileToken(this.toJSON(), privateKey);
+    return signProfileToken(this.toJSON() as Record<string, Json>, privateKey);
   }
 
-  static validateSchema(profile: any, strict = false): any {
-    schemaDefinition.strict = strict;
+  static validateSchema(profile: unknown, strict = false) {
+    (schemaDefinition as { strict?: boolean }).strict = strict;
     return inspector.validate(schemaDefinition, profile);
   }
 
   static fromToken(token: string, publicKeyOrAddress: string | null = null): Profile {
     const profile = extractProfile(token, publicKeyOrAddress);
-    return new Profile(profile);
+    return new Profile(profile as PublicProfileBase);
   }
 
   static makeZoneFile(domainName: string, tokenFileURL: string): string {
@@ -176,7 +185,7 @@ export class Person extends Profile {
     );
   }
 
-  static validateSchema(profile: any, strict = false) {
+  static validateSchema(profile: unknown, strict = false) {
     personSchemaDefinition.strict = strict;
     return inspector.validate(schemaDefinition, profile);
   }
@@ -186,7 +195,7 @@ export class Person extends Profile {
     return new Person(profile);
   }
 
-  static fromLegacyFormat(legacyProfile: any) {
+  static fromLegacyFormat(legacyProfile: LegacyProfile | null | undefined) {
     const profile = getPersonFromLegacyFormat(legacyProfile);
     return new Person(profile);
   }
@@ -208,7 +217,7 @@ export class Person extends Profile {
   }
 
   profile() {
-    return Object.assign({}, this._profile);
+    return Object.assign({}, this._profile) as PublicPersonProfile;
   }
 
   name() {
@@ -231,7 +240,7 @@ export class Person extends Profile {
     return getAvatarUrl(this.profile());
   }
 
-  verifiedAccounts(verifications?: any[]) {
+  verifiedAccounts(verifications?: VerificationEntry[]) {
     return getVerifiedAccounts(this.profile(), verifications);
   }
 
@@ -293,7 +302,7 @@ export function makeProfileZoneFile(origin: string, tokenFileUrl: string): strin
  *
  * @ignore
  */
-export function getTokenFileUrl(zoneFileJson: any): string | null {
+export function getTokenFileUrl(zoneFileJson: ZoneFileJson): string | null {
   if (!zoneFileJson.hasOwnProperty('uri')) {
     return null;
   }
@@ -305,7 +314,7 @@ export function getTokenFileUrl(zoneFileJson: any): string | null {
   }
 
   const validRecords = zoneFileJson.uri.filter(
-    (record: any) => record.hasOwnProperty('target') && record.name === '_http._tcp'
+    record => record.hasOwnProperty('target') && record.name === '_http._tcp'
   );
 
   if (validRecords.length < 1) {
@@ -319,15 +328,15 @@ export function getTokenFileUrl(zoneFileJson: any): string | null {
   }
   let tokenFileUrl = firstValidRecord.target;
 
-  if (tokenFileUrl.startsWith('https')) {
+  if (tokenFileUrl?.startsWith('https')) {
     // pass
-  } else if (tokenFileUrl.startsWith('http')) {
+  } else if (tokenFileUrl?.startsWith('http')) {
     // pass
   } else {
     tokenFileUrl = `https://${tokenFileUrl}`;
   }
 
-  return tokenFileUrl;
+  return tokenFileUrl ?? null;
 }
 
 /**
@@ -339,22 +348,22 @@ export function getTokenFileUrl(zoneFileJson: any): string | null {
  */
 export function resolveZoneFileToProfile(
   opts: {
-    zoneFile: any;
+    zoneFile: string;
     publicKeyOrAddress: string;
   } & NetworkClientParam
-): Promise<Record<string, any>> {
+): Promise<Record<string, unknown>> {
   const network = networkFrom(opts.network ?? 'mainnet');
   const client = Object.assign({}, clientFromNetwork(network), opts.client);
 
   return new Promise((resolve, reject) => {
-    let zoneFileJson = null;
+    let zoneFileJson: ZoneFileJson | null = null;
     try {
-      zoneFileJson = parseZoneFile(opts.zoneFile);
+      zoneFileJson = parseZoneFile(opts.zoneFile) as ZoneFileJson;
       if (!zoneFileJson.hasOwnProperty('$origin')) {
         zoneFileJson = null;
       }
     } catch (e) {
-      reject(e);
+      reject(e instanceof Error ? e : new Error(String(e)));
     }
 
     let tokenFileUrl: string | null = null;
@@ -362,9 +371,10 @@ export function resolveZoneFileToProfile(
       tokenFileUrl = getTokenFileUrl(zoneFileJson);
     } else {
       try {
-        return resolve(Person.fromLegacyFormat(JSON.parse(opts.zoneFile)).profile());
+        const legacyProfile = JSON.parse(opts.zoneFile) as LegacyProfile;
+        return resolve(Person.fromLegacyFormat(legacyProfile).profile());
       } catch (error) {
-        return reject(error);
+        return reject(error instanceof Error ? error : new Error(String(error)));
       }
     }
 
@@ -372,9 +382,9 @@ export function resolveZoneFileToProfile(
       client
         .fetch(tokenFileUrl)
         .then(response => response.text())
-        .then(responseText => JSON.parse(responseText))
+        .then(responseText => JSON.parse(responseText) as unknown)
         .then(responseJson => {
-          const tokenRecords = responseJson;
+          const tokenRecords = responseJson as { token: string }[];
           const profile = extractProfile(tokenRecords[0].token, opts.publicKeyOrAddress);
           resolve(profile);
         })
@@ -382,7 +392,7 @@ export function resolveZoneFileToProfile(
           Logger.error(
             `resolveZoneFileToProfile: error fetching token file ${tokenFileUrl}: ${error}`
           );
-          reject(error);
+          reject(error instanceof Error ? error : new Error(String(error)));
         });
     } else {
       Logger.debug('Token file url not found. Resolving to blank profile.');

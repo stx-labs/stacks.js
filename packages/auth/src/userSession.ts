@@ -23,6 +23,7 @@ import {
   nextHour,
 } from '@stacks/common';
 import { extractProfile } from '@stacks/profile';
+import type { PublicProfileBase } from '@stacks/profile';
 import { AuthScope, DEFAULT_PROFILE } from './constants';
 
 import { UserData } from './userData';
@@ -115,7 +116,7 @@ export class UserSession {
     scopes?: (AuthScope | string)[],
     appDomain?: string,
     expiresAt: number = nextHour().getTime(),
-    extraParams: any = {}
+    extraParams: Record<string, unknown> = {}
   ): string {
     const appConfig = this.appConfig;
     if (!appConfig) {
@@ -292,7 +293,7 @@ export class UserSession {
     }
 
     const userData: UserData = {
-      profile: tokenPayload.profile,
+      profile: tokenPayload.profile as unknown as PublicProfileBase,
       email: tokenPayload.email as string,
       decentralizedID: tokenPayload.iss,
       identityAddress: getAddressFromDID(tokenPayload.iss),
@@ -310,14 +311,14 @@ export class UserSession {
       const response = await fetchFn(profileURL);
       if (!response.ok) {
         // return blank profile if we fail to fetch
-        userData.profile = Object.assign({}, DEFAULT_PROFILE);
+        userData.profile = Object.assign({}, DEFAULT_PROFILE) as PublicProfileBase;
       } else {
         const responseText = await response.text();
         const wrappedProfile = JSON.parse(responseText);
         userData.profile = extractProfile(wrappedProfile[0].token);
       }
     } else {
-      userData.profile = tokenPayload.profile;
+      userData.profile = tokenPayload.profile as unknown as PublicProfileBase;
     }
 
     sessionData.userData = userData;

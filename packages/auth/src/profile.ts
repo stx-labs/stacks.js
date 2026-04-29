@@ -17,7 +17,7 @@ export interface ProfileLookupOptions {
  */
 export function lookupProfile(
   options: ProfileLookupOptions & NetworkClientParam
-): Promise<Record<string, any>> {
+): Promise<Record<string, unknown>> {
   if (!options.username) {
     return Promise.reject(new Error('No username provided'));
   }
@@ -32,11 +32,11 @@ export function lookupProfile(
   } else {
     lookupPromise = getNameInfo({ name: options.username });
   }
-  return lookupPromise.then((responseJSON: any) => {
+  return lookupPromise.then((responseJSON: Record<string, unknown>) => {
     if (responseJSON.hasOwnProperty('zonefile') && responseJSON.hasOwnProperty('address')) {
       return resolveZoneFileToProfile({
-        zoneFile: responseJSON.zonefile,
-        publicKeyOrAddress: responseJSON.address,
+        zoneFile: responseJSON.zonefile as string,
+        publicKeyOrAddress: responseJSON.address as string,
         client,
       });
     } else {
@@ -59,7 +59,7 @@ export function getNameInfo(
   const nameLookupURL = `${client.baseUrl}/v1/names/${opts.name}`;
   return client
     .fetch(nameLookupURL)
-    .then((resp: any) => {
+    .then(resp => {
       if (resp.status === 404) {
         throw new Error('Name not found');
       } else if (resp.status !== 200) {
@@ -68,7 +68,7 @@ export function getNameInfo(
         return resp.json();
       }
     })
-    .then((nameInfo: any) => {
+    .then((nameInfo: Record<string, unknown>) => {
       // the returned address _should_ be in the correct network ---
       //  stacks node gets into trouble because it tries to coerce back to mainnet
       //  and the regtest transaction generation libraries want to use testnet addresses

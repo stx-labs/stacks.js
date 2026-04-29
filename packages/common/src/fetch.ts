@@ -130,14 +130,17 @@ export function createApiKeyMiddleware({
   };
 }
 
-function argsForCreateFetchFn(args: any[]): { fetchLib: FetchFn; middlewares: FetchMiddleware[] } {
+function argsForCreateFetchFn(args: (FetchFn | FetchMiddleware)[]): {
+  fetchLib: FetchFn;
+  middlewares: FetchMiddleware[];
+} {
   let fetchLib: FetchFn = fetchWrapper;
   let middlewares: FetchMiddleware[] = [];
   if (args.length > 0 && typeof args[0] === 'function') {
-    fetchLib = args.shift();
+    fetchLib = args.shift() as FetchFn;
   }
   if (args.length > 0) {
-    middlewares = args; // remaining args
+    middlewares = args as FetchMiddleware[]; // remaining args
   }
   return { fetchLib, middlewares };
 }
@@ -154,10 +157,10 @@ function argsForCreateFetchFn(args: any[]): { fetchLib: FetchFn; middlewares: Fe
  */
 export function createFetchFn(fetchLib: FetchFn, ...middleware: FetchMiddleware[]): FetchFn;
 export function createFetchFn(...middleware: FetchMiddleware[]): FetchFn;
-export function createFetchFn(...args: any[]): FetchFn {
+export function createFetchFn(...args: (FetchFn | FetchMiddleware)[]): FetchFn {
   const { fetchLib, middlewares } = argsForCreateFetchFn(args);
 
-  const fetchFn = async (url: string, init?: RequestInit | undefined): Promise<Response> => {
+  const fetchFn = async (url: string, init?: RequestInit): Promise<Response> => {
     let fetchParams = { url, init: init ?? {} };
 
     for (const middleware of middlewares) {

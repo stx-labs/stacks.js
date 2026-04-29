@@ -37,10 +37,9 @@ export function cloneDeep<T>(obj: T): T {
 
 // todo: remove this function and instead delete param without clone (if possible)?
 export function omit<T, K extends keyof any>(obj: T, prop: K): Omit<T, K> {
-  const clone = cloneDeep(obj);
-  // @ts-expect-error
-  delete clone[prop];
-  return clone;
+  const clone = cloneDeep(obj) as Record<PropertyKey, unknown>;
+  delete clone[prop as PropertyKey];
+  return clone as Omit<T, K>;
 }
 
 export const hash160 = (input: Uint8Array): Uint8Array => {

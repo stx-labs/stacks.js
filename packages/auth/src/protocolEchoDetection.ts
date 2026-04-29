@@ -6,6 +6,12 @@
  */
 
 const GLOBAL_DETECTION_CACHE_KEY = '_blockstackDidCheckEchoReply';
+
+declare global {
+  interface Window {
+    _blockstackDidCheckEchoReply?: boolean;
+  }
+}
 const ECHO_REPLY_PARAM = 'echoReply';
 const AUTH_CONTINUATION_PARAM = 'authContinuation';
 
@@ -54,7 +60,7 @@ export function protocolEchoReplyDetection(): boolean {
   }
 
   // Avoid performing the check twice and triggered multiple redirect timers.
-  const existingDetection = (globalScope as any)[GLOBAL_DETECTION_CACHE_KEY];
+  const existingDetection = globalScope[GLOBAL_DETECTION_CACHE_KEY];
   if (typeof existingDetection === 'boolean') {
     return existingDetection;
   }
@@ -62,7 +68,7 @@ export function protocolEchoReplyDetection(): boolean {
   const searchParams = getQueryStringParams(globalScope.location.search);
   const echoReplyParam = searchParams[ECHO_REPLY_PARAM];
   if (echoReplyParam) {
-    (globalScope as any)[GLOBAL_DETECTION_CACHE_KEY] = true;
+    globalScope[GLOBAL_DETECTION_CACHE_KEY] = true;
 
     // Use localStorage to notify originated tab that protocol handler is available and working.
     const echoReplyKey = `echo-reply-${echoReplyParam}`;

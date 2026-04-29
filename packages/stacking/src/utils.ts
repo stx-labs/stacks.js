@@ -332,10 +332,22 @@ export function poxAddressToBtcAddress(
   poxAddrClarityValue: ClarityValue,
   network: StacksNetworkName
 ): string;
-export function poxAddressToBtcAddress(...args: any[]): string {
+export function poxAddressToBtcAddress(
+  versionOrClarityValue: number | ClarityValue,
+  hashOrNetwork: string | Uint8Array,
+  network?: StacksNetworkName
+): string {
   // todo: allow these helpers to take a bitcoin network instead of a stacks network, once we have a concept of bitcoin networks in the codebase
-  if (typeof args[0] === 'number') return _poxAddressToBtcAddress_Values(args[0], args[1], args[2]);
-  return _poxAddressToBtcAddress_ClarityValue(args[0], args[1]);
+  if (typeof versionOrClarityValue === 'number')
+    return _poxAddressToBtcAddress_Values(
+      versionOrClarityValue,
+      hashOrNetwork as string | Uint8Array,
+      network!
+    );
+  return _poxAddressToBtcAddress_ClarityValue(
+    versionOrClarityValue,
+    hashOrNetwork as StacksNetworkName
+  );
 }
 
 // todo: move unwrap to tx package and document

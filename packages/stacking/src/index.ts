@@ -350,35 +350,46 @@ export class StackingClient {
 
   /** @deprecated Kept for backwards compatibility, may be removed in the future */
   getCoreInfo(): Promise<V2CoreInfoResponse> {
-    return this.client.fetch(`${this.client.baseUrl}/v2/info`).then(res => res.json());
+    return this.client
+      .fetch(`${this.client.baseUrl}/v2/info`)
+      .then(res => res.json() as Promise<V2CoreInfoResponse>);
   }
 
   /** @deprecated Kept for backwards compatibility, may be removed in the future */
   getPoxInfo(): Promise<V2PoxInfoResponse> {
-    return this.client.fetch(`${this.client.baseUrl}/v2/pox`).then(res => res.json());
+    return this.client
+      .fetch(`${this.client.baseUrl}/v2/pox`)
+      .then(res => res.json() as Promise<V2PoxInfoResponse>);
   }
 
   /** @deprecated Kept for backwards compatibility, may be removed in the future */
   async getTargetBlockTime(): Promise<number> {
     const res = await this.client
       .fetch(`${this.client.baseUrl}/extended/v1/info/network_block_times`)
-      .then((res: any): V1InfoBlockTimesResponse => res.json());
+      .then(res => res.json() as Promise<V1InfoBlockTimesResponse>);
 
     if (this.network.chainId === ChainId.Mainnet) return res.mainnet.target_block_time;
     return res.testnet.target_block_time;
   }
 
   /** Get account status */
-  async getAccountStatus(): Promise<any> {
-    // todo: add types for response
+  async getAccountStatus(): Promise<AccountStatus> {
     return this.client
       .fetch(`${this.client.baseUrl}/v2/accounts/${this.address}?proof=0`)
-      .then(res => res.json())
-      .then(json => {
-        json.balance = BigInt(json.balance);
-        json.locked = BigInt(json.locked);
-        return json;
-      });
+      .then(
+        res =>
+          res.json() as Promise<{
+            balance: string;
+            locked: string;
+            unlock_height: number;
+            nonce: number;
+          }>
+      )
+      .then(json => ({
+        ...json,
+        balance: BigInt(json.balance),
+        locked: BigInt(json.locked),
+      }));
   }
 
   /** Get account balance */
@@ -390,14 +401,17 @@ export class StackingClient {
   async getAccountExtendedBalances(): Promise<ExtendedAccountBalances> {
     return this.client
       .fetch(`${this.client.baseUrl}/extended/v1/address/${this.address}/balances`)
-      .then(res => res.json())
-      .then(json => {
-        json.stx.balance = BigInt(json.stx.balance);
-        json.stx.total_sent = BigInt(json.stx.total_sent);
-        json.stx.total_received = BigInt(json.stx.total_received);
-        json.stx.locked = BigInt(json.stx.locked);
-        return json;
-      });
+      .then(res => res.json() as Promise<ExtendedAccountBalancesResponse>)
+      .then(json => ({
+        ...json,
+        stx: {
+          ...json.stx,
+          balance: BigInt(json.stx.balance),
+          total_sent: BigInt(json.stx.total_sent),
+          total_received: BigInt(json.stx.total_received),
+          locked: BigInt(json.stx.locked),
+        },
+      }));
   }
 
   /** Get account balance of locked tokens */
@@ -408,7 +422,7 @@ export class StackingClient {
   /** Get reward cycle duration in seconds */
   async getCycleDuration(): Promise<number> {
     const poxInfoPromise = this.getPoxInfo();
-    const targetBlockTimePromise = await this.getTargetBlockTime();
+    const targetBlockTimePromise = this.getTargetBlockTime();
 
     return Promise.all([poxInfoPromise, targetBlockTimePromise]).then(
       ([poxInfo, targetBlockTime]) => {
@@ -1635,16 +1649,20 @@ export class StackingClient {
 }
 
 /** @ignore Rename `privateKey` to `senderKey`, for backwards compatibility */
-function renamePrivateKey(txOptions: BaseTxOptions) {
-  // @ts-ignore
-  txOptions.senderKey = txOptions.privateKey;
-  // @ts-ignore
-  delete txOptions.privateKey;
-  return txOptions as any as {
-    fee?: IntegerType;
-    nonce?: IntegerType;
-    senderKey: string;
-  };
+function renamePrivateKey({ privateKey, ...rest }: BaseTxOptions): {
+  fee?: IntegerType;
+  nonce?: IntegerType;
+  senderKey: string;
+} {
+  return { ...rest, senderKey: privateKey };
+}
+
+/** @beta @ignore Type export subject to change*/
+export interface AccountStatus {
+  balance: bigint;
+  locked: bigint;
+  unlock_height: number;
+  nonce: number;
 }
 
 /** @beta @ignore Type export subject to change*/
@@ -1717,8 +1735,8 @@ export interface ExtendedAccountBalancesResponse {
     burnchain_lock_height: number;
     burnchain_unlock_height: number;
   };
-  fungible_tokens: any;
-  non_fungible_tokens: any;
+  fungible_tokens: Record<string, { balance: string }>;
+  non_fungible_tokens: Record<string, { count: string }>;
 }
 
 /** @beta @ignore Type export subject to change*/
@@ -1733,8 +1751,8 @@ export interface ExtendedAccountBalances {
     burnchain_lock_height: number;
     burnchain_unlock_height: number;
   };
-  fungible_tokens: any;
-  non_fungible_tokens: any;
+  fungible_tokens: Record<string, { balance: string }>;
+  non_fungible_tokens: Record<string, { count: string }>;
 }
 
 /** @beta @ignore Type export subject to change*/

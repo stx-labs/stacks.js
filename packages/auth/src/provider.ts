@@ -31,7 +31,7 @@ export function getAuthRequestFromURL(): string | null {
 export async function fetchAppManifest(
   authRequest: string,
   fetchFn: FetchFn = createFetchFn()
-): Promise<any> {
+): Promise<Record<string, unknown>> {
   if (!authRequest) {
     throw new Error('Invalid auth request');
   }
@@ -44,7 +44,7 @@ export async function fetchAppManifest(
     // Logger.debug(`Fetching manifest from ${manifestURI}`)
     const response = await fetchFn(manifestURI);
     const responseText = await response.text();
-    const responseJSON = JSON.parse(responseText);
+    const responseJSON = JSON.parse(responseText) as Record<string, unknown>;
     return { ...responseJSON, manifestURI };
   } catch (error) {
     console.log(error);

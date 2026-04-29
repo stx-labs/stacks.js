@@ -1,4 +1,3 @@
-// @ts-ignore
 export function isSubtleCryptoAvailable(): boolean {
   return typeof crypto !== 'undefined' && typeof crypto.subtle !== 'undefined';
 }
@@ -42,8 +41,6 @@ export interface NodeCryptoLib {
   name: 'nodeCrypto';
 }
 
-// Make async for future version which may lazy load.
-// eslint-disable-next-line @typescript-eslint/require-await
 export async function getCryptoLib(): Promise<WebCryptoLib | NodeCryptoLib> {
   if (isSubtleCryptoAvailable()) {
     return {
@@ -52,8 +49,7 @@ export async function getCryptoLib(): Promise<WebCryptoLib | NodeCryptoLib> {
     };
   } else {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const nodeCrypto = require('crypto') as typeof import('crypto');
+      const nodeCrypto = await import('crypto');
       return {
         lib: nodeCrypto,
         name: 'nodeCrypto',

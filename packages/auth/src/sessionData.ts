@@ -45,15 +45,18 @@ export class SessionData {
   //   this.userData.gaiaHubConfig = config
   // }
 
-  static fromJSON(json: any): SessionData {
-    if (json.version !== SESSION_VERSION) {
-      throw new InvalidStateError(`JSON data version ${json.version} not supported by SessionData`);
+  static fromJSON(json: unknown): SessionData {
+    const data = json as Record<string, unknown>;
+    if (data.version !== SESSION_VERSION) {
+      throw new InvalidStateError(
+        `JSON data version ${String(data.version)} not supported by SessionData`
+      );
     }
     const options: SessionOptions = {
-      coreNode: json.coreNode,
-      userData: json.userData,
-      transitKey: json.transitKey,
-      etags: json.etags,
+      coreNode: data.coreNode as string | undefined,
+      userData: data.userData as SessionOptions['userData'],
+      transitKey: data.transitKey as string | undefined,
+      etags: data.etags as SessionOptions['etags'],
     };
     return new SessionData(options);
   }

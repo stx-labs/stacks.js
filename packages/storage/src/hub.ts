@@ -33,6 +33,13 @@ export const BLOCKSTACK_GAIA_HUB_LABEL = 'blockstack-gaia-hub-config';
 /**
  * The configuration for the user's Gaia storage provider.
  */
+interface HubInfo {
+  challenge_text: string;
+  latest_auth_version?: string;
+  read_url_prefix: string;
+  max_file_upload_size_megabytes?: number;
+}
+
 export interface GaiaHubConfig {
   address: string;
   url_prefix: string;
@@ -174,7 +181,7 @@ function makeLegacyAuthToken(challengeText: string, signerKeyHex: string): strin
  * @ignore
  */
 function makeV1GaiaAuthToken(
-  hubInfo: any,
+  hubInfo: HubInfo,
   signerKeyHex: string,
   hubUrl: string,
   associationToken?: string
@@ -214,7 +221,7 @@ export async function connectToGaiaHub(
   Logger.debug(`connectToGaiaHub: ${gaiaHubUrl}/hub_info`);
 
   const response = await fetchFn(`${gaiaHubUrl}/hub_info`);
-  const hubInfo = await response.json();
+  const hubInfo = (await response.json()) as HubInfo;
   const readURL = hubInfo.read_url_prefix;
   const token = makeV1GaiaAuthToken(hubInfo, challengeSignerHex, gaiaHubUrl, associationToken);
   const address = publicKeyToBtcAddress(getPublicKeyFromPrivate(challengeSignerHex));
@@ -250,11 +257,11 @@ export async function getBucketUrl(
 
 async function getGaiaErrorResponse(response: Response): Promise<GaiaHubErrorResponse> {
   let responseMsg = '';
-  let responseJson: any;
+  let responseJson: Record<string, unknown> | undefined;
   try {
     responseMsg = await response.text();
     try {
-      responseJson = JSON.parse(responseMsg);
+      responseJson = JSON.parse(responseMsg) as Record<string, unknown>;
     } catch (error) {
       // Use text instead
     }

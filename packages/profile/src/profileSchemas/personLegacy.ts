@@ -1,4 +1,24 @@
-import { ProfileType } from '../types';
+import { ProfileImage, ProfileType, PublicPersonProfile } from '../types';
+
+export interface LegacyServiceAccount {
+  username: string;
+  proof?: { url?: string };
+}
+
+export interface LegacyProfile {
+  name?: { formatted?: string };
+  bio?: string;
+  location?: { formatted?: string };
+  avatar?: { url?: string };
+  cover?: { url?: string };
+  website?: string;
+  bitcoin?: { address?: string };
+  twitter?: LegacyServiceAccount;
+  facebook?: LegacyServiceAccount;
+  github?: LegacyServiceAccount;
+  auth?: { publicKeychain?: string }[];
+  pgp?: { url?: string; fingerprint?: string };
+}
 
 /**
  *
@@ -7,7 +27,7 @@ import { ProfileType } from '../types';
  *
  * @ignore
  */
-function formatAccount(serviceName: string, data: any) {
+function formatAccount(serviceName: string, data: LegacyServiceAccount) {
   let proofUrl;
   if (data.proof && data.proof.url) {
     proofUrl = data.proof.url;
@@ -27,21 +47,18 @@ function formatAccount(serviceName: string, data: any) {
  *
  * @ignore
  */
-export function getPersonFromLegacyFormat(profile: any) {
+export function getPersonFromLegacyFormat(profile: LegacyProfile | null | undefined) {
   const profileData: {
     ['@type']: ProfileType;
-    account?: any[];
+    account?: NonNullable<PublicPersonProfile['account']>;
     name?: string;
     description?: string;
     address?: {
       ['@type']: string;
       addressLocality: string;
     };
-    image?: any[];
-    website?: {
-      ['@type']: string;
-      url: string;
-    }[];
+    image?: ProfileImage[];
+    website?: NonNullable<PublicPersonProfile['website']>;
   } = {
     '@type': 'Person',
   };
@@ -62,7 +79,7 @@ export function getPersonFromLegacyFormat(profile: any) {
       };
     }
 
-    const images = [];
+    const images: ProfileImage[] = [];
     if (profile.avatar && profile.avatar.url) {
       images.push({
         '@type': 'ImageObject',
@@ -90,7 +107,7 @@ export function getPersonFromLegacyFormat(profile: any) {
       ];
     }
 
-    const accounts = [];
+    const accounts: NonNullable<PublicPersonProfile['account']> = [];
     if (profile.bitcoin && profile.bitcoin.address) {
       accounts.push({
         '@type': 'Account',

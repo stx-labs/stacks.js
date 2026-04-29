@@ -51,8 +51,8 @@ export class BlockstackError extends Error {
     if (!stack) {
       try {
         throw new Error();
-      } catch (e: any) {
-        stack = e.stack;
+      } catch (e: unknown) {
+        stack = (e as Error).stack;
       }
     } else {
       bugDetails += `Stack Trace:\n${stack}`;
@@ -210,14 +210,14 @@ export class NoSessionDataError extends BlockstackError {
 export interface GaiaHubErrorResponse {
   status: number;
   statusText: string;
-  body?: any; // todo: should this be string?
+  body?: string | Record<string, unknown>;
 }
 
 export interface HubErrorDetails {
   message?: string;
   statusCode: number;
   statusText: string;
-  [prop: string]: any;
+  [prop: string]: unknown;
 }
 
 /**

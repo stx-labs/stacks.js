@@ -13,7 +13,7 @@ import {
   makeECPrivateKey,
   publicKeyToBtcAddress,
 } from '@stacks/encryption';
-import { SECP256K1Client, TokenSigner } from 'jsontokens';
+import { Json, SECP256K1Client, TokenSigner } from 'jsontokens';
 import { AuthScope, DEFAULT_SCOPE } from './constants';
 import { makeDIDFromAddress } from './dids';
 
@@ -68,7 +68,7 @@ export function makeAuthRequestToken(
   scopes: (AuthScope | string)[] = DEFAULT_SCOPE.slice(),
   appDomain?: string,
   expiresAt: number = nextMonth().getTime(),
-  extraParams: any = {}
+  extraParams: Record<string, unknown> = {}
 ): string {
   const getWindowOrigin = (paramName: string) => {
     const location = getGlobalObject('location', {
@@ -93,8 +93,8 @@ export function makeAuthRequestToken(
     jti: makeUUID4(),
     iat: Math.floor(new Date().getTime() / 1000), // JWT times are in seconds
     exp: Math.floor(expiresAt / 1000), // JWT times are in seconds
-    iss: null,
-    public_keys: [],
+    iss: null as string | null,
+    public_keys: [] as string[],
     domain_name: appDomain,
     manifest_uri: manifestURI,
     redirect_uri: redirectURI,
@@ -114,7 +114,7 @@ export function makeAuthRequestToken(
 
   /* Sign and return the token */
   const tokenSigner = new TokenSigner('ES256k', transitPrivateKey);
-  const token = tokenSigner.sign(payload);
+  const token = tokenSigner.sign(payload as unknown as Json);
 
   return token;
 }
@@ -186,8 +186,7 @@ export async function decryptPrivateKey(
  */
 export async function makeAuthResponse(
   privateKey: string,
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  profile: {} = {},
+  profile: Record<string, unknown> = {},
   metadata: AuthMetadata | null,
   coreToken: string | null = null,
   appPrivateKey: string | null = null,
@@ -245,5 +244,5 @@ export async function makeAuthResponse(
 
   /* Sign and return the token */
   const tokenSigner = new TokenSigner('ES256k', privateKey);
-  return tokenSigner.sign(payload);
+  return tokenSigner.sign(payload as unknown as Json);
 }

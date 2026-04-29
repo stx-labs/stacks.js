@@ -1,3 +1,14 @@
+import type { PublicProfileBase } from '@stacks/profile';
+
+/** Internal representation of a Gaia hub connection config. */
+export interface GaiaHubConfig {
+  address: string;
+  url_prefix: string;
+  token: string;
+  max_file_upload_size_megabytes: number | undefined;
+  server: string;
+}
+
 /**
  *  Returned from the [[UserSession.loadUserData]] function.
  */
@@ -31,9 +42,9 @@ export interface UserData {
   gaiaAssociationToken?: string;
   // public: this is the proper `Person` schema json for the user.
   // This is the data that gets used when the `new blockstack.Person(profile)` class is used.
-  profile: any;
+  profile: PublicProfileBase;
   // private: does not get sent to webapp at all.
-  gaiaHubConfig?: any;
+  gaiaHubConfig?: GaiaHubConfig;
   // Based on issue with incorrect appPrivateKey derivation see stacks-web-wallet issue #2238
   appPrivateKeyFromWalletSalt?: string;
 }
