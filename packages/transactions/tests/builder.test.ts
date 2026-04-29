@@ -3116,7 +3116,7 @@ describe('Preferred param shapes', () => {
     expect(unified.serialize()).toBe(legacy.serialize());
   });
 
-  test('makeContractDeploy with empty-string `name` still normalizes', async () => {
+  test('makeUnsignedContractDeploy with empty-string `name` still normalizes', async () => {
     const publicKey = '03ef788b3830c00abe8f64f62dc32fc863bc0b2cafeb073b6c8e1c7657d9c2c3ab';
     const codeBody = '(+ 1 1)';
 
