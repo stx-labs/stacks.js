@@ -198,7 +198,11 @@ export const validateStacksAddress = (address: string): boolean => {
 
 /** @ignore */
 export function parseContractId(contractId: ContractIdString) {
-  const [address, name] = contractId.split('.');
-  if (!address || !name) throw new Error(`Invalid contract identifier: ${contractId}`);
-  return [address, name];
+  const segments = contractId.split('.');
+  if (segments.length !== 2 || !segments[0] || !segments[1]) {
+    throw new Error(
+      `Invalid contract identifier "${contractId}". Expected format "<address>.<name>".`
+    );
+  }
+  return segments as [string, string];
 }
