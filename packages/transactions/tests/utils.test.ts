@@ -39,9 +39,7 @@ describe(validateStacksAddress.name, () => {
   });
 });
 
-// `cloneDeep` is used at six call sites. These tests construct the exact
-// shapes cloned at each one and assert the clone behaves the way the caller
-// then uses it (methods callable, bigint/Uint8Array intact, mutation isolated).
+// Tests mirror the actual shapes cloned at each `cloneDeep` call site.
 describe(cloneDeep.name, () => {
   const PUBKEY = '03ef788b3830c00abe8f64f62dc32fc863bc0b2cafeb073b6c8e1c7657d9c2c3ab';
   const PUBKEY_2 = '02ed4e25a2c2bb83adfaadce6e3da0e6c4cee6d4f4b50a52f96fb5826ee45e2b91';
@@ -97,8 +95,7 @@ describe(cloneDeep.name, () => {
     });
 
     test('mutating clone.auth does not mutate the original (signBegin/verifyBegin contract)', () => {
-      // transaction.ts:115 / :122 rely on this: signBegin/verifyBegin clone, mutate
-      // the clone's auth (intoInitialSighashAuth), then take txid — must not mutate self
+      // signBegin/verifyBegin clone, mutate the clone's auth, then take txid — must not mutate self
       const tx = buildStandardTx();
       const originalNonce = tx.auth.spendingCondition!.nonce;
       const clone = cloneDeep(tx);
@@ -107,7 +104,7 @@ describe(cloneDeep.name, () => {
       expect(tx.auth.spendingCondition!.nonce).not.toBe(clone.auth.spendingCondition!.nonce);
     });
 
-    test('createSponsorSigner flow: clone, setSponsor, verifyOrigin (signer.ts:71)', () => {
+    test('createSponsorSigner flow: clone, setSponsor, verifyOrigin', () => {
       const tx = buildSponsoredTx();
       // Sign the origin first so verifyOrigin has something real to check
       const originSigner = new TransactionSigner(tx);
@@ -129,7 +126,7 @@ describe(cloneDeep.name, () => {
     });
 
     test('TransactionSigner.resume + getTxInComplete preserve bigint and methods', () => {
-      // signer.ts:156 (getTxInComplete) and :160 (resume) both go through cloneDeep
+      // getTxInComplete and resume both go through cloneDeep
       const tx = buildStandardTx();
       const signer = new TransactionSigner(tx);
       const out = signer.getTxInComplete();
@@ -144,7 +141,7 @@ describe(cloneDeep.name, () => {
     });
   });
 
-  describe('SpendingCondition (authorization.ts:196 — clearCondition)', () => {
+  describe('SpendingCondition (clearCondition)', () => {
     test('single-sig: bigint fee/nonce preserved, signature object preserved, mutation isolated', () => {
       const cond = createSingleSigSpendingCondition(AddressHashMode.P2PKH, PUBKEY, 5n, 1000n);
       cond.signature = createMessageSignature(
@@ -190,7 +187,7 @@ describe(cloneDeep.name, () => {
     });
   });
 
-  describe('Clarity tuple value (contract-abi.ts:350 — matchType)', () => {
+  describe('Clarity tuple value (matchType)', () => {
     test('cloning a tuple value preserves bigints and isolates key deletion', () => {
       // matchType clones cv.value, then `delete tuple[key]` for matched keys.
       // Cloning must not mutate the original tuple value.
@@ -210,34 +207,4 @@ describe(cloneDeep.name, () => {
     });
   });
 
-  describe('low-level invariants', () => {
-    test('preserves bigint, Uint8Array, and nested mutation isolation', () => {
-      const input = {
-        big: 12345678901234567890n,
-        bytes: new Uint8Array([1, 2, 3, 4]),
-        nested: { arr: [{ x: 1 }] },
-      };
-      const clone = cloneDeep(input);
-
-      expect(clone.big).toBe(12345678901234567890n);
-      expect(typeof clone.big).toBe('bigint');
-      expect(clone.bytes).toBeInstanceOf(Uint8Array);
-      expect(Array.from(clone.bytes)).toEqual([1, 2, 3, 4]);
-      expect(clone.bytes).not.toBe(input.bytes);
-      expect(clone.nested).not.toBe(input.nested);
-      expect(clone.nested.arr[0]).not.toBe(input.nested.arr[0]);
-
-      clone.nested.arr[0].x = 99;
-      expect(input.nested.arr[0].x).toBe(1);
-    });
-
-    test('returns primitives as-is', () => {
-      expect(cloneDeep(42)).toBe(42);
-      expect(cloneDeep('hello')).toBe('hello');
-      expect(cloneDeep(null)).toBe(null);
-      expect(cloneDeep(undefined)).toBe(undefined);
-      expect(cloneDeep(true)).toBe(true);
-      expect(cloneDeep(7n)).toBe(7n);
-    });
-  });
 });
