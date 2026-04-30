@@ -4,7 +4,6 @@ import { sha512_256 } from '@noble/hashes/sha512';
 import { utils } from '@noble/secp256k1';
 import { bytesToHex, concatArray, concatBytes, utf8ToBytes } from '@stacks/common';
 import { c32addressDecode } from 'c32check';
-import lodashCloneDeep from 'lodash.clonedeep';
 import { ClarityValue, deserializeCV, serializeCV } from './clarity';
 import { ContractIdString } from './types';
 
@@ -32,7 +31,13 @@ export const exceedsMaxLengthBytes = (string: string, maxLengthBytes: number): b
 
 /** @internal @deprecated */
 export function cloneDeep<T>(obj: T): T {
-  return lodashCloneDeep(obj);
+  const cloned = structuredClone(obj);
+  // structuredClone strips prototypes; restore the top-level one so class
+  // instances (e.g. StacksTransactionWire) keep their methods.
+  if (obj !== null && typeof obj === 'object') {
+    Object.setPrototypeOf(cloned as object, Object.getPrototypeOf(obj));
+  }
+  return cloned;
 }
 
 // todo: remove this function and instead delete param without clone (if possible)?
