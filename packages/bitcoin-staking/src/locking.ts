@@ -75,10 +75,35 @@ export function parseDefaultUnlockScript(unlockBytes: Uint8Array | string): Uint
 export function buildLockingScript(opts: {
   stxAddress: string;
   unlockHeight: number;
-  unlockBytes: Uint8Array | string;
+  /** Pre-encoded unlock-script tail. Mutually exclusive with `earlyExitPubkeys`. */
+  unlockBytes?: Uint8Array | string;
+  /**
+   * Early-exit signer pubkeys (compressed, hex). When provided, the unlock-script
+   * tail is constructed as a multisig spendable by `earlyExitThreshold`-of-N.
+   * Mutually exclusive with `unlockBytes`.
+   *
+   * unsure: exact early-exit script encoding — see `unsure/flow-5.md`. The
+   * contract stores a 683-byte opaque `early-unlock-signers` descriptor; how that
+   * maps to a discrete pubkey list is not specified. This implementation emits a
+   * standard Bitcoin `OP_<M> <pubkey...> OP_<N> OP_CHECKMULTISIG` tail as a
+   * placeholder.
+   */
+  earlyExitPubkeys?: string[];
+  /** Threshold M for the M-of-N early-exit multisig. Defaults to 1. */
+  earlyExitThreshold?: number;
 }): Uint8Array {
-  const unlock =
-    typeof opts.unlockBytes === 'string' ? hexToBytes(opts.unlockBytes) : opts.unlockBytes;
+  let unlock: Uint8Array;
+  if (opts.unlockBytes !== undefined) {
+    unlock =
+      typeof opts.unlockBytes === 'string' ? hexToBytes(opts.unlockBytes) : opts.unlockBytes;
+  } else if (opts.earlyExitPubkeys !== undefined) {
+    unlock = buildEarlyExitUnlockScript({
+      pubkeys: opts.earlyExitPubkeys,
+      threshold: opts.earlyExitThreshold ?? 1,
+    });
+  } else {
+    throw new Error('buildLockingScript: provide either `unlockBytes` or `earlyExitPubkeys`');
+  }
 
   // Stacks address payload: 0x05 || version (1 byte) || hash160 (20 bytes) = 22 bytes
   const parsed = Address.parse(opts.stxAddress) as { version: number; hash160: string };
@@ -114,10 +139,66 @@ export function buildLockingBitcoinAddress(opts: {
   network: StacksNetworkName | StacksNetwork;
 }): string {
   const script = buildLockingScript(opts);
-  const btcNetwork = BTC_NETWORKS[networkNameFrom(opts.network)];
+  return lockingScriptToP2wsh(script, networkNameFrom(opts.network));
+}
+
+/**
+ * Derive the P2WSH Bitcoin address that commits to the given locking script.
+ *
+ * Pure: no I/O. Useful when the caller already holds the script bytes (e.g. from
+ * {@link buildLockingScript}) and wants to fund the address out-of-band.
+ */
+export function lockingScriptToP2wsh(
+  script: Uint8Array,
+  network: StacksNetworkName | StacksNetwork
+): string {
+  const btcNetwork = BTC_NETWORKS[networkNameFrom(network)];
   const result = btc.p2wsh({ type: 'wsh', script }, btcNetwork);
   if (!result.address) throw new Error('Failed to derive P2WSH address');
   return result.address;
+}
+
+/**
+ * Build a standard `M-of-N CHECKMULTISIG` unlock-script tail for the early-exit
+ * branch of a paired-BTC lockup.
+ *
+ * unsure: real on-chain shape. The PoX-5 contract stores `early-unlock-signers`
+ * as an opaque 683-byte buffer descriptor (see `setup-bond` in `pox-5.clar`).
+ * The exact wire format that the L1 verifier matches is not yet specified; this
+ * helper emits a vanilla Bitcoin multisig tail as a working placeholder so that
+ * downstream P2WSH derivation produces stable addresses for testing.
+ */
+export function buildEarlyExitUnlockScript(opts: {
+  pubkeys: string[];
+  threshold: number;
+}): Uint8Array {
+  const { pubkeys, threshold } = opts;
+  if (pubkeys.length === 0) throw new Error('earlyExitPubkeys must be non-empty');
+  if (threshold < 1 || threshold > pubkeys.length) {
+    throw new Error('earlyExitThreshold out of range');
+  }
+  const pubBytes = pubkeys.map(p => {
+    const bytes = hexToBytes(p);
+    if (bytes.length !== 33) throw new Error('Expected 33-byte compressed public key');
+    return bytes;
+  });
+  // missing: contract-defined early-exit script shape — emits a generic
+  // M-of-N multisig pending the spec.
+  return btc.Script.encode([
+    smallNumOp(threshold),
+    ...pubBytes,
+    smallNumOp(pubBytes.length),
+    'CHECKMULTISIG',
+  ]);
+}
+
+/** @ignore Map 1..16 to its OP_N token. */
+function smallNumOp(n: number) {
+  if (n < 1 || n > 16) throw new Error(`OP_N out of range: ${n}`);
+  return ([
+    'OP_1', 'OP_2', 'OP_3', 'OP_4', 'OP_5', 'OP_6', 'OP_7', 'OP_8',
+    'OP_9', 'OP_10', 'OP_11', 'OP_12', 'OP_13', 'OP_14', 'OP_15', 'OP_16',
+  ] as const)[n - 1];
 }
 
 /**

@@ -6,8 +6,14 @@ export const CONTRACT_ADDRESS = POX_5_CONTRACT.split('.')[0];
 /** @ignore */
 export const CONTRACT_NAME = POX_5_CONTRACT.split('.')[1];
 
-/** Maximum number of cycles for PoX-5 staking (≈ 1 year) */
-export const MAX_CYCLES = 24;
+/** Length of a paired-BTC bond in reward cycles (≈ 6 months). */
+export const BOND_LENGTH_CYCLES = 12;
+
+/** Gap between consecutive bond starts, in reward cycles. */
+export const BOND_GAP_CYCLES = 2;
+
+/** Hard cap for STX-only stake duration. */
+export const MAX_NUM_CYCLES = 96;
 
 /** Signature topics for PoX-5 SIP-018 structured data signing */
 export enum Pox5SignatureTopic {

@@ -2,12 +2,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import type { PrivateKey } from '@stacks/common';
 import { verifyMessageSignatureRsv } from '@stacks/encryption';
 import { networkFrom } from '@stacks/network';
-import {
-  Cl,
-  type ClarityValue,
-  encodeStructuredDataBytes,
-  signStructuredData,
-} from '@stacks/transactions';
+import { Cl, encodeStructuredDataBytes, signStructuredData } from '@stacks/transactions';
 import { toPoxTuple } from './btc-address';
 import type { Pox5SignatureOptions, SignerKeyGrantOptions } from './types';
 
@@ -34,24 +29,28 @@ export function pox5SignatureMessage(opts: Pox5SignatureOptions) {
   return { message, domain };
 }
 
-/** Build the SIP-018 structured data message + domain for a signer key grant. */
+/**
+ * Build the SIP-018 structured data message + domain for a signer-key grant.
+ *
+ * Mirrors `pox-5::get-signer-grant-message-hash`, which hashes the tuple
+ * `{topic: "grant-authorization", signer-manager: <principal>, auth-id: <uint>}`
+ * under the `POX_5_SIGNER_DOMAIN`.
+ */
 export function signerKeyGrantMessage(opts: SignerKeyGrantOptions) {
   const network = networkFrom(opts.network);
 
-  const messageFields: Record<string, ClarityValue> = {
-    staker: Cl.address(opts.staker),
+  const message = Cl.tuple({
+    topic: Cl.stringAscii('grant-authorization'),
+    'signer-manager': Cl.address(opts.signerManager),
     'auth-id': Cl.uint(opts.authId),
-  };
-
-  const message = opts.poxAddress
-    ? Cl.tuple({ ...messageFields, 'pox-addr': toPoxTuple(opts.poxAddress) })
-    : Cl.tuple(messageFields);
+  });
 
   const domain = Cl.tuple({
     name: Cl.stringAscii('pox-5-signer'),
     version: Cl.stringAscii('1.0.0'),
     'chain-id': Cl.uint(network.chainId),
   });
+
   return { message, domain };
 }
 
