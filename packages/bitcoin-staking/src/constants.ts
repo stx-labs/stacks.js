@@ -15,13 +15,6 @@ export const BOND_GAP_CYCLES = 2;
 /** Hard cap for STX-only stake duration. */
 export const MAX_NUM_CYCLES = 96;
 
-/** Signature topics for PoX-5 SIP-018 structured data signing */
-export enum Pox5SignatureTopic {
-  Stake = 'stake',
-  StakeExtend = 'stake-extend',
-  StakeUpdate = 'stake-update',
-}
-
 /** Address versions corresponding to the pox-5 contract `pox-addr` tuple */
 export enum PoXAddressVersion {
   // Taken from https://github.com/stx-labs/stacks.js/blob/efd2255f979ed64b90ac33246d99cd4809620400/packages/stacking/src/constants.ts#L1-L17

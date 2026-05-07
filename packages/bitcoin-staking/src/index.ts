@@ -9,7 +9,8 @@ export * from './fetch';
 /**
  * ### `BtcAddress.` Bitcoin Address Namespace
  *
- * Parse, stringify, and convert between Bitcoin addresses and PoX Clarity tuples.
+ * Parse and stringify Bitcoin addresses (used internally to render `pox-addr`
+ * tuples returned from PoX-5 reads).
  *
  * @example
  * ```ts
@@ -17,9 +18,6 @@ export * from './fetch';
  *
  * const parsed = BtcAddress.parse('bc1q...');
  * const btcAddr = BtcAddress.stringify(parsed, 'mainnet');
- *
- * const tuple = BtcAddress.toPoxTuple('bc1q...');
- * const addr = BtcAddress.stringify(poxAddrTuple, 'mainnet');
  * ```
  */
 export * as BtcAddress from './btc-address';

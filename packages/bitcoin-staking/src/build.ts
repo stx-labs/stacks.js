@@ -6,31 +6,18 @@ import {
   type StacksTransactionWire,
   makeUnsignedContractCall,
 } from '@stacks/transactions';
-import { BtcAddress } from '.';
 import { CONTRACT_ADDRESS, CONTRACT_NAME } from './constants';
 import type {
   BuildAllowContractCallerArgs,
   BuildDisallowContractCallerArgs,
   BuildGrantSignerKeyTxArgs,
-  BuildRegisterPoolTxArgs,
   BuildRevokeSignerKeyTxArgs,
-  BuildStakeExtendPooledTxArgs,
-  BuildStakeExtendTxArgs,
-  BuildStakePooledTxArgs,
-  BuildStakeTxArgs,
-  BuildStakeUpdatePooledTxArgs,
-  BuildStakeUpdateTxArgs,
   TxParams,
 } from './types';
 
 /** @ignore */
 function normalizeUnlockBytes(unlockBytes: Uint8Array | string): Uint8Array {
   return typeof unlockBytes === 'string' ? hexToBytes(unlockBytes) : unlockBytes;
-}
-
-/** @ignore */
-function clOptionalBuffer(hex?: string): ClarityValue {
-  return hex ? Cl.some(Cl.bufferFromHex(hex)) : Cl.none();
 }
 
 /** @ignore @internal */
@@ -211,7 +198,7 @@ export function buildRegisterForBond(
  */
 export async function buildStake(
   args: {
-    /** Contract principal of the signer-manager implementing `signer-manager-trait`. */
+    /** Contract address of the signer-manager implementing `signer-manager-trait`. */
     signerManager: string;
     amountUstx: IntegerType;
     numCycles: number;
@@ -246,21 +233,6 @@ export async function buildStake(
 }
 
 /**
- * @deprecated PoX-4-shape solo `stake`. The 2026-05-04 `pox-5.clar` no longer
- * accepts these args; left as a stub so other clusters that import the old
- * symbol still type-check.
- *
- * todo: delete once all clusters migrate to {@link buildStake}.
- */
-export async function buildStakeTx(
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _args: BuildStakeTxArgs & TxParams
-): Promise<StacksTransactionWire> {
-  // missing: PoX-4 arg shape no longer matches the contract.
-  throw new Error('buildStakeTx: removed — use buildStake (PoX-5 STX-only) instead');
-}
-
-/**
  * Build an unsigned PoX-5 `stake-update` transaction (STX-only — flow 2).
  *
  * Per `staking-design/pox-5.clar` (2026-05-04), the contract signature is:
@@ -283,7 +255,7 @@ export async function buildStakeTx(
  */
 export async function buildStakeUpdate(
   args: {
-    /** Contract principal of the signer-manager implementing `signer-manager-trait`. */
+    /** Contract address of the signer-manager implementing `signer-manager-trait`. */
     signerManager: string;
     /** Number of cycles to extend the lock by. `0` = no extension. */
     cyclesToExtend: number;
@@ -316,45 +288,6 @@ export async function buildStakeUpdate(
   );
 }
 
-/** Build an unsigned `stake-extend` transaction (solo — extend during last cycle). */
-export async function buildStakeExtendTx(
-  args: BuildStakeExtendTxArgs & TxParams
-): Promise<StacksTransactionWire> {
-  return callPox5(
-    'stake-extend',
-    [
-      Cl.uint(args.amountUstx),
-      BtcAddress.toPoxTuple(args.poxAddress),
-      clOptionalBuffer(args.signerSignature),
-      Cl.bufferFromHex(args.signerKey),
-      Cl.uint(args.maxAmount),
-      Cl.uint(args.authId),
-      Cl.uint(args.numCycles),
-      Cl.buffer(normalizeUnlockBytes(args.unlockBytes)),
-    ],
-    args
-  );
-}
-
-/**
- * @deprecated PoX-4-shape solo `stake-update`. The 2026-05-04 `pox-5.clar` no
- * longer accepts these args (`pox-address`, `signerKey`, `signerSignature`,
- * `maxAmount`, `authId` are gone; auth is delegated to the signer-manager
- * contract via `validate-stake!`). Left as a stub so other clusters that
- * import the old symbol still type-check.
- *
- * todo: delete once all clusters migrate to {@link buildStakeUpdate}.
- */
-export async function buildStakeUpdateTx(
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _args: BuildStakeUpdateTxArgs & TxParams
-): Promise<StacksTransactionWire> {
-  // missing: PoX-4 arg shape no longer matches the contract.
-  throw new Error(
-    'buildStakeUpdateTx: removed — use buildStakeUpdate (PoX-5 unified extend/increase/rotate) instead'
-  );
-}
-
 /**
  * Build an unsigned PoX-5 `unstake` transaction (STX-only — flow 3).
  *
@@ -377,54 +310,6 @@ export async function buildStakeUpdateTx(
  */
 export async function buildUnstake(args: TxParams): Promise<StacksTransactionWire> {
   return callPox5('unstake', [], args);
-}
-
-// ---------------------------------------------------------------------------
-// Pool staking
-// ---------------------------------------------------------------------------
-
-/** Build an unsigned `stake-pooled` transaction (join a registered pool). */
-export async function buildStakePooledTx(
-  args: BuildStakePooledTxArgs & TxParams
-): Promise<StacksTransactionWire> {
-  return callPox5(
-    'stake-pooled',
-    [
-      Cl.address(args.poolOwner),
-      Cl.uint(args.amountUstx),
-      Cl.uint(args.numCycles),
-      Cl.buffer(normalizeUnlockBytes(args.unlockBytes)),
-      Cl.uint(args.startBurnHt),
-    ],
-    args
-  );
-}
-
-/** Build an unsigned `stake-extend-pooled` transaction. */
-export async function buildStakeExtendPooledTx(
-  args: BuildStakeExtendPooledTxArgs & TxParams
-): Promise<StacksTransactionWire> {
-  return callPox5(
-    'stake-extend-pooled',
-    [
-      Cl.address(args.poolOwner),
-      Cl.uint(args.amountUstx),
-      Cl.uint(args.numCycles),
-      Cl.buffer(normalizeUnlockBytes(args.unlockBytes)),
-    ],
-    args
-  );
-}
-
-/** Build an unsigned `stake-update-pooled` transaction. */
-export async function buildStakeUpdatePooledTx(
-  args: BuildStakeUpdatePooledTxArgs & TxParams
-): Promise<StacksTransactionWire> {
-  return callPox5(
-    'stake-update-pooled',
-    [Cl.address(args.poolOwner), Cl.uint(args.amountUstxIncrease)],
-    args
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -454,7 +339,7 @@ export async function buildGrantSignerKey(
 
 /**
  * Build an unsigned `revoke-signer-grant` transaction. tx-sender must be
- * the Stacks principal whose hash160 matches `signerKey`.
+ * the Stacks address whose hash160 matches `signerKey`.
  */
 export async function buildRevokeSignerGrant(
   args: BuildRevokeSignerKeyTxArgs & TxParams
@@ -467,34 +352,13 @@ export async function buildRevokeSignerGrant(
 }
 
 // ---------------------------------------------------------------------------
-// Pool registration
-// ---------------------------------------------------------------------------
-
-/** Build an unsigned `register-pool` transaction. */
-export async function buildRegisterPoolTx(
-  args: BuildRegisterPoolTxArgs & TxParams
-): Promise<StacksTransactionWire> {
-  return callPox5(
-    'register-pool',
-    [
-      Cl.address(args.poolOwnerContract),
-      Cl.bufferFromHex(args.signerKey),
-      BtcAddress.toPoxTuple(args.poxAddress),
-      Cl.bufferFromHex(args.signerSignature),
-      Cl.uint(args.authId),
-    ],
-    args
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Contract-caller authorization
 // ---------------------------------------------------------------------------
 
 /**
  * Build an unsigned `allow-contract-caller` transaction.
  *
- * Authorizes another principal (typically a helper / batching contract) to
+ * Authorizes another address (typically a helper / batching contract) to
  * make PoX-5 calls on behalf of the sending account. An optional
  * `untilBurnHeight` caps the authorization at a given burn-block height; omit
  * for no expiry.
@@ -575,7 +439,7 @@ export async function buildCalculateRewards(
  * shows the `totalPending === 0n` guard).
  *
  * `tx-sender` should be the signer-manager (the contract uses
- * `contract-caller` as the signer principal).
+ * `contract-caller` as the signer address).
  *
  * unsure: `rewardCycle` semantics. The flow markdown passes
  * `currentDistributionCycle - 1` (claim the cycle the caller just settled
@@ -721,7 +585,7 @@ export async function buildPausePayout(
  */
 export async function buildReportUtxoSpent(
   args: {
-    /** Stacks principal of the staker whose L1 lockup was spent. */
+    /** Stacks address of the staker whose L1 lockup was spent. */
     staker: string;
     /** Txid of the Bitcoin transaction that spent the tracked output. */
     spendTxid: Uint8Array | string;

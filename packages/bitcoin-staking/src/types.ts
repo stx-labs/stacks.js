@@ -1,6 +1,5 @@
 import type { IntegerType } from '@stacks/common';
 import type { StacksNetwork, StacksNetworkName } from '@stacks/network';
-import type { Pox5SignatureTopic } from './constants';
 
 // ---------------------------------------------------------------------------
 // Tx-level params (shared by all build*Tx functions)
@@ -111,7 +110,7 @@ export interface StakerDetailsPooled {
   firstRewardCycle: number;
   /** The arbitrary unlock script (hex) — last section of the L1 locking script. */
   unlockBytesHex: string;
-  /** Contract principal (address) of the pool owner. */
+  /** Contract address of the pool owner. */
   poolOwner: string;
 }
 
@@ -142,73 +141,13 @@ export interface ClaimableRewards {
 }
 
 // ---------------------------------------------------------------------------
-// Build function arg types — solo staking
-// ---------------------------------------------------------------------------
-
-export interface BuildStakeTxArgs {
-  amountUstx: IntegerType;
-  poxAddress: string;
-  signerKey: string;
-  signerSignature?: string;
-  maxAmount: IntegerType;
-  authId: IntegerType;
-  numCycles: number;
-  unlockBytes: Uint8Array | string;
-  startBurnHt: number;
-}
-
-export interface BuildStakeExtendTxArgs {
-  amountUstx: IntegerType;
-  poxAddress: string;
-  signerKey: string;
-  signerSignature?: string;
-  maxAmount: IntegerType;
-  authId: IntegerType;
-  numCycles: number;
-  unlockBytes: Uint8Array | string;
-}
-
-export interface BuildStakeUpdateTxArgs {
-  amountUstxIncrease: IntegerType;
-  poxAddress: string;
-  signerKey: string;
-  signerSignature?: string;
-  maxAmount: IntegerType;
-  authId: IntegerType;
-}
-
-// ---------------------------------------------------------------------------
-// Build function arg types — pool staking
-// ---------------------------------------------------------------------------
-
-export interface BuildStakePooledTxArgs {
-  amountUstx: IntegerType;
-  numCycles: number;
-  unlockBytes: Uint8Array | string;
-  startBurnHt: number;
-  poolOwner: string;
-}
-
-export interface BuildStakeExtendPooledTxArgs {
-  poolOwner: string;
-  amountUstx: IntegerType;
-  numCycles: number;
-  unlockBytes: Uint8Array | string;
-}
-
-export interface BuildStakeUpdatePooledTxArgs {
-  poolOwner: string;
-  amountUstxIncrease: IntegerType;
-}
-
-// ---------------------------------------------------------------------------
-// Build function arg types — signer grants & pool registration
+// Build function arg types — signer grants
 // ---------------------------------------------------------------------------
 
 export interface BuildGrantSignerKeyTxArgs {
   /** 33-byte compressed signer pubkey (hex). */
   signerKey: string;
-  /** Contract principal of the signer-manager being granted permission. */
+  /** Contract address of the signer-manager being granted permission. */
   signerManager: string;
   /** Per-grant nonce. */
   authId: IntegerType;
@@ -217,16 +156,10 @@ export interface BuildGrantSignerKeyTxArgs {
 }
 
 export interface BuildRevokeSignerKeyTxArgs {
+  /** 33-byte compressed signer pubkey (hex). */
   signerKey: string;
+  /** Contract address of the signer-manager being revoked permission. */
   signerManager: string;
-}
-
-export interface BuildRegisterPoolTxArgs {
-  poolOwnerContract: string;
-  signerKey: string;
-  poxAddress: string;
-  signerSignature: string;
-  authId: IntegerType;
 }
 
 // ---------------------------------------------------------------------------
@@ -234,7 +167,7 @@ export interface BuildRegisterPoolTxArgs {
 // ---------------------------------------------------------------------------
 
 export interface BuildAllowContractCallerArgs {
-  /** Principal (standard or contract) authorized to call PoX-5 methods on the
+  /** Address (standard or contract) authorized to call PoX-5 methods on the
    * sender's behalf. */
   contractCaller: string;
   /** Optional burn-block height at which the authorization expires. Omit for
@@ -243,7 +176,7 @@ export interface BuildAllowContractCallerArgs {
 }
 
 export interface BuildDisallowContractCallerArgs {
-  /** Principal whose authorization should be revoked. */
+  /** Address whose authorization should be revoked. */
   contractCaller: string;
 }
 
@@ -358,18 +291,8 @@ export interface SpendProof {
 // Signer types
 // ---------------------------------------------------------------------------
 
-export interface Pox5SignatureOptions {
-  topic: Pox5SignatureTopic;
-  poxAddress: string;
-  rewardCycle: number;
-  period: number;
-  maxAmount: IntegerType;
-  authId: IntegerType;
-  network: StacksNetworkName | StacksNetwork;
-}
-
 export interface SignerKeyGrantOptions {
-  /** Contract principal of the signer-manager being authorized. */
+  /** Contract address of the signer-manager being authorized. */
   signerManager: string;
   /** Per-grant nonce; replay-gated by `(signerKey, signerManager, authId)`. */
   authId: IntegerType;

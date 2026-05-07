@@ -103,7 +103,7 @@ export async function fetchStakerInfo(
   const poolOrSolo = tuple.value['pool-or-solo-info'] as ResponseCV;
 
   if (poolOrSolo.type === ClarityType.ResponseOk) {
-    // pooled — ok value is the pool owner principal
+    // pooled — ok value is the pool owner address
     const poolOwner = (poolOrSolo.value as ClarityValue & { value: string }).value;
     return {
       staked: true,
@@ -146,14 +146,11 @@ export async function fetchStakerInfo(
  * Mirrors the logic of the contract's `check-caller-allowed` read-only
  * function: an authorization is in effect when an entry exists in the
  * `allowance-contract-callers` map and either has no expiry or the current
- * burn-block height has not yet reached the expiry. The map is queried
- * directly (rather than via `check-caller-allowed`) because that read-only
- * uses runtime `tx-sender` / `contract-caller` values that are equal for
- * top-level RPC reads and would always return `true`.
+ * burn-block height has not yet reached the expiry.
  */
-export async function fetchCheckCallerAllowed(
-  opts: { sender: string; contractCaller: string } & NetworkClientParam
-): Promise<boolean> {
+export async function fetchAllowanceContractCallers(
+  opts: { sender: string; contractCaller: string; poxInfo?: PoxInfo } & NetworkClientParam
+): Promise<{ callerAllowed: boolean; callerExpiryHeight?: number }> {
   const entry = await fetchContractMapEntry({
     contractAddress: CONTRACT_ADDRESS,
     contractName: CONTRACT_NAME,
@@ -169,16 +166,23 @@ export async function fetchCheckCallerAllowed(
   // Map values are wrapped in (some ...) by the API; missing entries are
   // returned as `none`.
   const optional = entry as OptionalCV;
-  if (optional.type === ClarityType.OptionalNone) return false;
+  if (optional.type === ClarityType.OptionalNone) return { callerAllowed: false };
 
   // Map value type is `(optional uint)`: outer Some wraps the stored
   // expiry-burn-ht (or inner None for "no expiry").
   const expiry = optional.value as OptionalCV<UIntCV>;
-  if (expiry.type === ClarityType.OptionalNone) return true;
+  if (expiry.type === ClarityType.OptionalNone) return { callerAllowed: true };
 
   const expiryHeight = Number(expiry.value.value);
-  const pox = await fetchPoxInfo({ network: opts.network, client: opts.client });
-  return pox.currentBurnchainBlockHeight < expiryHeight;
+
+  // If the caller provided a PoxInfo, use it. Otherwise, fetch it from the network.
+  const poxInfo =
+    opts.poxInfo ?? (await fetchPoxInfo({ network: opts.network, client: opts.client }));
+
+  return {
+    callerAllowed: poxInfo.currentBurnchainBlockHeight < expiryHeight,
+    callerExpiryHeight: expiryHeight,
+  };
 }
 
 /**
@@ -201,8 +205,7 @@ export async function fetchAccountStatus(
 
   // The node returns hex-encoded big-endian uints for balance/locked. They
   // are wrapped in a leading "0x".
-  const hexToBigInt = (hex: string): bigint =>
-    hex && hex !== '0x' ? BigInt(hex) : 0n;
+  const hexToBigInt = (hex: string): bigint => (hex && hex !== '0x' ? BigInt(hex) : 0n);
 
   return {
     balance: hexToBigInt(data.balance),
@@ -303,8 +306,16 @@ export async function fetchBond(
       network: opts.network,
       client: opts.client,
     }),
-    fetchBondPeriodToBurnHeight({ bondIndex: opts.bondIndex, network: opts.network, client: opts.client }),
-    fetchBondPeriodToRewardCycle({ bondIndex: opts.bondIndex, network: opts.network, client: opts.client }),
+    fetchBondPeriodToBurnHeight({
+      bondIndex: opts.bondIndex,
+      network: opts.network,
+      client: opts.client,
+    }),
+    fetchBondPeriodToRewardCycle({
+      bondIndex: opts.bondIndex,
+      network: opts.network,
+      client: opts.client,
+    }),
   ]);
 
   const optional = bondEntry as OptionalCV<TupleCV>;
@@ -440,11 +451,7 @@ export async function fetchMinUstxForSats(
     contractAddress: CONTRACT_ADDRESS,
     contractName: CONTRACT_NAME,
     functionName: 'min-ustx-for-sats-amount',
-    functionArgs: [
-      Cl.uint(opts.sats),
-      Cl.uint(opts.stxValueRatio),
-      Cl.uint(opts.minUstxRatioBps),
-    ],
+    functionArgs: [Cl.uint(opts.sats), Cl.uint(opts.stxValueRatio), Cl.uint(opts.minUstxRatioBps)],
     senderAddress: CONTRACT_ADDRESS,
     network: opts.network,
     client: opts.client,
@@ -495,16 +502,13 @@ export async function fetchRewardCycleToBurnHeight(
  * (`reward-cycle-to-unlock-height(c) = rewardCycleToBurnHeight(c) + len/2`.)
  */
 export async function fetchIsInPreparePhase(
-  opts: { burnHeight: number } & NetworkClientParam
+  opts: { burnHeight: number; poxInfo?: PoxInfo } & NetworkClientParam
 ): Promise<boolean> {
-  const pox = await fetchPoxInfo({ network: opts.network, client: opts.client });
+  const pox = opts.poxInfo ?? (await fetchPoxInfo({ network: opts.network, client: opts.client }));
   const { firstBurnchainBlockHeight, rewardCycleLength, prepareCycleLength } = pox;
   if (opts.burnHeight < firstBurnchainBlockHeight) return false;
-  const cycle = Math.floor(
-    (opts.burnHeight - firstBurnchainBlockHeight) / rewardCycleLength
-  );
-  const nextCycleBurnStart =
-    firstBurnchainBlockHeight + (cycle + 1) * rewardCycleLength;
+  const cycle = Math.floor((opts.burnHeight - firstBurnchainBlockHeight) / rewardCycleLength);
+  const nextCycleBurnStart = firstBurnchainBlockHeight + (cycle + 1) * rewardCycleLength;
   const nextCycleUnlockHeight = nextCycleBurnStart + Math.floor(rewardCycleLength / 2);
   const prepareStart = nextCycleUnlockHeight - prepareCycleLength;
   return opts.burnHeight >= prepareStart;
@@ -533,23 +537,6 @@ export async function fetchIsBondActiveAtHeight(
     client: opts.client,
   });
   return (result as BooleanCV).type === ClarityType.BoolTrue;
-}
-
-/** Check whether an address is staking in a specific cycle. */
-export async function fetchStakerInCycle(
-  opts: { address: string; cycle: number } & NetworkClientParam
-): Promise<boolean> {
-  const result = await fetchCallReadOnlyFunction({
-    contractAddress: CONTRACT_ADDRESS,
-    contractName: CONTRACT_NAME,
-    functionName: 'get-staker-in-cycle',
-    functionArgs: [Cl.address(opts.address), Cl.uint(opts.cycle)],
-    senderAddress: opts.address,
-    network: opts.network,
-    client: opts.client,
-  });
-
-  return (result as OptionalCV).type === ClarityType.OptionalSome;
 }
 
 // ---------------------------------------------------------------------------
@@ -617,11 +604,7 @@ export async function fetchSignerSharesStakedForCycle(
     contractAddress: CONTRACT_ADDRESS,
     contractName: CONTRACT_NAME,
     functionName: 'get-signer-shares-staked-for-cycle',
-    functionArgs: [
-      Cl.address(opts.signerManager),
-      Cl.uint(opts.index),
-      Cl.bool(opts.isBond),
-    ],
+    functionArgs: [Cl.address(opts.signerManager), Cl.uint(opts.index), Cl.bool(opts.isBond)],
     senderAddress: CONTRACT_ADDRESS,
     network: opts.network,
     client: opts.client,
@@ -648,11 +631,7 @@ export async function fetchSignerRewardsPaidForCycle(
     contractAddress: CONTRACT_ADDRESS,
     contractName: CONTRACT_NAME,
     functionName: 'get-signer-rewards-paid-for-cycle',
-    functionArgs: [
-      Cl.address(opts.signerManager),
-      Cl.uint(opts.index),
-      Cl.bool(opts.isBond),
-    ],
+    functionArgs: [Cl.address(opts.signerManager), Cl.uint(opts.index), Cl.bool(opts.isBond)],
     senderAddress: CONTRACT_ADDRESS,
     network: opts.network,
     client: opts.client,
@@ -669,9 +648,7 @@ function decodeRewardsLeg(tuple: TupleCV): RewardsLeg {
     rewardsPaid: BigInt((tuple.value['rewards-paid'] as UIntCV).value),
     rewardsPending: BigInt((tuple.value['rewards-pending'] as UIntCV).value),
     sharesStaked: BigInt((tuple.value['shares-staked'] as UIntCV).value),
-    rewardsPerShare: BigInt(
-      (tuple.value['rewards-per-share'] as UIntCV).value
-    ),
+    rewardsPerShare: BigInt((tuple.value['rewards-per-share'] as UIntCV).value),
   };
 }
 
@@ -691,11 +668,7 @@ async function fetchClaimableRewardsLeg(
     contractAddress: CONTRACT_ADDRESS,
     contractName: CONTRACT_NAME,
     functionName: 'get-claimable-rewards',
-    functionArgs: [
-      Cl.address(opts.signerManager),
-      Cl.uint(opts.index),
-      Cl.bool(opts.isBond),
-    ],
+    functionArgs: [Cl.address(opts.signerManager), Cl.uint(opts.index), Cl.bool(opts.isBond)],
     senderAddress: CONTRACT_ADDRESS,
     network: opts.network,
     client: opts.client,
@@ -765,9 +738,7 @@ export async function fetchClaimableRewards(
  * `calculate-rewards` to the prior distribution cycle's
  * `calculation-height = distribution-cycle-to-burn-height(currentDistCycle) - 1`.
  */
-export async function fetchLastRewardComputeHeight(
-  opts: NetworkClientParam = {}
-): Promise<number> {
+export async function fetchLastRewardComputeHeight(opts: NetworkClientParam = {}): Promise<number> {
   const result = await fetchCallReadOnlyFunction({
     contractAddress: CONTRACT_ADDRESS,
     contractName: CONTRACT_NAME,
@@ -810,10 +781,10 @@ export async function fetchLastRewardComputeHeight(
  * `blocksRemaining: 0`).
  */
 export async function fetchPayoutWindow(
-  opts: NetworkClientParam = {}
+  opts: { poxInfo?: PoxInfo } & NetworkClientParam = {}
 ): Promise<PayoutWindow> {
   const [pox, distCycle, lastComputeHeight] = await Promise.all([
-    fetchPoxInfo({ network: opts.network, client: opts.client }),
+    opts.poxInfo ?? fetchPoxInfo({ network: opts.network, client: opts.client }),
     fetchCurrentDistributionCycle({ network: opts.network, client: opts.client }),
     fetchLastRewardComputeHeight({ network: opts.network, client: opts.client }),
   ]);
@@ -823,8 +794,7 @@ export async function fetchPayoutWindow(
   // `distributionCycleToBurnHeight(currentDistCycle) - 1`, anchoring at
   // the burn-height the dist cycle ticked over.
   const halfCycleLength = Math.floor(pox.rewardCycleLength / 2);
-  const distCycleStartHeight =
-    pox.firstBurnchainBlockHeight + distCycle * halfCycleLength;
+  const distCycleStartHeight = pox.firstBurnchainBlockHeight + distCycle * halfCycleLength;
   const calculationHeight = distCycleStartHeight - 1;
 
   // Once the contract has settled at-or-after `calculationHeight` the
@@ -836,8 +806,7 @@ export async function fetchPayoutWindow(
   // i.e. up to `ANDON_CORD_PAUSE_BLOCKS` after the dist cycle starts —
   // to halt. blocksRemaining counts down from 250 to 0 inside the
   // window.
-  const blocksSinceTick =
-    pox.currentBurnchainBlockHeight - distCycleStartHeight;
+  const blocksSinceTick = pox.currentBurnchainBlockHeight - distCycleStartHeight;
   const blocksRemaining = alreadyFired
     ? 0
     : Math.max(0, ANDON_CORD_PAUSE_BLOCKS - Math.max(0, blocksSinceTick));
@@ -981,4 +950,3 @@ export async function collectSpendProof(_opts: {
       'scope for @stacks/bitcoin-staking; see unsure/flow-14.md'
   );
 }
-

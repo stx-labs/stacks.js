@@ -1,10 +1,9 @@
 import { bech32, bech32m } from '@scure/base';
-import { bigIntToBytes, hexToBytes } from '@stacks/common';
+import { hexToBytes } from '@stacks/common';
 import { base58CheckDecode, base58CheckEncode } from '@stacks/encryption';
 import type { StacksNetwork, StacksNetworkName } from '@stacks/network';
 import {
   type BufferCV,
-  Cl,
   ClarityType,
   type ClarityValue,
   type TupleCV,
@@ -192,33 +191,3 @@ export function stringify(
   }
 }
 
-/**
- * Convert a Bitcoin address string to a Clarity `pox-addr` tuple.
- *
- * @example
- * ```ts
- * import { BtcAddress } from '@stacks/bitcoin-staking';
- *
- * const tuple = BtcAddress.toPoxTuple('bc1q...');
- * // Cl.tuple({ version: Cl.buffer(...), hashbytes: Cl.buffer(...) })
- * ```
- */
-export function toPoxTuple(btcAddress: string) {
-  const { version, data } = parse(btcAddress);
-
-  // Mirror the contract's check-pox-addr: version <= 6, hashbytes 20 or 32
-  const expectedLen = version <= PoXAddressVersion.P2WPKH ? 20 : 32;
-  if (version > PoXAddressVersion.P2TR) {
-    throw new Error(`Invalid PoX address version: ${version}`);
-  }
-  if (data.length !== expectedLen) {
-    throw new Error(
-      `Expected ${expectedLen}-byte hashbytes for version ${version}, got ${data.length}`
-    );
-  }
-
-  return Cl.tuple({
-    version: Cl.buffer(bigIntToBytes(BigInt(version), 1)),
-    hashbytes: Cl.buffer(data),
-  });
-}
