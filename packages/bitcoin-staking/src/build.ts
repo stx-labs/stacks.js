@@ -1,5 +1,4 @@
 import type { IntegerType } from '@stacks/common';
-import { hexToBytes } from '@stacks/common';
 import {
   Cl,
   type ClarityValue,
@@ -16,8 +15,14 @@ import type {
 } from './types';
 
 /** @ignore */
-function normalizeUnlockBytes(unlockBytes: Uint8Array | string): Uint8Array {
-  return typeof unlockBytes === 'string' ? hexToBytes(unlockBytes) : unlockBytes;
+function clBufferFrom(value: Uint8Array | string) {
+  return typeof value === 'string' ? Cl.bufferFromHex(value) : Cl.buffer(value);
+}
+
+/** @ignore */
+function clOptionalBufferFrom(value: Uint8Array | string | undefined) {
+  if (value === undefined) return Cl.none();
+  return Cl.some(clBufferFrom(value));
 }
 
 /** @ignore @internal */
@@ -71,11 +76,6 @@ export async function buildSetupBond(
     allowlist: { staker: string; maxSats: IntegerType }[];
   } & TxParams
 ): Promise<StacksTransactionWire> {
-  const earlyUnlockBytes =
-    typeof args.earlyUnlockSigners === 'string'
-      ? hexToBytes(args.earlyUnlockSigners)
-      : args.earlyUnlockSigners;
-
   const allowlistCV = Cl.list(
     args.allowlist.map(entry =>
       Cl.tuple({
@@ -92,7 +92,7 @@ export async function buildSetupBond(
       Cl.uint(args.targetRateBps),
       Cl.uint(args.stxValueRatio),
       Cl.uint(args.minUstxRatioBps),
-      Cl.buffer(earlyUnlockBytes),
+      clBufferFrom(args.earlyUnlockSigners),
       allowlistCV,
     ],
     args
@@ -139,30 +139,19 @@ export function buildRegisterForBond(
     const outputs = btcLockup.outputs.map(o =>
       Cl.tuple({
         amount: Cl.uint(o.amountSats),
-        txid: typeof o.txid === 'string' ? Cl.bufferFromHex(o.txid) : Cl.buffer(o.txid),
+        txid: clBufferFrom(o.txid),
         'output-index': Cl.uint(o.outputIndex),
       })
     );
     lockupCV = Cl.ok(
       Cl.tuple({
         outputs: Cl.list(outputs),
-        'unlock-bytes': Cl.buffer(normalizeUnlockBytes(btcLockup.unlockBytes)),
+        'unlock-bytes': clBufferFrom(btcLockup.unlockBytes),
       })
     );
   } else {
     lockupCV = Cl.error(Cl.uint(btcLockup.sbtcSats));
   }
-
-  const calldataCV =
-    args.signerCalldata === undefined
-      ? Cl.none()
-      : Cl.some(
-          Cl.buffer(
-            typeof args.signerCalldata === 'string'
-              ? hexToBytes(args.signerCalldata)
-              : args.signerCalldata
-          )
-        );
 
   return callPox5(
     'register-for-bond',
@@ -171,7 +160,7 @@ export function buildRegisterForBond(
       Cl.address(args.signerManager),
       Cl.uint(args.amountUstx),
       lockupCV,
-      calldataCV,
+      clOptionalBufferFrom(args.signerCalldata),
     ],
     args
   );
@@ -208,17 +197,6 @@ export async function buildStake(
     signerCalldata?: Uint8Array | string;
   } & TxParams
 ): Promise<StacksTransactionWire> {
-  const calldataCV =
-    args.signerCalldata === undefined
-      ? Cl.none()
-      : Cl.some(
-          Cl.buffer(
-            typeof args.signerCalldata === 'string'
-              ? hexToBytes(args.signerCalldata)
-              : args.signerCalldata
-          )
-        );
-
   return callPox5(
     'stake',
     [
@@ -226,7 +204,7 @@ export async function buildStake(
       Cl.uint(args.amountUstx),
       Cl.uint(args.numCycles),
       Cl.uint(args.startBurnHt),
-      calldataCV,
+      clOptionalBufferFrom(args.signerCalldata),
     ],
     args
   );
@@ -265,24 +243,13 @@ export async function buildStakeUpdate(
     signerCalldata?: Uint8Array | string;
   } & TxParams
 ): Promise<StacksTransactionWire> {
-  const calldataCV =
-    args.signerCalldata === undefined
-      ? Cl.none()
-      : Cl.some(
-          Cl.buffer(
-            typeof args.signerCalldata === 'string'
-              ? hexToBytes(args.signerCalldata)
-              : args.signerCalldata
-          )
-        );
-
   return callPox5(
     'stake-update',
     [
       Cl.address(args.signerManager),
       Cl.uint(args.cyclesToExtend),
       Cl.uint(args.amountIncrease),
-      calldataCV,
+      clOptionalBufferFrom(args.signerCalldata),
     ],
     args
   );
@@ -298,7 +265,7 @@ export async function buildStakeUpdate(
  * reward cycle (i.e. `num-cycles` is rewritten so `first-reward-cycle +
  * num-cycles = current-cycle + 1`). The contract reverts with
  * `ERR_UNSTAKE_IN_PREPARE_PHASE` if invoked during the prepare phase, so
- * callers should gate on {@link fetchIsInPreparePhase} first (see
+ * callers should gate on {@link isInPreparePhase} first (see
  * `flows/4-solo-stx/3.md`).
  *
  * No arguments — the staker is derived from `tx-sender` and the position is
@@ -546,8 +513,11 @@ export async function buildPausePayout(
 ): Promise<StacksTransactionWire> {
   // missing: contract function name `pause-payout` is the design-doc
   // placeholder. Replace once the contract surface is finalized.
-  const reasonBytes = new TextEncoder().encode(args.reason);
-  return callPox5('pause-payout', [Cl.uint(args.distributionCycle), Cl.buffer(reasonBytes)], args);
+  return callPox5(
+    'pause-payout',
+    [Cl.uint(args.distributionCycle), Cl.bufferFromUtf8(args.reason)],
+    args
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -598,23 +568,17 @@ export async function buildReportUtxoSpent(
     // finalized.
   } & TxParams
 ): Promise<StacksTransactionWire> {
-  const txidCV =
-    typeof args.spendTxid === 'string'
-      ? Cl.bufferFromHex(args.spendTxid)
-      : Cl.buffer(args.spendTxid);
-
-  const branchCV = Cl.list(
-    args.merkleBranch.map(node =>
-      typeof node === 'string' ? Cl.bufferFromHex(node) : Cl.buffer(node)
-    )
-  );
-
   // missing: contract function name + arg list are placeholders pulled
   // from the flow-markdown sketch. Replace once `pox-5.clar` exposes
   // the real surface.
   return callPox5(
     'report-utxo-spent',
-    [Cl.address(args.staker), txidCV, Cl.uint(args.spendBlockHeight), branchCV],
+    [
+      Cl.address(args.staker),
+      clBufferFrom(args.spendTxid),
+      Cl.uint(args.spendBlockHeight),
+      Cl.list(args.merkleBranch.map(clBufferFrom)),
+    ],
     args
   );
 }

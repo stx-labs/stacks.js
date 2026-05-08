@@ -9,6 +9,7 @@ export const CONTRACT_NAME = POX_5_CONTRACT.split('.')[1];
 /** Length of a paired-BTC bond in reward cycles (≈ 6 months). */
 export const BOND_LENGTH_CYCLES = 12;
 
+// todo: check with core if these will be configurable later
 /** Gap between consecutive bond starts, in reward cycles. */
 export const BOND_GAP_CYCLES = 2;
 

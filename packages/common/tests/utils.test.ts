@@ -2,6 +2,7 @@ import {
   bigIntToBytes,
   bytesToHex,
   fromTwos,
+  hexToBigInt,
   hexToBytes,
   intToHex,
   isLaterVersion,
@@ -54,6 +55,12 @@ test('intToHex', () => {
 
   expect(intToHex(BigInt(16))).toEqual(expected);
   expect(intToHex(16)).toEqual(expected);
+});
+
+test('hexToBigInt accepts 0x-prefixed Stacks node hex (and bare hex)', () => {
+  expect(hexToBigInt('0x0000000000000000000000003baa11c6')).toBe(1001001414n);
+  expect(hexToBigInt('0000000000000000000000003baa11c6')).toBe(1001001414n);
+  expect(hexToBigInt('0x00000000000000000000000000000000')).toBe(0n);
 });
 
 test('hexToBytes & bytesToHex', () => {

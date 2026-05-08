@@ -34,22 +34,21 @@ export interface CycleInfo {
   isPoxActive: boolean;
 }
 
-export type StakerInfo =
-  | { staked: false }
-  | { staked: true; details: StakerDetailsSolo }
-  | { staked: true; details: StakerDetailsPooled };
+/**
+ * Lock summary returned by `pox-5.get-staker-info`.
+ *
+ * The contract's `staker-info` map only records the lock dimensions
+ * (`amount-ustx`, `first-reward-cycle`, `num-cycles`); it does NOT carry
+ * pool/solo discrimination, signer key, BTC reward address, or unlock-script.
+ * Those live in separate maps (e.g. `staker-signer-cycle-memberships`) and
+ * are surfaced by their own fetch helpers.
+ */
+export type StakerInfo = { staked: false } | { staked: true; details: StakerLock };
 
-export interface StakerDetailsSolo {
-  type: 'solo';
-  numCycles: number;
+export interface StakerLock {
   amountUstx: bigint;
   firstRewardCycle: number;
-  /** The arbitrary unlock script (hex) — last section of the L1 locking script. */
-  unlockBytesHex: string;
-  /** The staker's BTC reward address. */
-  poxAddress: string;
-  /** The signer's 33-byte compressed public key (hex). */
-  signerKey: string;
+  numCycles: number;
 }
 
 /**
@@ -77,7 +76,11 @@ export interface BondMembership {
 
 /**
  * Static configuration of a protocol bond, sourced from the on-chain
- * `protocol-bonds` map plus derived burn-height endpoints.
+ * `protocol-bonds` map.
+ *
+ * `openBurnHeight` / `firstRewardCycle` are NOT included — they are
+ * deterministic functions of the bond index and pox params. Compose with
+ * `bondPeriodToBurnHeight` / `bondPeriodToRewardCycle` from `cycles.ts`.
  *
  * Note: `capacitySats` is NOT a stored field on-chain. The contract emits the
  * sum of allowlist `max-sats` only as part of `setup-bond`'s response. Until a
@@ -87,31 +90,16 @@ export interface BondMembership {
  */
 export interface Bond {
   bondIndex: number;
-  /** Burn-block height at which the bond opens for enrollment. */
-  openBurnHeight: number;
-  /** Reward cycle in which the bond starts. */
-  firstRewardCycle: number;
   /** Target APY in basis points. */
   targetRateBps: number;
   /** STX:BTC price representation: ustx per 100 sats. */
   stxValueRatio: bigint;
   /** Minimum amount of STX (in basis points) that must be paired per BTC. */
   minUstxRatioBps: number;
-  /** Opaque buffer describing the early-unlock signer set (683 bytes). */
-  earlyUnlockSigners: Uint8Array;
+  /** Hex describing the early-unlock signer set (683 bytes). */
+  earlyUnlockSigners: string;
   /** Sum of allowlist `max-sats` (capacity). Optional; see note above. */
   capacitySats?: bigint;
-}
-
-export interface StakerDetailsPooled {
-  type: 'pooled';
-  numCycles: number;
-  amountUstx: bigint;
-  firstRewardCycle: number;
-  /** The arbitrary unlock script (hex) — last section of the L1 locking script. */
-  unlockBytesHex: string;
-  /** Contract address of the pool owner. */
-  poolOwner: string;
 }
 
 // ---------------------------------------------------------------------------

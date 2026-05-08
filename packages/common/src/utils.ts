@@ -396,15 +396,16 @@ export function without0x(value: string): string {
 
 /**
  * Converts hex input string to bigint
- * @param hex - hex input string without 0x prefix and in big endian format
+ * @param hex - hex string in big-endian format, with or without `0x` prefix
  * @example "6c7cde4d702830c1db34ef7c19e2776f59107afef39084776fc88bc78dbb9656"
+ * @example "0x6c7cde4d702830c1db34ef7c19e2776f59107afef39084776fc88bc78dbb9656"
  * @ignore
  */
 export function hexToBigInt(hex: string): bigint {
   if (typeof hex !== 'string')
     throw new TypeError(`hexToBigInt: expected string, got ${typeof hex}`);
   // Big Endian
-  return BigInt(`0x${hex}`);
+  return BigInt(with0x(hex));
 }
 
 /**

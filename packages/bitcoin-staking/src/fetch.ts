@@ -1,21 +1,18 @@
-import { hexToBytes } from '@stacks/common';
+import { hexToBigInt } from '@stacks/common';
 import type { NetworkClientParam } from '@stacks/network';
 import { clientFromNetwork, networkFrom } from '@stacks/network';
 import {
-  type BooleanCV,
   Cl,
   ClarityType,
-  type ClarityValue,
   type OptionalCV,
   type TupleCV,
   type UIntCV,
   type BufferCV,
-  type ResponseCV,
   fetchCallReadOnlyFunction,
   fetchContractMapEntry,
 } from '@stacks/transactions';
-import { stringify as btcAddressStringify } from './btc-address';
 import { CONTRACT_ADDRESS, CONTRACT_NAME } from './constants';
+import { distributionCycleToBurnHeight } from './cycles';
 import type {
   AccountStatus,
   Bond,
@@ -46,10 +43,9 @@ const ANDON_CORD_PAUSE_BLOCKS = 250;
 /** Fetch PoX info from the `/v2/pox` node endpoint. */
 export async function fetchPoxInfo(opts: NetworkClientParam = {}): Promise<PoxInfo> {
   const network = networkFrom(opts.network ?? 'mainnet');
-  const client = clientFromNetwork(network);
-  const fetchFn = client.fetch;
+  const client = Object.assign({}, clientFromNetwork(network), opts.client);
   const url = `${client.baseUrl}/v2/pox`;
-  const response = await fetchFn(url);
+  const response = await client.fetch(url);
   const data = await response.json();
 
   return {
@@ -74,8 +70,13 @@ export async function fetchPoxInfo(opts: NetworkClientParam = {}): Promise<PoxIn
 }
 
 /**
- * Fetch staker info for a given STX address via the `get-staker-info` read-only call.
- * Returns a discriminated union: `{ staked: false }` or `{ staked: true, details: ... }`.
+ * Fetch staker lock summary via the `get-staker-info` read-only.
+ *
+ * Per `pox-5.clar` (`staker-info` map), this returns only the lock dimensions:
+ * `{ amount-ustx, first-reward-cycle, num-cycles }`. Pool/solo discrimination,
+ * signer key, and BTC reward address are NOT exposed here — they live in
+ * `staker-signer-cycle-memberships` / `get-signer-cycle-membership` and need
+ * separate fetchers.
  */
 export async function fetchStakerInfo(
   opts: { address: string } & NetworkClientParam
@@ -94,46 +95,12 @@ export async function fetchStakerInfo(
   if (optional.type === ClarityType.OptionalNone) return { staked: false };
 
   const tuple = optional.value;
-  const numCycles = Number((tuple.value['num-cycles'] as UIntCV).value);
-  const amountUstx = BigInt((tuple.value['amount-ustx'] as UIntCV).value);
-  const firstRewardCycle = Number((tuple.value['first-reward-cycle'] as UIntCV).value);
-  const unlockBytesHex = (tuple.value['unlock-bytes'] as BufferCV).value;
-
-  // Discriminate solo vs pooled via the `pool-or-solo-info` response field
-  const poolOrSolo = tuple.value['pool-or-solo-info'] as ResponseCV;
-
-  if (poolOrSolo.type === ClarityType.ResponseOk) {
-    // pooled — ok value is the pool owner address
-    const poolOwner = (poolOrSolo.value as ClarityValue & { value: string }).value;
-    return {
-      staked: true,
-      details: {
-        type: 'pooled',
-        numCycles,
-        amountUstx,
-        firstRewardCycle,
-        unlockBytesHex,
-        poolOwner,
-      },
-    };
-  }
-
-  // solo — err value is the solo info tuple
-  const soloTuple = poolOrSolo.value as TupleCV;
-  const poxAddr = soloTuple.value['pox-addr'] as TupleCV;
-  const signerKey = (soloTuple.value['signer-key'] as BufferCV).value;
-  const poxAddress = btcAddressStringify(poxAddr, opts.network ?? 'mainnet');
-
   return {
     staked: true,
     details: {
-      type: 'solo',
-      numCycles,
-      amountUstx,
-      firstRewardCycle,
-      unlockBytesHex,
-      poxAddress,
-      signerKey,
+      amountUstx: BigInt((tuple.value['amount-ustx'] as UIntCV).value),
+      firstRewardCycle: Number((tuple.value['first-reward-cycle'] as UIntCV).value),
+      numCycles: Number((tuple.value['num-cycles'] as UIntCV).value),
     },
   };
 }
@@ -196,16 +163,10 @@ export async function fetchAccountStatus(
   opts: { address: string } & NetworkClientParam
 ): Promise<AccountStatus> {
   const network = networkFrom(opts.network ?? 'mainnet');
-  const client = clientFromNetwork(network);
-  const baseUrl = opts.client?.baseUrl ?? client.baseUrl;
-  const fetchFn = opts.client?.fetch ?? client.fetch;
-  const url = `${baseUrl}/v2/accounts/${opts.address}?proof=0`;
-  const response = await fetchFn(url);
+  const client = Object.assign({}, clientFromNetwork(network), opts.client);
+  const url = `${client.baseUrl}/v2/accounts/${opts.address}?proof=0`;
+  const response = await client.fetch(url);
   const data = await response.json();
-
-  // The node returns hex-encoded big-endian uints for balance/locked. They
-  // are wrapped in a leading "0x".
-  const hexToBigInt = (hex: string): bigint => (hex && hex !== '0x' ? BigInt(hex) : 0n);
 
   return {
     balance: hexToBigInt(data.balance),
@@ -286,37 +247,29 @@ export async function fetchStakerSharesStakedForCycle(
 /**
  * Fetch the static configuration of a protocol bond.
  *
- * Reads the `protocol-bonds` map directly and derives `openBurnHeight` /
- * `firstRewardCycle` from the bond index using the contract's gap math. Does
- * NOT populate `capacitySats` — the contract does not expose total allowlist
- * capacity as a single read; sum `protocol-bond-allowances` separately if
- * needed.
+ * Reads the `protocol-bonds` map directly. Returns `undefined` if the bond
+ * has not been set up.
  *
- * Returns `undefined` if the bond has not been set up.
+ * `openBurnHeight` / `firstRewardCycle` are NOT included — they are
+ * deterministic functions of `bondIndex`, `firstBondPeriodCycle`, and the pox
+ * params. Compose with {@link bondPeriodToBurnHeight} /
+ * {@link bondPeriodToRewardCycle} from `cycles.ts` when needed.
+ *
+ * Does NOT populate `capacitySats` — the contract does not expose total
+ * allowlist capacity as a single read; sum `protocol-bond-allowances`
+ * separately if needed.
  */
 export async function fetchBond(
   opts: { bondIndex: number } & NetworkClientParam
 ): Promise<Bond | undefined> {
-  const [bondEntry, openBurnHeight, firstRewardCycle] = await Promise.all([
-    fetchContractMapEntry({
-      contractAddress: CONTRACT_ADDRESS,
-      contractName: CONTRACT_NAME,
-      mapName: 'protocol-bonds',
-      mapKey: Cl.uint(opts.bondIndex),
-      network: opts.network,
-      client: opts.client,
-    }),
-    fetchBondPeriodToBurnHeight({
-      bondIndex: opts.bondIndex,
-      network: opts.network,
-      client: opts.client,
-    }),
-    fetchBondPeriodToRewardCycle({
-      bondIndex: opts.bondIndex,
-      network: opts.network,
-      client: opts.client,
-    }),
-  ]);
+  const bondEntry = await fetchContractMapEntry({
+    contractAddress: CONTRACT_ADDRESS,
+    contractName: CONTRACT_NAME,
+    mapName: 'protocol-bonds',
+    mapKey: Cl.uint(opts.bondIndex),
+    network: opts.network,
+    client: opts.client,
+  });
 
   const optional = bondEntry as OptionalCV<TupleCV>;
   if (optional.type === ClarityType.OptionalNone) return undefined;
@@ -325,60 +278,15 @@ export async function fetchBond(
   const targetRate = (tuple.value['target-rate'] as UIntCV).value;
   const stxValueRatio = (tuple.value['stx-value-ratio'] as UIntCV).value;
   const minUstxRatio = (tuple.value['min-ustx-ratio'] as UIntCV).value;
-  const earlyUnlockSigners = (tuple.value['early-unlock-signers'] as BufferCV).value;
+  const earlyUnlockSigners = (tuple.value['early-unlock-signers'] as BufferCV).value as string;
 
   return {
     bondIndex: opts.bondIndex,
-    openBurnHeight,
-    firstRewardCycle,
     targetRateBps: Number(targetRate),
     stxValueRatio: BigInt(stxValueRatio),
     minUstxRatioBps: Number(minUstxRatio),
-    earlyUnlockSigners:
-      typeof earlyUnlockSigners === 'string'
-        ? hexToBytes(earlyUnlockSigners)
-        : (earlyUnlockSigners as Uint8Array),
+    earlyUnlockSigners,
   };
-}
-
-/**
- * Map a bond index to the burn-block height at which the bond opens.
- *
- * Wraps the contract's `bond-period-to-burn-height` read-only.
- */
-export async function fetchBondPeriodToBurnHeight(
-  opts: { bondIndex: number } & NetworkClientParam
-): Promise<number> {
-  const result = await fetchCallReadOnlyFunction({
-    contractAddress: CONTRACT_ADDRESS,
-    contractName: CONTRACT_NAME,
-    functionName: 'bond-period-to-burn-height',
-    functionArgs: [Cl.uint(opts.bondIndex)],
-    senderAddress: CONTRACT_ADDRESS,
-    network: opts.network,
-    client: opts.client,
-  });
-  return Number((result as UIntCV).value);
-}
-
-/**
- * Map a bond index to the reward cycle at which the bond starts.
- *
- * Wraps the contract's `bond-period-to-reward-cycle` read-only.
- */
-export async function fetchBondPeriodToRewardCycle(
-  opts: { bondIndex: number } & NetworkClientParam
-): Promise<number> {
-  const result = await fetchCallReadOnlyFunction({
-    contractAddress: CONTRACT_ADDRESS,
-    contractName: CONTRACT_NAME,
-    functionName: 'bond-period-to-reward-cycle',
-    functionArgs: [Cl.uint(opts.bondIndex)],
-    senderAddress: CONTRACT_ADDRESS,
-    network: opts.network,
-    client: opts.client,
-  });
-  return Number((result as UIntCV).value);
 }
 
 /**
@@ -389,6 +297,7 @@ export async function fetchBondPeriodToRewardCycle(
 export async function fetchTotalSatsStakedForBond(
   opts: { bondIndex: number } & NetworkClientParam
 ): Promise<bigint> {
+  // todo: improvement for api, this could be added to a bond lookup endpoint, then becomes unneeded
   const result = await fetchCallReadOnlyFunction({
     contractAddress: CONTRACT_ADDRESS,
     contractName: CONTRACT_NAME,
@@ -427,118 +336,6 @@ export async function fetchBondAllowance(
   return BigInt(optional.value.value);
 }
 
-/**
- * Wraps the contract's `min-ustx-for-sats-amount` read-only.
- *
- * Computes the minimum uSTX that must be paired with `sats` for a bond whose
- * static parameters are `stxValueRatio` (uSTX per 100 sats — trailing average
- * snapshot taken at `setup-bond`) and `minUstxRatioBps` (basis points; e.g.
- * `500` = 5%). Mirrors the on-chain formula:
- *
- * `(stxValueRatio * sats / 100) * minUstxRatioBps / 10000`
- *
- * Use the on-chain helper rather than re-deriving locally so client and
- * contract math stay in lockstep across rounding edge cases.
- */
-export async function fetchMinUstxForSats(
-  opts: {
-    sats: bigint;
-    stxValueRatio: bigint;
-    minUstxRatioBps: number;
-  } & NetworkClientParam
-): Promise<bigint> {
-  const result = await fetchCallReadOnlyFunction({
-    contractAddress: CONTRACT_ADDRESS,
-    contractName: CONTRACT_NAME,
-    functionName: 'min-ustx-for-sats-amount',
-    functionArgs: [Cl.uint(opts.sats), Cl.uint(opts.stxValueRatio), Cl.uint(opts.minUstxRatioBps)],
-    senderAddress: CONTRACT_ADDRESS,
-    network: opts.network,
-    client: opts.client,
-  });
-  return BigInt((result as UIntCV).value);
-}
-
-/**
- * Map a reward cycle to the burn-block height at which the cycle starts.
- *
- * Wraps the contract's `reward-cycle-to-burn-height` read-only.
- *
- * Note: this is pure-math given pox params (`first-burnchain-block-height`,
- * `pox-reward-cycle-length`). Could be implemented as a synchronous converter
- * over `PoxInfo`; kept as a fetch wrapper for parity with the contract surface
- * and the existing `fetchBondPeriodTo*` pair.
- */
-export async function fetchRewardCycleToBurnHeight(
-  opts: { cycle: number } & NetworkClientParam
-): Promise<number> {
-  const result = await fetchCallReadOnlyFunction({
-    contractAddress: CONTRACT_ADDRESS,
-    contractName: CONTRACT_NAME,
-    functionName: 'reward-cycle-to-burn-height',
-    functionArgs: [Cl.uint(opts.cycle)],
-    senderAddress: CONTRACT_ADDRESS,
-    network: opts.network,
-    client: opts.client,
-  });
-  return Number((result as UIntCV).value);
-}
-
-/**
- * Whether the given burn-block height falls inside the prepare phase of its
- * containing reward cycle.
- *
- * The on-chain `is-in-prepare-phase` predicate takes a *cycle* and compares
- * `burn-block-height` (the chain-tip) against the prepare-phase window of
- * `cycle + 1`. To answer the same question for an arbitrary `burnHeight`
- * (not necessarily the chain-tip), we recompute the predicate client-side
- * from `PoxInfo`:
- *
- *   prepareStart = rewardCycleToBurnHeight(cycle + 1)
- *                  + rewardCycleLength / 2
- *                  - prepareCycleLength
- *   inPrepare    = burnHeight >= prepareStart
- *
- * (`reward-cycle-to-unlock-height(c) = rewardCycleToBurnHeight(c) + len/2`.)
- */
-export async function fetchIsInPreparePhase(
-  opts: { burnHeight: number; poxInfo?: PoxInfo } & NetworkClientParam
-): Promise<boolean> {
-  const pox = opts.poxInfo ?? (await fetchPoxInfo({ network: opts.network, client: opts.client }));
-  const { firstBurnchainBlockHeight, rewardCycleLength, prepareCycleLength } = pox;
-  if (opts.burnHeight < firstBurnchainBlockHeight) return false;
-  const cycle = Math.floor((opts.burnHeight - firstBurnchainBlockHeight) / rewardCycleLength);
-  const nextCycleBurnStart = firstBurnchainBlockHeight + (cycle + 1) * rewardCycleLength;
-  const nextCycleUnlockHeight = nextCycleBurnStart + Math.floor(rewardCycleLength / 2);
-  const prepareStart = nextCycleUnlockHeight - prepareCycleLength;
-  return opts.burnHeight >= prepareStart;
-}
-
-/**
- * Whether a given bond is active at the supplied burn-block height.
- *
- * Wraps `is-bond-active-at-height`. The contract definition combines three
- * checks: (1) the bond is configured (`protocol-bonds` map has an entry),
- * (2) the height has passed the bond's open height, and (3) the height is at
- * or before the bond's end height (= start of bond `bondIndex + 6`). The map
- * lookup makes this contract-dependent; it cannot be implemented as a pure
- * converter without first fetching the bond config.
- */
-export async function fetchIsBondActiveAtHeight(
-  opts: { bondIndex: number; burnHeight: number } & NetworkClientParam
-): Promise<boolean> {
-  const result = await fetchCallReadOnlyFunction({
-    contractAddress: CONTRACT_ADDRESS,
-    contractName: CONTRACT_NAME,
-    functionName: 'is-bond-active-at-height',
-    functionArgs: [Cl.uint(opts.bondIndex), Cl.uint(opts.burnHeight)],
-    senderAddress: CONTRACT_ADDRESS,
-    network: opts.network,
-    client: opts.client,
-  });
-  return (result as BooleanCV).type === ClarityType.BoolTrue;
-}
-
 // ---------------------------------------------------------------------------
 // Reward / distribution reads — flows 7, 15, 21
 // ---------------------------------------------------------------------------
@@ -558,26 +355,6 @@ export async function fetchCurrentDistributionCycle(
     contractName: CONTRACT_NAME,
     functionName: 'current-distribution-cycle',
     functionArgs: [],
-    senderAddress: CONTRACT_ADDRESS,
-    network: opts.network,
-    client: opts.client,
-  });
-  return Number((result as UIntCV).value);
-}
-
-/**
- * Wraps the contract's `distribution-cycle-to-burn-height` read-only.
- *
- * Distribution-cycle index → burn-height at which the half-cycle starts.
- */
-export async function fetchDistributionCycleToBurnHeight(
-  opts: { cycle: number } & NetworkClientParam
-): Promise<number> {
-  const result = await fetchCallReadOnlyFunction({
-    contractAddress: CONTRACT_ADDRESS,
-    contractName: CONTRACT_NAME,
-    functionName: 'distribution-cycle-to-burn-height',
-    functionArgs: [Cl.uint(opts.cycle)],
     senderAddress: CONTRACT_ADDRESS,
     network: opts.network,
     client: opts.client,
@@ -793,8 +570,7 @@ export async function fetchPayoutWindow(
   // started but not yet been settled. `calculate-rewards` settles for
   // `distributionCycleToBurnHeight(currentDistCycle) - 1`, anchoring at
   // the burn-height the dist cycle ticked over.
-  const halfCycleLength = Math.floor(pox.rewardCycleLength / 2);
-  const distCycleStartHeight = pox.firstBurnchainBlockHeight + distCycle * halfCycleLength;
+  const distCycleStartHeight = distributionCycleToBurnHeight({ cycle: distCycle, poxInfo: pox });
   const calculationHeight = distCycleStartHeight - 1;
 
   // Once the contract has settled at-or-after `calculationHeight` the
