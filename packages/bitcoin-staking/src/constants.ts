@@ -1,19 +1,14 @@
-/** PoX-5 contract identifier (placeholder — update when deployed) */
-export const POX_5_CONTRACT = 'SP000000000000000000002Q6VF78.pox-5';
+/** @internal PoX-5 contract name (on boot address, null address)  */
+export const POX5_CONTRACT_NAME = 'pox-5';
 
-/** @ignore */
-export const CONTRACT_ADDRESS = POX_5_CONTRACT.split('.')[0];
-/** @ignore */
-export const CONTRACT_NAME = POX_5_CONTRACT.split('.')[1];
-
-/** Length of a paired-BTC bond in reward cycles (≈ 6 months). */
+/** @internalLength of a paired-BTC bond in reward cycles (≈ 6 months). */
 export const BOND_LENGTH_CYCLES = 12;
 
 // todo: check with core if these will be configurable later
-/** Gap between consecutive bond starts, in reward cycles. */
+/** @internal Gap between consecutive bond starts, in reward cycles. */
 export const BOND_GAP_CYCLES = 2;
 
-/** Hard cap for STX-only stake duration. */
+/** @internal Hard cap for STX-only stake duration. */
 export const MAX_NUM_CYCLES = 96;
 
 /** Address versions corresponding to the pox-5 contract `pox-addr` tuple */
@@ -36,7 +31,7 @@ export enum PoXAddressVersion {
   P2TR = 0x06,
 }
 
-/** Bitcoin base58 address version bytes per network */
+/** @internal Bitcoin base58 address version bytes per network */
 export const BitcoinNetworkVersion = {
   mainnet: { P2PKH: 0x00, P2SH: 0x05 },
   testnet: { P2PKH: 0x6f, P2SH: 0xc4 },
@@ -44,19 +39,19 @@ export const BitcoinNetworkVersion = {
   mocknet: { P2PKH: 0x6f, P2SH: 0xc4 },
 } as const;
 
-/** Regex matching base58 (legacy) BTC address prefixes */
+/** @internal Regex matching base58 (legacy) BTC address prefixes */
 export const B58_ADDR_PREFIXES = /^(1|3|m|n|2)/;
 
-/** Regex matching any segwit BTC address prefix (mainnet, testnet, regtest) */
+/** @internal Regex matching any segwit BTC address prefix (mainnet, testnet, regtest) */
 export const SEGWIT_ADDR_PREFIXES = /^(bc|tb|bcrt)/i;
 
-/** Segwit v0 address prefix regex */
+/** @internal Segwit v0 address prefix regex */
 export const SEGWIT_V0_ADDR_PREFIX = /^(bc1q|tb1q|bcrt1q)/i;
 
-/** Segwit v1 (taproot) address prefix regex */
+/** @internal Segwit v1 (taproot) address prefix regex */
 export const SEGWIT_V1_ADDR_PREFIX = /^(bc1p|tb1p|bcrt1p)/i;
 
-/** Bech32 human-readable part per network */
+/** @internal Bech32 human-readable part per network */
 export const SegwitPrefix = {
   mainnet: 'bc',
   testnet: 'tb',
@@ -64,5 +59,8 @@ export const SegwitPrefix = {
   mocknet: 'bcrt',
 } as const;
 
+/** @internal Segwit v0 */
 export const SEGWIT_V0 = 0;
+
+/** @internal Segwit v1 */
 export const SEGWIT_V1 = 1;

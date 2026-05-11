@@ -2,7 +2,9 @@ import * as btc from '@scure/btc-signer';
 import { hexToBytes } from '@stacks/common';
 import type { StacksNetwork, StacksNetworkName } from '@stacks/network';
 import { Address } from '@stacks/transactions';
+import { rewardCycleToUnlockHeight } from './cycles';
 import { networkNameFrom } from './network';
+import type { PoxInfo } from './types';
 
 const REGTEST_NETWORK = { bech32: 'bcrt', pubKeyHash: 111, scriptHash: 196, wif: 239 };
 
@@ -78,6 +80,7 @@ export function buildLockingScript(opts: {
   /** Pre-encoded unlock-script tail. Mutually exclusive with `earlyExitPubkeys`. */
   unlockBytes?: Uint8Array | string;
   /**
+   * todo: check w stacks-core how this is encoded
    * Early-exit signer pubkeys (compressed, hex). When provided, the unlock-script
    * tail is constructed as a multisig spendable by `earlyExitThreshold`-of-N.
    * Mutually exclusive with `unlockBytes`.
@@ -92,21 +95,23 @@ export function buildLockingScript(opts: {
   /** Threshold M for the M-of-N early-exit multisig. Defaults to 1. */
   earlyExitThreshold?: number;
 }): Uint8Array {
-  let unlock: Uint8Array;
-  if (opts.unlockBytes !== undefined) {
-    unlock =
-      typeof opts.unlockBytes === 'string' ? hexToBytes(opts.unlockBytes) : opts.unlockBytes;
-  } else if (opts.earlyExitPubkeys !== undefined) {
-    unlock = buildEarlyExitUnlockScript({
-      pubkeys: opts.earlyExitPubkeys,
-      threshold: opts.earlyExitThreshold ?? 1,
-    });
-  } else {
-    throw new Error('buildLockingScript: provide either `unlockBytes` or `earlyExitPubkeys`');
+  const unlock = resolveUnlockBytes(opts);
+
+  // Stacks address payload: 0x05 || version (1 byte) || hash160 (20 bytes) = 22 bytes.
+  // The L1 redeem-script format can only commit to a standard principal — there is
+  // no room for a contract name in 22 bytes. Reject contract principals up-front.
+  const parsed = Address.parse(opts.stxAddress) as {
+    version: number;
+    hash160: string;
+    contractName?: string;
+  };
+  if (parsed.contractName) {
+    throw new Error(
+      `buildLockingScript: contract principals are not supported (got "${opts.stxAddress}"); ` +
+        'the BTC redeem-script payload only encodes a 20-byte hash160 of a standard principal'
+    );
   }
 
-  // Stacks address payload: 0x05 || version (1 byte) || hash160 (20 bytes) = 22 bytes
-  const parsed = Address.parse(opts.stxAddress) as { version: number; hash160: string };
   const addrPayload = new Uint8Array(22);
   addrPayload[0] = 0x05;
   addrPayload[1] = parsed.version;
@@ -127,23 +132,81 @@ export function buildLockingScript(opts: {
   ]);
 }
 
+/** @ignore */
+function resolveUnlockBytes(opts: {
+  unlockBytes?: Uint8Array | string;
+  earlyExitPubkeys?: string[];
+  earlyExitThreshold?: number;
+}): Uint8Array {
+  if (opts.unlockBytes !== undefined) {
+    return typeof opts.unlockBytes === 'string' ? hexToBytes(opts.unlockBytes) : opts.unlockBytes;
+  }
+  if (opts.earlyExitPubkeys !== undefined) {
+    return buildEarlyExitUnlockScript({
+      pubkeys: opts.earlyExitPubkeys,
+      threshold: opts.earlyExitThreshold ?? 1,
+    });
+  }
+  throw new Error('buildLockingScript: provide either `unlockBytes` or `earlyExitPubkeys`');
+}
+
 /**
  * Build the P2WSH Bitcoin address for a PoX-5 locking script.
  *
  * Combines {@link buildLockingScript} and P2WSH derivation into a single call.
+ * Accepts either a pre-encoded `unlockBytes` tail or a compressed `publicKey`
+ * (in which case {@link buildDefaultUnlockScript} is used to derive the
+ * `<pubkey> OP_CHECKSIG` tail).
+ *
+ * @example
+ * ```ts
+ * // From a compressed public key (most common — single-sig spend):
+ * const address = buildLockingBitcoinAddress({
+ *   stxAddress: 'SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7',
+ *   unlockHeight: 850_000,
+ *   publicKey: '02a1633cafcc01ebfb6d78e39f687a1f0995c62fc95f51ead10a02ee0be551b5dc',
+ *   network: 'mainnet',
+ * });
+ *
+ * // From a pre-encoded unlock-script tail (custom spend conditions):
+ * const address2 = buildLockingBitcoinAddress({
+ *   stxAddress: 'SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7',
+ *   unlockHeight: 850_000,
+ *   unlockBytes: customScriptBytes,
+ *   network: 'mainnet',
+ * });
+ * ```
  */
 export function buildLockingBitcoinAddress(opts: {
   stxAddress: string;
   unlockHeight: number;
   unlockBytes: Uint8Array | string;
   network: StacksNetworkName | StacksNetwork;
+}): string;
+export function buildLockingBitcoinAddress(opts: {
+  stxAddress: string;
+  unlockHeight: number;
+  publicKey: Uint8Array | string;
+  network: StacksNetworkName | StacksNetwork;
+}): string;
+export function buildLockingBitcoinAddress(opts: {
+  stxAddress: string;
+  unlockHeight: number;
+  unlockBytes?: Uint8Array | string;
+  publicKey?: Uint8Array | string;
+  network: StacksNetworkName | StacksNetwork;
 }): string {
-  const script = buildLockingScript(opts);
+  const unlockBytes =
+    opts.unlockBytes ?? (opts.publicKey ? buildDefaultUnlockScript(opts.publicKey) : undefined);
+  if (!unlockBytes) {
+    throw new Error('buildLockingBitcoinAddress: provide either `unlockBytes` or `publicKey`');
+  }
+  const script = buildLockingScript({ ...opts, unlockBytes });
   return lockingScriptToP2wsh(script, networkNameFrom(opts.network));
 }
 
 /**
- * Derive the P2WSH Bitcoin address that commits to the given locking script.
+ * @internal @ignore Derive the P2WSH Bitcoin address that commits to the given locking script.
  *
  * Pure: no I/O. Useful when the caller already holds the script bytes (e.g. from
  * {@link buildLockingScript}) and wants to fund the address out-of-band.
@@ -162,6 +225,7 @@ export function lockingScriptToP2wsh(
  * Build a standard `M-of-N CHECKMULTISIG` unlock-script tail for the early-exit
  * branch of a paired-BTC lockup.
  *
+ * todo: check w stacks-core how this is encoded
  * unsure: real on-chain shape. The PoX-5 contract stores `early-unlock-signers`
  * as an opaque 683-byte buffer descriptor (see `setup-bond` in `pox-5.clar`).
  * The exact wire format that the L1 verifier matches is not yet specified; this
@@ -182,38 +246,25 @@ export function buildEarlyExitUnlockScript(opts: {
     if (bytes.length !== 33) throw new Error('Expected 33-byte compressed public key');
     return bytes;
   });
-  // missing: contract-defined early-exit script shape — emits a generic
+  // missing: todo: contract-defined early-exit script shape — emits a generic
   // M-of-N multisig pending the spec.
-  return btc.Script.encode([
-    smallNumOp(threshold),
-    ...pubBytes,
-    smallNumOp(pubBytes.length),
-    'CHECKMULTISIG',
-  ]);
-}
-
-/** @ignore Map 1..16 to its OP_N token. */
-function smallNumOp(n: number) {
-  if (n < 1 || n > 16) throw new Error(`OP_N out of range: ${n}`);
-  return ([
-    'OP_1', 'OP_2', 'OP_3', 'OP_4', 'OP_5', 'OP_6', 'OP_7', 'OP_8',
-    'OP_9', 'OP_10', 'OP_11', 'OP_12', 'OP_13', 'OP_14', 'OP_15', 'OP_16',
-  ] as const)[n - 1];
+  return btc.Script.encode([threshold, ...pubBytes, pubBytes.length, 'CHECKMULTISIG']);
 }
 
 /**
  * Compute the deterministic L1 unlock height for a staking commitment.
- * Set to halfway through the staker's last cycle, giving time to re-lock
- * without missing a cycle.
+ *
+ * Set to halfway through the staker's last cycle (i.e.
+ * {@link rewardCycleToUnlockHeight} of `firstRewardCycle + numCycles - 1`),
+ * giving time to re-lock without missing a cycle.
  */
 export function computeUnlockHeight(opts: {
   firstRewardCycle: number;
   numCycles: number;
-  rewardCycleLength: number;
-  firstBurnchainBlockHeight: number;
+  poxInfo: PoxInfo;
 }): number {
-  const lastCycleStart =
-    opts.firstBurnchainBlockHeight +
-    (opts.firstRewardCycle + opts.numCycles - 1) * opts.rewardCycleLength;
-  return lastCycleStart + Math.floor(opts.rewardCycleLength / 2);
+  return rewardCycleToUnlockHeight({
+    cycle: opts.firstRewardCycle + opts.numCycles - 1,
+    poxInfo: opts.poxInfo,
+  });
 }

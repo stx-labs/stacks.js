@@ -186,8 +186,10 @@ describe('buildLockingBitcoinAddress', () => {
 
 describe('computeUnlockHeight', () => {
   const baseOpts = {
-    firstBurnchainBlockHeight: 666_050,
-    rewardCycleLength: 2100,
+    poxInfo: {
+      firstBurnchainBlockHeight: 666_050,
+      rewardCycleLength: 2100,
+    } as Parameters<typeof computeUnlockHeight>[0]['poxInfo'],
     firstRewardCycle: 50,
     numCycles: 1,
   };

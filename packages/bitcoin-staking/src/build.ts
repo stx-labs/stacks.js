@@ -5,7 +5,7 @@ import {
   type StacksTransactionWire,
   makeUnsignedContractCall,
 } from '@stacks/transactions';
-import { CONTRACT_ADDRESS, CONTRACT_NAME } from './constants';
+import { POX5_CONTRACT_NAME } from './constants';
 import type {
   BuildAllowContractCallerArgs,
   BuildDisallowContractCallerArgs,
@@ -13,6 +13,7 @@ import type {
   BuildRevokeSignerKeyTxArgs,
   TxParams,
 } from './types';
+import { networkFrom } from '@stacks/network';
 
 /** @ignore */
 function clBufferFrom(value: Uint8Array | string) {
@@ -31,9 +32,10 @@ async function callPox5(
   functionArgs: ClarityValue[],
   tx: TxParams
 ): Promise<StacksTransactionWire> {
+  const network = networkFrom(tx.network);
   return makeUnsignedContractCall({
-    contractAddress: CONTRACT_ADDRESS,
-    contractName: CONTRACT_NAME,
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
     functionName,
     functionArgs,
     publicKey: tx.publicKey,
@@ -106,11 +108,11 @@ export async function buildSetupBond(
 /**
  * Build an unsigned `register-for-bond` transaction.
  *
- * Two `btcLockup` shapes:
- * - `kind: 'l1'`  — caller has funded one or more L1 timelocked outputs whose
+ * Two `lockup` shapes:
+ * - `kind: 'btc'`  — caller has funded one or more L1 (BTC) timelocked outputs whose
  *   redeem script is the locking script returned by {@link buildLockingScript}.
  *   The contract reconstructs and verifies each P2WSH output.
- * - `kind: 'sbtc'` — no L1 lockup; the contract pulls `sbtcSats` from the caller
+ * - `kind: 'sbtc'` — no L1 (BTC) lockup; the contract pulls `sbtcSats` from the caller
  *   via `lock-sbtc`.
  */
 export function buildRegisterForBond(
@@ -118,9 +120,9 @@ export function buildRegisterForBond(
     bondIndex: number;
     signerManager: string;
     amountUstx: IntegerType;
-    btcLockup:
+    lockup:
       | {
-          kind: 'l1';
+          kind: 'btc';
           outputs: {
             amountSats: IntegerType;
             txid: Uint8Array | string;
@@ -132,37 +134,43 @@ export function buildRegisterForBond(
     signerCalldata?: Uint8Array | string;
   } & TxParams
 ): Promise<StacksTransactionWire> {
-  const { btcLockup } = args;
-
-  let lockupCV: ClarityValue;
-  if (btcLockup.kind === 'l1') {
-    const outputs = btcLockup.outputs.map(o =>
-      Cl.tuple({
-        amount: Cl.uint(o.amountSats),
-        txid: clBufferFrom(o.txid),
-        'output-index': Cl.uint(o.outputIndex),
-      })
-    );
-    lockupCV = Cl.ok(
-      Cl.tuple({
-        outputs: Cl.list(outputs),
-        'unlock-bytes': clBufferFrom(btcLockup.unlockBytes),
-      })
-    );
-  } else {
-    lockupCV = Cl.error(Cl.uint(btcLockup.sbtcSats));
-  }
-
   return callPox5(
     'register-for-bond',
     [
       Cl.uint(args.bondIndex),
       Cl.address(args.signerManager),
       Cl.uint(args.amountUstx),
-      lockupCV,
+      lockupToCV(args.lockup),
       clOptionalBufferFrom(args.signerCalldata),
     ],
     args
+  );
+}
+
+/** @ignore */
+function lockupToCV(
+  lockup:
+    | {
+        kind: 'btc';
+        outputs: { amountSats: IntegerType; txid: Uint8Array | string; outputIndex: number }[];
+        unlockBytes: Uint8Array | string;
+      }
+    | { kind: 'sbtc'; sbtcSats: IntegerType }
+): ClarityValue {
+  if (lockup.kind === 'sbtc') return Cl.error(Cl.uint(lockup.sbtcSats));
+  return Cl.ok(
+    Cl.tuple({
+      outputs: Cl.list(
+        lockup.outputs.map(o =>
+          Cl.tuple({
+            amount: Cl.uint(o.amountSats),
+            txid: clBufferFrom(o.txid),
+            'output-index': Cl.uint(o.outputIndex),
+          })
+        )
+      ),
+      'unlock-bytes': clBufferFrom(lockup.unlockBytes),
+    })
   );
 }
 
@@ -433,6 +441,8 @@ export async function buildClaimRewards(
 // ---------------------------------------------------------------------------
 
 /**
+ * todo: check w stacks-core team
+ *
  * Build an unsigned `request-early-exit` transaction.
  *
  * Flags a paired-BTC bond position for early exit. After this lands the

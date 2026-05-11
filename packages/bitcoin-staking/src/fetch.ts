@@ -11,7 +11,7 @@ import {
   fetchCallReadOnlyFunction,
   fetchContractMapEntry,
 } from '@stacks/transactions';
-import { CONTRACT_ADDRESS, CONTRACT_NAME } from './constants';
+import { POX5_CONTRACT_NAME } from './constants';
 import { distributionCycleToBurnHeight } from './cycles';
 import type {
   AccountStatus,
@@ -81,9 +81,10 @@ export async function fetchPoxInfo(opts: NetworkClientParam = {}): Promise<PoxIn
 export async function fetchStakerInfo(
   opts: { address: string } & NetworkClientParam
 ): Promise<StakerInfo> {
+  const network = networkFrom(opts.network ?? 'mainnet');
   const result = await fetchCallReadOnlyFunction({
-    contractAddress: CONTRACT_ADDRESS,
-    contractName: CONTRACT_NAME,
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
     functionName: 'get-staker-info',
     functionArgs: [Cl.address(opts.address)],
     senderAddress: opts.address,
@@ -118,9 +119,10 @@ export async function fetchStakerInfo(
 export async function fetchAllowanceContractCallers(
   opts: { sender: string; contractCaller: string; poxInfo?: PoxInfo } & NetworkClientParam
 ): Promise<{ callerAllowed: boolean; callerExpiryHeight?: number }> {
+  const network = networkFrom(opts.network ?? 'mainnet');
   const entry = await fetchContractMapEntry({
-    contractAddress: CONTRACT_ADDRESS,
-    contractName: CONTRACT_NAME,
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
     mapName: 'allowance-contract-callers',
     mapKey: Cl.tuple({
       sender: Cl.address(opts.sender),
@@ -186,9 +188,10 @@ export async function fetchAccountStatus(
 export async function fetchBondMembership(
   opts: { address: string } & NetworkClientParam
 ): Promise<BondMembership | undefined> {
+  const network = networkFrom(opts.network ?? 'mainnet');
   const result = await fetchCallReadOnlyFunction({
-    contractAddress: CONTRACT_ADDRESS,
-    contractName: CONTRACT_NAME,
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
     functionName: 'get-bond-membership',
     functionArgs: [Cl.address(opts.address)],
     senderAddress: opts.address,
@@ -226,9 +229,10 @@ export async function fetchStakerSharesStakedForCycle(
     isBond: boolean;
   } & NetworkClientParam
 ): Promise<bigint> {
+  const network = networkFrom(opts.network ?? 'mainnet');
   const result = await fetchCallReadOnlyFunction({
-    contractAddress: CONTRACT_ADDRESS,
-    contractName: CONTRACT_NAME,
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
     functionName: 'get-staker-shares-staked-for-cycle',
     functionArgs: [
       Cl.address(opts.staker),
@@ -262,9 +266,10 @@ export async function fetchStakerSharesStakedForCycle(
 export async function fetchBond(
   opts: { bondIndex: number } & NetworkClientParam
 ): Promise<Bond | undefined> {
+  const network = networkFrom(opts.network ?? 'mainnet');
   const bondEntry = await fetchContractMapEntry({
-    contractAddress: CONTRACT_ADDRESS,
-    contractName: CONTRACT_NAME,
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
     mapName: 'protocol-bonds',
     mapKey: Cl.uint(opts.bondIndex),
     network: opts.network,
@@ -298,12 +303,13 @@ export async function fetchTotalSatsStakedForBond(
   opts: { bondIndex: number } & NetworkClientParam
 ): Promise<bigint> {
   // todo: improvement for api, this could be added to a bond lookup endpoint, then becomes unneeded
+  const network = networkFrom(opts.network ?? 'mainnet');
   const result = await fetchCallReadOnlyFunction({
-    contractAddress: CONTRACT_ADDRESS,
-    contractName: CONTRACT_NAME,
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
     functionName: 'get-total-sats-staked-for-bond',
     functionArgs: [Cl.uint(opts.bondIndex)],
-    senderAddress: CONTRACT_ADDRESS,
+    senderAddress: network.bootAddress,
     network: opts.network,
     client: opts.client,
   });
@@ -319,9 +325,10 @@ export async function fetchTotalSatsStakedForBond(
 export async function fetchBondAllowance(
   opts: { bondIndex: number; address: string } & NetworkClientParam
 ): Promise<bigint> {
+  const network = networkFrom(opts.network ?? 'mainnet');
   const entry = await fetchContractMapEntry({
-    contractAddress: CONTRACT_ADDRESS,
-    contractName: CONTRACT_NAME,
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
     mapName: 'protocol-bond-allowances',
     mapKey: Cl.tuple({
       'bond-index': Cl.uint(opts.bondIndex),
@@ -350,12 +357,13 @@ export async function fetchBondAllowance(
 export async function fetchCurrentDistributionCycle(
   opts: NetworkClientParam = {}
 ): Promise<number> {
+  const network = networkFrom(opts.network ?? 'mainnet');
   const result = await fetchCallReadOnlyFunction({
-    contractAddress: CONTRACT_ADDRESS,
-    contractName: CONTRACT_NAME,
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
     functionName: 'current-distribution-cycle',
     functionArgs: [],
-    senderAddress: CONTRACT_ADDRESS,
+    senderAddress: network.bootAddress,
     network: opts.network,
     client: opts.client,
   });
@@ -377,12 +385,13 @@ export async function fetchSignerSharesStakedForCycle(
     isBond: boolean;
   } & NetworkClientParam
 ): Promise<bigint> {
+  const network = networkFrom(opts.network ?? 'mainnet');
   const result = await fetchCallReadOnlyFunction({
-    contractAddress: CONTRACT_ADDRESS,
-    contractName: CONTRACT_NAME,
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
     functionName: 'get-signer-shares-staked-for-cycle',
     functionArgs: [Cl.address(opts.signerManager), Cl.uint(opts.index), Cl.bool(opts.isBond)],
-    senderAddress: CONTRACT_ADDRESS,
+    senderAddress: network.bootAddress,
     network: opts.network,
     client: opts.client,
   });
@@ -404,12 +413,13 @@ export async function fetchSignerRewardsPaidForCycle(
     isBond: boolean;
   } & NetworkClientParam
 ): Promise<bigint> {
+  const network = networkFrom(opts.network ?? 'mainnet');
   const result = await fetchCallReadOnlyFunction({
-    contractAddress: CONTRACT_ADDRESS,
-    contractName: CONTRACT_NAME,
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
     functionName: 'get-signer-rewards-paid-for-cycle',
     functionArgs: [Cl.address(opts.signerManager), Cl.uint(opts.index), Cl.bool(opts.isBond)],
-    senderAddress: CONTRACT_ADDRESS,
+    senderAddress: network.bootAddress,
     network: opts.network,
     client: opts.client,
   });
@@ -441,12 +451,13 @@ async function fetchClaimableRewardsLeg(
     isBond: boolean;
   } & NetworkClientParam
 ): Promise<RewardsLeg> {
+  const network = networkFrom(opts.network ?? 'mainnet');
   const result = await fetchCallReadOnlyFunction({
-    contractAddress: CONTRACT_ADDRESS,
-    contractName: CONTRACT_NAME,
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
     functionName: 'get-claimable-rewards',
     functionArgs: [Cl.address(opts.signerManager), Cl.uint(opts.index), Cl.bool(opts.isBond)],
-    senderAddress: CONTRACT_ADDRESS,
+    senderAddress: network.bootAddress,
     network: opts.network,
     client: opts.client,
   });
@@ -516,12 +527,13 @@ export async function fetchClaimableRewards(
  * `calculation-height = distribution-cycle-to-burn-height(currentDistCycle) - 1`.
  */
 export async function fetchLastRewardComputeHeight(opts: NetworkClientParam = {}): Promise<number> {
+  const network = networkFrom(opts.network ?? 'mainnet');
   const result = await fetchCallReadOnlyFunction({
-    contractAddress: CONTRACT_ADDRESS,
-    contractName: CONTRACT_NAME,
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
     functionName: 'get-last-reward-compute-height',
     functionArgs: [],
-    senderAddress: CONTRACT_ADDRESS,
+    senderAddress: network.bootAddress,
     network: opts.network,
     client: opts.client,
   });
