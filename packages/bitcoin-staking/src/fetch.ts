@@ -12,25 +12,15 @@ import {
   fetchContractMapEntry,
 } from '@stacks/transactions';
 import { POX5_CONTRACT_NAME } from './constants';
-import { distributionCycleToBurnHeight } from './cycles';
 import type {
   AccountStatus,
   Bond,
   BondMembership,
   ClaimableRewards,
-  PayoutWindow,
   PoxInfo,
   RewardsLeg,
   StakerInfo,
 } from './types';
-
-/**
- * Pause window length (in burn blocks) for the andon-cord halt path.
- *
- * missing: todo: not enforced by `pox-5.clar` yet. Surfaced here so callers
- * and tests share one constant.
- */
-const ANDON_CORD_PAUSE_BLOCKS = 250;
 
 // ---------------------------------------------------------------------------
 // Public fetch functions
@@ -555,97 +545,6 @@ export async function fetchClaimableRewards(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Andon cord / payout pause
-// ---------------------------------------------------------------------------
-
-/**
- * Wraps the contract's `get-last-reward-compute-height` read-only.
- *
- * Returns the burn-block height at which `calculate-rewards` was most
- * recently settled (`0` before any settlement). The value is set inside
- * `calculate-rewards` to the prior distribution cycle's
- * `calculation-height = distribution-cycle-to-burn-height(currentDistCycle) - 1`.
- */
-export async function fetchLastRewardComputeHeight(opts: NetworkClientParam = {}): Promise<number> {
-  const network = networkFrom(opts.network ?? 'mainnet');
-  const result = await fetchCallReadOnlyFunction({
-    contractAddress: network.bootAddress,
-    contractName: POX5_CONTRACT_NAME,
-    functionName: 'get-last-reward-compute-height',
-    functionArgs: [],
-    senderAddress: network.bootAddress,
-    network: opts.network,
-    client: opts.client,
-  });
-  return Number((result as UIntCV).value);
-}
-
-/**
- * Compute the andon-cord payout window for the next-pending distribution
- * cycle.
- *
- * Two pieces feed the answer:
- * - `currentDistributionCycle` — index of the dist cycle the chain tip
- *   is in. Once it ticks over, `calculate-rewards` becomes callable for
- *   the *previous* cycle (`calculation-height = distributionCycleToBurnHeight
- *   (currentDistCycle) - 1`).
- * - `lastRewardComputeHeight` — burn-height of the last settlement. If
- *   it equals (or exceeds) the upcoming `calculation-height` the cycle
- *   has already fired and cannot be paused.
- *
- * The 250-block delay window is the design-spec gating.
- *
- * missing: todo: `pox-5.clar` does NOT enforce a 250-block delay yet —
- * `calculate-rewards` only checks `last-reward-compute-height <
- * calculation-height`. The contract also has no `paused` flag, so this
- * helper can only return `paused: false`.
- *
- * unsure: todo: which dist cycle to surface. The design sketch implies
- * "the next-pending payout". We pick: if
- * `lastRewardComputeHeight < calculationHeightForCurrentDistCycle`,
- * the current dist cycle's payout is still pending; otherwise the
- * window has already closed (returned with `canPause: false` and
- * `blocksRemaining: 0`).
- */
-export async function fetchPayoutWindow(
-  opts: { poxInfo?: PoxInfo } & NetworkClientParam = {}
-): Promise<PayoutWindow> {
-  const [pox, distCycle, lastComputeHeight] = await Promise.all([
-    opts.poxInfo ?? fetchPoxInfo({ network: opts.network, client: opts.client }),
-    fetchCurrentDistributionCycle({ network: opts.network, client: opts.client }),
-    fetchLastRewardComputeHeight({ network: opts.network, client: opts.client }),
-  ]);
-
-  // The dist cycle whose payout is "next to fire" is the one that has
-  // started but not yet been settled. `calculate-rewards` settles for
-  // `distributionCycleToBurnHeight(currentDistCycle) - 1`, anchoring at
-  // the burn-height the dist cycle ticked over.
-  const distCycleStartHeight = distributionCycleToBurnHeight({ cycle: distCycle, poxInfo: pox });
-  const calculationHeight = distCycleStartHeight - 1;
-
-  // Once the contract has settled at-or-after `calculationHeight` the
-  // payout has fired and the window is closed.
-  const alreadyFired = lastComputeHeight >= calculationHeight;
-
-  // Pause window: payout fires at `distCycleStartHeight + 1`
-  // ("automation fires at X+1"); ops have until then — i.e. up to
-  // `ANDON_CORD_PAUSE_BLOCKS` after the dist cycle starts — to halt.
-  // blocksRemaining counts down from 250 to 0 inside the window.
-  const blocksSinceTick = pox.currentBurnchainBlockHeight - distCycleStartHeight;
-  const blocksRemaining = alreadyFired
-    ? 0
-    : Math.max(0, ANDON_CORD_PAUSE_BLOCKS - Math.max(0, blocksSinceTick));
-
-  return {
-    distCycle,
-    scheduledHeight: distCycleStartHeight,
-    blocksRemaining,
-    canPause: !alreadyFired && blocksRemaining > 0,
-    // missing: todo: contract has no `paused` flag.
-    paused: false,
-  };
-}
-
 // todo: flow 13 (paired-BTC early exit) — `fetchEarlyExitStatus`.
 // todo: flow 14 (watchdog) — `fetchLockStatus`, `collectSpendProof`.
+// todo: flow 15 (andon cord) — `fetchLastRewardComputeHeight`, `fetchPayoutWindow`.

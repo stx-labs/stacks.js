@@ -170,39 +170,7 @@ export interface BuildDisallowContractCallerArgs {
 
 // todo: flow 13 (paired-BTC early exit) — `EarlyExitStatus`.
 // todo: flow 14 (watchdog) — `LockStatus`.
-
-// ---------------------------------------------------------------------------
-// Andon cord / payout pause types
-// ---------------------------------------------------------------------------
-
-/**
- * The current state of the next-pending reward distribution, surfaced for
- * ops dashboards (3-of-5 multisig holders) and end users wanting a
- * "queued / confirmed / paused" indicator.
- *
- * Payout for distribution cycle X requires automation to call
- * `calculate-rewards` once `current-distribution-cycle ≥ X + 1`. A
- * 250-block delay window between dist-cycle tick-over and `calculate-rewards`
- * gives ops time to halt if the coverage ratio looks wrong.
- *
- * missing: todo: the 250-block delay is not enforced by `pox-5.clar` yet
- * (only `last-reward-compute-height < calculation-height` is checked).
- *
- * unsure: todo: `paused` cannot be answered from the current contract — no
- * pause flag, no pause function, no read-only. Treat as a placeholder.
- */
-export interface PayoutWindow {
-  /** The distribution cycle whose payout is next to be settled. */
-  distCycle: number;
-  /** Burn-height at which the dist cycle's calculation-height was reached. */
-  scheduledHeight: number;
-  /** Burn-blocks remaining in the 250-block pause window (`0` once closed). */
-  blocksRemaining: number;
-  /** True while `blocksRemaining > 0` AND the payout has not yet fired. */
-  canPause: boolean;
-  /** Whether the payout was paused by a 3-of-5 multisig call. See unsure. */
-  paused: boolean;
-}
+// todo: flow 15 (andon cord) — `PayoutWindow`.
 
 /**
  * Bitcoin SPV-style proof that an L1 lockup UTXO has been spent.

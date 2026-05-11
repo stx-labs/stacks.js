@@ -401,38 +401,5 @@ export async function buildClaimRewards(
 }
 
 // todo: flow 13 (paired-BTC early exit) — `buildEarlyExitRequest`.
-
-// ---------------------------------------------------------------------------
-// Andon cord / payout pause
-// ---------------------------------------------------------------------------
-
-/**
- * Build an unsigned `pause-payout` transaction.
- *
- * Halts a queued `calculate-rewards` settlement for distribution cycle
- * `distributionCycle` during the 250-block andon-cord window. Authorization
- * is a 3-of-5 ops multisig (the multisig is the `tx-sender`; the contract
- * enforces the membership check). Pause cannot redirect — only halt;
- * restoring a paused payout may require a hard fork.
- *
- * missing: todo: `pause-payout` is not in `pox-5.clar` yet — no pause flag,
- * no pause function, no 3-of-5 authorization surface. Function name, arg
- * shape `(distributionCycle, reason)`, and signing model (single principal
- * vs SIP-018 aggregated multisig) are all placeholders pending the contract.
- */
-export async function buildPausePayout(
-  args: {
-    /** Distribution cycle whose pending payout should be halted. */
-    distributionCycle: number;
-    /** Free-form audit string; capped at 256 bytes by the placeholder shape. */
-    reason: string;
-  } & TxParams
-): Promise<StacksTransactionWire> {
-  return callPox5(
-    'pause-payout',
-    [Cl.uint(args.distributionCycle), Cl.bufferFromUtf8(args.reason)],
-    args
-  );
-}
-
 // todo: flow 14 (watchdog spent-report) — `buildReportUtxoSpent`.
+// todo: flow 15 (andon cord) — `buildPausePayout`.
