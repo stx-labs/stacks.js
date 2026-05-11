@@ -85,11 +85,10 @@ export function buildLockingScript(opts: {
    * tail is constructed as a multisig spendable by `earlyExitThreshold`-of-N.
    * Mutually exclusive with `unlockBytes`.
    *
-   * unsure: exact early-exit script encoding — see `unsure/flow-5.md`. The
-   * contract stores a 683-byte opaque `early-unlock-signers` descriptor; how that
-   * maps to a discrete pubkey list is not specified. This implementation emits a
-   * standard Bitcoin `OP_<M> <pubkey...> OP_<N> OP_CHECKMULTISIG` tail as a
-   * placeholder.
+   * unsure: todo: exact early-exit script encoding. The contract stores a 683-byte
+   * opaque `early-unlock-signers` descriptor; how that maps to a discrete
+   * pubkey list is not specified. This implementation emits a standard
+   * Bitcoin `OP_<M> <pubkey...> OP_<N> OP_CHECKMULTISIG` tail as a placeholder.
    */
   earlyExitPubkeys?: string[];
   /** Threshold M for the M-of-N early-exit multisig. Defaults to 1. */
@@ -226,7 +225,7 @@ export function lockingScriptToP2wsh(
  * branch of a paired-BTC lockup.
  *
  * todo: check w stacks-core how this is encoded
- * unsure: real on-chain shape. The PoX-5 contract stores `early-unlock-signers`
+ * unsure: todo: real on-chain shape. The PoX-5 contract stores `early-unlock-signers`
  * as an opaque 683-byte buffer descriptor (see `setup-bond` in `pox-5.clar`).
  * The exact wire format that the L1 verifier matches is not yet specified; this
  * helper emits a vanilla Bitcoin multisig tail as a working placeholder so that

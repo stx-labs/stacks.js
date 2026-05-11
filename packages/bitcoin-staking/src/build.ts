@@ -46,26 +46,17 @@ async function callPox5(
 }
 
 // ---------------------------------------------------------------------------
-// Bond setup (admin) — flow 4
+// Bond setup (admin)
 // ---------------------------------------------------------------------------
 
 /**
- * Build an unsigned `setup-bond` transaction (admin / Endowment — flow 4).
- *
- * Per `staking-design/pox-5.clar` (2026-05-04):
- *   (setup-bond (bond-index uint)
- *               (target-rate uint)
- *               (stx-value-ratio uint)
- *               (min-ustx-ratio uint)
- *               (early-unlock-signers (buff 683))
- *               (allowlist (list 1000 { staker: principal, max-sats: uint })))
+ * Build an unsigned `setup-bond` transaction (admin / Endowment).
  *
  * Restricted to the bond admin (`bond-admin` data-var). Must be called within
  * `BOND_GAP_CYCLES` of the bond's start and before its open height.
  *
- * unsure: the 683-byte `earlyUnlockSigners` descriptor format is open
- * (notes/status.md tier-2 §14, design open-question 2). Currently passed
- * through as opaque bytes; the helper in `locking.ts`
+ * unsure: todo: the 683-byte `earlyUnlockSigners` descriptor format is open.
+ * Currently passed through as opaque bytes; the helper in `locking.ts`
  * (`buildEarlyExitUnlockScript`) emits a placeholder M-of-N tail.
  */
 export async function buildSetupBond(
@@ -179,19 +170,10 @@ function lockupToCV(
 // ---------------------------------------------------------------------------
 
 /**
- * Build an unsigned PoX-5 `stake` transaction (STX-only entry — flow 1).
- *
- * Per `staking-design/pox-5.clar` (2026-05-04), the contract signature is:
- *   (stake (signer-manager <signer-manager-trait>)
- *          (amount-ustx uint)
- *          (num-cycles uint)
- *          (start-burn-ht uint)
- *          (signer-calldata (optional (buff 500))))
+ * Build an unsigned PoX-5 `stake` transaction (STX-only entry).
  *
  * Authorization is delegated to the signer-manager contract via
- * `validate-stake!`. There is no `pox-address`, no per-tx signer signature,
- * no `max-amount`, no `auth-id`, no `unlock-bytes` — those belonged to the
- * paired-BTC flow (now `register-for-bond`) or to PoX-4.
+ * `validate-stake!`. The paired-BTC entry is `register-for-bond`.
  */
 export async function buildStake(
   args: {
@@ -219,34 +201,28 @@ export async function buildStake(
 }
 
 /**
- * Build an unsigned PoX-5 `stake-update` transaction (STX-only — flow 2).
+ * Build an unsigned PoX-5 `stake-update` transaction (STX-only).
  *
- * Per `staking-design/pox-5.clar` (2026-05-04), the contract signature is:
- *   (stake-update (signer-manager <signer-manager-trait>)
- *                 (cycles-to-extend uint)
- *                 (amount-increase uint)
- *                 (signer-calldata (optional (buff 500))))
+ * A single call can extend the lock by N cycles, top up the locked amount,
+ * and rotate the signer-manager. Pass `0` / `0n` to skip a dimension (same
+ * `signerManager` keeps the current binding from the staker's perspective,
+ * but the contract still re-runs `validate-stake!` against whichever
+ * signer-manager is passed).
  *
- * Unifies the PoX-4 `stake-extend` + `stake-update` shapes: a single call can
- * extend the lock by N cycles, top up the locked amount, and rotate the
- * signer-manager. Pass `0` / `0n` to skip a dimension (same `signerManager`
- * keeps the current binding from the staker's perspective, but the contract
- * still re-runs `validate-stake!` against whichever signer-manager is passed).
- *
- * unsure: flow 2 markdown sketches the API as `cyclesToExtend`/`amountIncrease`
- * with `0` meaning "skip". The contract's own min-num-cycles guard
- * (`check-pox-lock-period`) is computed against `(unlock-cycle - current-cycle - 1)`,
- * so a pure rotate (both zeros, already-extended position) only succeeds if
- * the existing tail still satisfies the bound. No client-side guard added.
+ * unsure: todo: the API takes `cyclesToExtend`/`amountIncrease` with `0` meaning
+ * "skip". The contract's own min-num-cycles guard (`check-pox-lock-period`)
+ * is computed against `(unlock-cycle - current-cycle - 1)`, so a pure rotate
+ * (both zeros, already-extended position) only succeeds if the existing tail
+ * still satisfies the bound. No client-side guard added.
  */
 export async function buildStakeUpdate(
   args: {
     /** Contract address of the signer-manager implementing `signer-manager-trait`. */
     signerManager: string;
-    /** Number of cycles to extend the lock by. `0` = no extension. */
-    cyclesToExtend: number;
-    /** Additional uSTX to lock on top of the current `amount-ustx`. `0n` = no top-up. */
-    amountIncrease: IntegerType;
+    /** Number of cycles to extend the lock by. Defaults to `0` (no extension). */
+    cyclesToExtend?: number;
+    /** Additional uSTX to lock on top of the current `amount-ustx`. Defaults to `0n` (no top-up). */
+    amountIncrease?: IntegerType;
     /** Opaque calldata forwarded to `validate-stake!`. */
     signerCalldata?: Uint8Array | string;
   } & TxParams
@@ -255,8 +231,8 @@ export async function buildStakeUpdate(
     'stake-update',
     [
       Cl.address(args.signerManager),
-      Cl.uint(args.cyclesToExtend),
-      Cl.uint(args.amountIncrease),
+      Cl.uint(args.cyclesToExtend ?? 0),
+      Cl.uint(args.amountIncrease ?? 0n),
       clOptionalBufferFrom(args.signerCalldata),
     ],
     args
@@ -264,24 +240,20 @@ export async function buildStakeUpdate(
 }
 
 /**
- * Build an unsigned PoX-5 `unstake` transaction (STX-only — flow 3).
- *
- * Per `staking-design/pox-5.clar` (2026-05-04), the contract signature is:
- *   (unstake)
+ * Build an unsigned PoX-5 `unstake` transaction (STX-only).
  *
  * Sets the caller's STX-only position to unlock at the end of the current
  * reward cycle (i.e. `num-cycles` is rewritten so `first-reward-cycle +
  * num-cycles = current-cycle + 1`). The contract reverts with
  * `ERR_UNSTAKE_IN_PREPARE_PHASE` if invoked during the prepare phase, so
- * callers should gate on {@link isInPreparePhase} first (see
- * `flows/4-solo-stx/3.md`).
+ * callers should gate on {@link isInPreparePhase} first.
  *
  * No arguments — the staker is derived from `tx-sender` and the position is
  * looked up via `get-staker-info`.
  *
- * unsure: the contract `(define-public (unstake) ...)` takes no args; flow
- * markdown matches. If a future revision adds an explicit position selector
- * (e.g. for multi-position stakers) this signature will need to grow.
+ * unsure: todo: the contract `(define-public (unstake) ...)` takes no args. If a
+ * future revision adds an explicit position selector (e.g. for multi-position
+ * stakers) this signature will need to grow.
  */
 export async function buildUnstake(args: TxParams): Promise<StacksTransactionWire> {
   return callPox5('unstake', [], args);
@@ -362,14 +334,11 @@ export async function buildDisallowContractCaller(
 }
 
 // ---------------------------------------------------------------------------
-// Reward distribution (signer side) — flow 7
+// Reward distribution (signer side)
 // ---------------------------------------------------------------------------
 
 /**
- * Build an unsigned `calculate-rewards` transaction (flow 7, leg 1).
- *
- * Per `staking-design/pox-5.clar` (2026-05-04):
- *   (calculate-rewards (bond-periods (list 6 uint)))
+ * Build an unsigned `calculate-rewards` transaction.
  *
  * Anyone can call. Settles the current distribution cycle's waterfall:
  * iterates `bondPeriods` in descending `stx-value-ratio` order (drawdown
@@ -384,10 +353,10 @@ export async function buildDisallowContractCaller(
  * `calculation-height` (`assert-all-active-bonds-included`); pass the full
  * `activeBondIndices` set the dashboard surfaces, not a filtered subset.
  *
- * unsure: whether to expose a client-side ordering helper. Today the caller
+ * unsure: todo: whether to expose a client-side ordering helper. Today the caller
  * must pre-sort by descending `stx-value-ratio` (older bond index breaks
- * ties); see `flows/6-rewards/7.md`. Could wrap once a fetch helper
- * surfaces per-bond `stx-value-ratio` in a single call.
+ * ties). Could wrap once a fetch helper surfaces per-bond `stx-value-ratio`
+ * in a single call.
  */
 export async function buildCalculateRewards(
   args: {
@@ -399,27 +368,22 @@ export async function buildCalculateRewards(
 }
 
 /**
- * Build an unsigned `claim-rewards` transaction (flow 7, leg 2).
- *
- * Per `staking-design/pox-5.clar` (2026-05-04, post-patch):
- *   (claim-rewards (bond-periods (list 6 uint)) (reward-cycle uint))
+ * Build an unsigned `claim-rewards` transaction.
  *
  * Pulls accumulated sBTC for the contract-caller's signer share across the
  * STX-only leg keyed by `rewardCycle` plus one leg per `bondIndices` entry.
- * The 2026-05-04 patch changed the return tuple to
+ * Returns a tuple
  * `{ stx-rewards, bond-rewards (list), bond-totals, total-rewards }` and
  * mirrors that shape in the `print` event so callers can break the payout
  * down per bond. Reverts with `ERR_NO_CLAIMABLE_REWARDS` if every leg is
- * empty — gate on {@link fetchClaimableRewards} first (the flow markdown
- * shows the `totalPending === 0n` guard).
+ * empty — gate on {@link fetchClaimableRewards} first.
  *
  * `tx-sender` should be the signer-manager (the contract uses
  * `contract-caller` as the signer address).
  *
- * unsure: `rewardCycle` semantics. The flow markdown passes
+ * unsure: todo: `rewardCycle` semantics. Common usage passes
  * `currentDistributionCycle - 1` (claim the cycle the caller just settled
- * via `calculate-rewards`); the `-1` sits with a TODO in `flows/6-rewards/7.md`
- * about why exactly. Surfaced as a plain arg here — callers decide.
+ * via `calculate-rewards`). Surfaced as a plain arg here — callers decide.
  */
 export async function buildClaimRewards(
   args: {
@@ -436,82 +400,25 @@ export async function buildClaimRewards(
   );
 }
 
+// todo: flow 13 (paired-BTC early exit) — `buildEarlyExitRequest`.
+
 // ---------------------------------------------------------------------------
-// Early exit (paired-BTC) — flow 13
+// Andon cord / payout pause
 // ---------------------------------------------------------------------------
 
 /**
- * todo: check w stacks-core team
- *
- * Build an unsigned `request-early-exit` transaction.
- *
- * Flags a paired-BTC bond position for early exit. After this lands the
- * staker forfeits all remaining BTC yield for the bond period; the paired
- * STX stays locked through the natural bond end and earns nothing (it does
- * NOT convert to a T3 STX-only position).
- *
- * The L1 unlock follows separately: an off-chain coordinator (1-of-N AWS
- * multisig — the "Early Exit signer set") observes this L2 event and
- * co-signs a spend against the pre-authorized early-exit branch baked into
- * the locking script at enrollment time (see `buildEarlyExitUnlockScript`
- * in `locking.ts`, flow 5/9). Anyone may then broadcast that BTC tx.
- *
- * missing: `request-early-exit` is referenced in the design diagrams
- * (notes/user-flows.md §1g, notes/pox-5-design.md "Early exit",
- * notes/status.md tier-2 item 14, flows/3-paired-btc/13.md) but is NOT
- * yet defined in `staking-design/pox-5.clar` (2026-05-04 snapshot).
- * `setup-bond` does store the `early-unlock-signers` 683-byte descriptor,
- * so the L1 side is provisioned, but the L2 request entry point is a
- * placeholder. Function name, argument shape, and event payload are all
- * subject to change once the contract function lands.
- *
- * unsure: argument shape. The flow markdown sketches a no-arg call
- * (just publicKey/fee/nonce/network), implying the contract derives the
- * staker from `tx-sender` and looks up the bond via
- * `get-bond-membership`. A future revision could add `(bond-index uint)`
- * if the contract chooses to disambiguate; left out here to match the
- * sketch.
- */
-export async function buildEarlyExitRequest(args: TxParams): Promise<StacksTransactionWire> {
-  // missing: contract function name `request-early-exit` is the design-doc
-  // placeholder. Replace once the contract surface is finalized.
-  return callPox5('request-early-exit', [], args);
-}
-
-// ---------------------------------------------------------------------------
-// Andon cord / payout pause — flow 15
-// ---------------------------------------------------------------------------
-
-/**
- * Build an unsigned `pause-payout` transaction (flow 15).
+ * Build an unsigned `pause-payout` transaction.
  *
  * Halts a queued `calculate-rewards` settlement for distribution cycle
  * `distributionCycle` during the 250-block andon-cord window. Authorization
- * is a 3-of-5 ops multisig (the multisig is the `tx-sender`; the
- * contract enforces the membership check). Pause cannot redirect — only
- * halt; restoring a paused payout may require a hard fork
- * (`notes/pox-5-design.md` "Andon Cord", White Paper §4.4, Launch Scope D19).
+ * is a 3-of-5 ops multisig (the multisig is the `tx-sender`; the contract
+ * enforces the membership check). Pause cannot redirect — only halt;
+ * restoring a paused payout may require a hard fork.
  *
- * missing: `pause-payout` is NOT in `staking-design/pox-5.clar`
- * (2026-05-04 snapshot). The contract today gates `calculate-rewards`
- * solely on `last-reward-compute-height < calculation-height` — there
- * is no pause flag, no pause function, and no 3-of-5 multisig
- * authorization surface. `notes/status.md` tier-2 item 16 and open
- * design-question 3 flag the entire andon-cord surface as TBD. Replace
- * this stub once the contract function lands.
- *
- * unsure: function name + arg shape are speculative. The flow markdown
- * sketches `(distributionCycle, reason)`. Plausible alternatives:
- * `(distribution-cycle uint)` only, with the reason carried off-chain
- * via the `print` event payload; or `(distribution-cycle uint, reason
- * (buff 256))` to keep the audit trail on-chain. Encoded the
- * sketch-shape here.
- *
- * unsure: who signs. The flow-15 sketch shows the ops multisig as
- * `publicKey: ops.stxPublicKey`, implying a single principal hosts the
- * 3-of-5. A SIP-018-style aggregated multisig would invert the call
- * shape (off-chain signature collection + a single relay tx). Left as
- * a single-principal builder for parity with the rest of the package.
+ * missing: todo: `pause-payout` is not in `pox-5.clar` yet — no pause flag,
+ * no pause function, no 3-of-5 authorization surface. Function name, arg
+ * shape `(distributionCycle, reason)`, and signing model (single principal
+ * vs SIP-018 aggregated multisig) are all placeholders pending the contract.
  */
 export async function buildPausePayout(
   args: {
@@ -521,8 +428,6 @@ export async function buildPausePayout(
     reason: string;
   } & TxParams
 ): Promise<StacksTransactionWire> {
-  // missing: contract function name `pause-payout` is the design-doc
-  // placeholder. Replace once the contract surface is finalized.
   return callPox5(
     'pause-payout',
     [Cl.uint(args.distributionCycle), Cl.bufferFromUtf8(args.reason)],
@@ -530,65 +435,4 @@ export async function buildPausePayout(
   );
 }
 
-// ---------------------------------------------------------------------------
-// Watchdog spent-report (paired-BTC) — flow 14
-// ---------------------------------------------------------------------------
-
-/**
- * Build an unsigned `report-utxo-spent` transaction (watchdog flow 14).
- *
- * Anyone can post a Bitcoin SPV proof that a tracked L1 lockup has been
- * spent before its CLTV expiry. The first valid proof earns compensation;
- * the reported position is dropped from T1 eligibility at the next payout
- * (`notes/pox-5-design.md` "Watchdog", Launch Scope D21,
- * `flows/3-paired-btc/14.md`).
- *
- * missing: NO watchdog function exists in `pox-5.clar` (2026-05-04
- * snapshot). The only related primitive is the private
- * `validate-p2wsh-exists?` stub at line 1636 — itself a placeholder for
- * a future Clarity built-in. `notes/status.md` tier-2 item 15 and open
- * design-question 1 explicitly flag this surface as TBD.
- *
- * unsure: function name. The flow markdown sketches `report-utxo-spent`;
- * other plausible names are `report-l1-spend`, `submit-spend-proof`,
- * `prove-utxo-spent`. Used the flow-markdown name as the placeholder.
- *
- * unsure: argument shape. Sketch passes `staker`, `spendTxid`,
- * `spendBlockHeight`, `merkleBranch`. Real contract will likely also
- * need: the original `(lock-txid, lock-vout)` it claims to invalidate,
- * the raw spending tx bytes, the input index spending the tracked
- * output, and a block-header chain segment. Encoded the minimal sketch
- * here; expand once the contract lands.
- *
- * unsure: compensation payout asset (sBTC vs. STX) and amount are not
- * specified anywhere in the design notes — open per `flows/3-paired-btc/14.md`.
- */
-export async function buildReportUtxoSpent(
-  args: {
-    /** Stacks address of the staker whose L1 lockup was spent. */
-    staker: string;
-    /** Txid of the Bitcoin transaction that spent the tracked output. */
-    spendTxid: Uint8Array | string;
-    /** Burn-block height that included the spending tx. */
-    spendBlockHeight: number;
-    /** Merkle branch proving inclusion of `spendTxid` in `spendBlockHeight`. */
-    merkleBranch: (Uint8Array | string)[];
-    // missing: likely also (lockTxid, lockVout), raw spending tx bytes,
-    // spending input index, block header(s). Add when contract shape is
-    // finalized.
-  } & TxParams
-): Promise<StacksTransactionWire> {
-  // missing: contract function name + arg list are placeholders pulled
-  // from the flow-markdown sketch. Replace once `pox-5.clar` exposes
-  // the real surface.
-  return callPox5(
-    'report-utxo-spent',
-    [
-      Cl.address(args.staker),
-      clBufferFrom(args.spendTxid),
-      Cl.uint(args.spendBlockHeight),
-      Cl.list(args.merkleBranch.map(clBufferFrom)),
-    ],
-    args
-  );
-}
+// todo: flow 14 (watchdog spent-report) — `buildReportUtxoSpent`.

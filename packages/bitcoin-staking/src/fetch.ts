@@ -18,8 +18,6 @@ import type {
   Bond,
   BondMembership,
   ClaimableRewards,
-  EarlyExitStatus,
-  LockStatus,
   PayoutWindow,
   PoxInfo,
   RewardsLeg,
@@ -29,10 +27,8 @@ import type {
 /**
  * Pause window length (in burn blocks) for the andon-cord halt path.
  *
- * Per `notes/pox-5-design.md` "Andon Cord" / White Paper §4.4 / Launch
- * Scope D19. NOT enforced by `pox-5.clar` (2026-05-04) — see
- * `unsure/flow-15.md`. Surfaced here so callers and tests share one
- * constant.
+ * missing: todo: not enforced by `pox-5.clar` yet. Surfaced here so callers
+ * and tests share one constant.
  */
 const ANDON_CORD_PAUSE_BLOCKS = 250;
 
@@ -40,7 +36,7 @@ const ANDON_CORD_PAUSE_BLOCKS = 250;
 // Public fetch functions
 // ---------------------------------------------------------------------------
 
-/** Fetch PoX info from the `/v2/pox` node endpoint. */
+/** Wraps the `/v2/pox` node endpoint. */
 export async function fetchPoxInfo(opts: NetworkClientParam = {}): Promise<PoxInfo> {
   const network = networkFrom(opts.network ?? 'mainnet');
   const client = Object.assign({}, clientFromNetwork(network), opts.client);
@@ -70,13 +66,12 @@ export async function fetchPoxInfo(opts: NetworkClientParam = {}): Promise<PoxIn
 }
 
 /**
- * Fetch staker lock summary via the `get-staker-info` read-only.
+ * Wraps the contract's `get-staker-info` read-only.
  *
- * Per `pox-5.clar` (`staker-info` map), this returns only the lock dimensions:
- * `{ amount-ustx, first-reward-cycle, num-cycles }`. Pool/solo discrimination,
- * signer key, and BTC reward address are NOT exposed here — they live in
- * `staker-signer-cycle-memberships` / `get-signer-cycle-membership` and need
- * separate fetchers.
+ * Returns only the lock dimensions (`amount-ustx`, `first-reward-cycle`,
+ * `num-cycles`). Pool/solo discrimination, signer key, and BTC reward address
+ * are NOT exposed here — they live in `staker-signer-cycle-memberships` /
+ * `get-signer-cycle-membership` and need separate fetchers.
  */
 export async function fetchStakerInfo(
   opts: { address: string } & NetworkClientParam
@@ -107,14 +102,13 @@ export async function fetchStakerInfo(
 }
 
 /**
- * Check whether `sender` has authorized `contractCaller` to call PoX-5
- * methods on its behalf, honoring the optional expiry burn-height stored in
- * the grant.
+ * Wraps the contract's `allowance-contract-callers` map.
  *
- * Mirrors the logic of the contract's `check-caller-allowed` read-only
- * function: an authorization is in effect when an entry exists in the
- * `allowance-contract-callers` map and either has no expiry or the current
- * burn-block height has not yet reached the expiry.
+ * Returns whether `sender` has authorized `contractCaller` to call PoX-5
+ * methods on its behalf, honoring the optional expiry burn-height stored in
+ * the grant. An authorization is in effect when an entry exists in the map
+ * and either has no expiry or the current burn-block height has not yet
+ * reached the expiry.
  */
 export async function fetchAllowanceContractCallers(
   opts: { sender: string; contractCaller: string; poxInfo?: PoxInfo } & NetworkClientParam
@@ -155,8 +149,7 @@ export async function fetchAllowanceContractCallers(
 }
 
 /**
- * Fetch account-level balance/lock state for a STX address from the
- * `/v2/accounts/<addr>` node endpoint.
+ * Wraps the `/v2/accounts/<addr>` node endpoint.
  *
  * Returned values use `bigint` (STX values are too large to safely round-trip
  * through `number`). `unlockHeight` is `0` when no lock is active.
@@ -179,7 +172,7 @@ export async function fetchAccountStatus(
 }
 
 /**
- * Fetch a staker's current paired-BTC bond membership via `get-bond-membership`.
+ * Wraps the contract's `get-bond-membership` read-only.
  *
  * Returns `undefined` when no active membership exists (either no entry, or
  * the bond's unlock cycle has been reached — the contract collapses both
@@ -212,6 +205,8 @@ export async function fetchBondMembership(
 }
 
 /**
+ * Wraps the contract's `get-staker-shares-staked-for-cycle` read-only.
+ *
  * Per-staker share contributed to a given signer in a given cycle. Useful for
  * dashboards rendering a per-signer breakdown when a staker is delegated
  * across multiple signers.
@@ -249,10 +244,10 @@ export async function fetchStakerSharesStakedForCycle(
 }
 
 /**
- * Fetch the static configuration of a protocol bond.
+ * Wraps the contract's `protocol-bonds` map.
  *
- * Reads the `protocol-bonds` map directly. Returns `undefined` if the bond
- * has not been set up.
+ * Returns the static configuration of a protocol bond, or `undefined` if the
+ * bond has not been set up.
  *
  * `openBurnHeight` / `firstRewardCycle` are NOT included — they are
  * deterministic functions of `bondIndex`, `firstBondPeriodCycle`, and the pox
@@ -295,9 +290,9 @@ export async function fetchBond(
 }
 
 /**
- * Fetch the total sats already staked into a given bond.
+ * Wraps the contract's `get-total-sats-staked-for-bond` read-only.
  *
- * Wraps `get-total-sats-staked-for-bond`. Returns `0n` when no entry exists.
+ * Returns `0n` when no entry exists.
  */
 export async function fetchTotalSatsStakedForBond(
   opts: { bondIndex: number } & NetworkClientParam
@@ -317,10 +312,10 @@ export async function fetchTotalSatsStakedForBond(
 }
 
 /**
- * Fetch a staker's allowlisted sats allocation for a bond.
+ * Wraps the contract's `protocol-bond-allowances` map.
  *
- * Reads the `protocol-bond-allowances` map directly. Returns `0n` when the
- * staker is not on the bond's allowlist (no entry => not allowed).
+ * Returns the staker's allowlisted sats allocation for a bond, or `0n` when
+ * the staker is not on the bond's allowlist (no entry => not allowed).
  */
 export async function fetchBondAllowance(
   opts: { bondIndex: number; address: string } & NetworkClientParam
@@ -344,7 +339,7 @@ export async function fetchBondAllowance(
 }
 
 // ---------------------------------------------------------------------------
-// Reward / distribution reads — flows 7, 15, 21
+// Reward / distribution reads
 // ---------------------------------------------------------------------------
 
 /**
@@ -371,19 +366,39 @@ export async function fetchCurrentDistributionCycle(
 }
 
 /**
- * Per-signer share total contributed in a given cycle (STX-only) or bond
- * (paired-BTC). Wraps `get-signer-shares-staked-for-cycle`.
+ * Wraps the contract's `get-signer-shares-staked-for-cycle` read-only for a
+ * paired-BTC bond.
  *
- * - `index` is a reward cycle when `isBond` is `false`; a bond index when
- *   `isBond` is `true`.
- * - For STX-only: denominated in uSTX. For bonds: denominated in sats.
+ * Per-signer share total contributed to a given bond, denominated in sats.
  */
-export async function fetchSignerSharesStakedForCycle(
+export async function fetchSignerSharesStakedByBond(
   opts: {
     signerManager: string;
-    index: number;
-    isBond: boolean;
+    bondIndex: number;
   } & NetworkClientParam
+): Promise<bigint> {
+  return fetchSignerSharesStakedRead({ ...opts, index: opts.bondIndex, isBond: true });
+}
+
+/**
+ * Wraps the contract's `get-signer-shares-staked-for-cycle` read-only for an
+ * STX-only cycle.
+ *
+ * Per-signer share total contributed in a given reward cycle, denominated
+ * in uSTX.
+ */
+export async function fetchSignerSharesStakedByCycle(
+  opts: {
+    signerManager: string;
+    rewardCycle: number;
+  } & NetworkClientParam
+): Promise<bigint> {
+  return fetchSignerSharesStakedRead({ ...opts, index: opts.rewardCycle, isBond: false });
+}
+
+/** @ignore */
+async function fetchSignerSharesStakedRead(
+  opts: { signerManager: string; index: number; isBond: boolean } & NetworkClientParam
 ): Promise<bigint> {
   const network = networkFrom(opts.network ?? 'mainnet');
   const result = await fetchCallReadOnlyFunction({
@@ -399,19 +414,44 @@ export async function fetchSignerSharesStakedForCycle(
 }
 
 /**
- * Lifetime sBTC rewards already paid out to a signer for a cycle (STX-only)
- * or bond (paired-BTC). Wraps `get-signer-rewards-paid-for-cycle`.
+ * Wraps the contract's `get-signer-rewards-paid-for-cycle` read-only for a
+ * paired-BTC bond.
  *
- * The contract increments this counter inside `update-claimable-rewards` by
- * the most-recently-pulled `rewards-pending`, so the value reflects all prior
- * `claim-rewards` calls for that `(signer, index, isBond)` triple.
+ * Lifetime sBTC rewards already paid out to a signer for the bond. The
+ * contract increments this counter inside `update-claimable-rewards` by the
+ * most-recently-pulled `rewards-pending`, so the value reflects all prior
+ * `claim-rewards` calls for that `(signer, bondIndex)` pair.
  */
-export async function fetchSignerRewardsPaidForCycle(
+export async function fetchSignerRewardsPaidByBond(
   opts: {
     signerManager: string;
-    index: number;
-    isBond: boolean;
+    bondIndex: number;
   } & NetworkClientParam
+): Promise<bigint> {
+  return fetchSignerRewardsPaidRead({ ...opts, index: opts.bondIndex, isBond: true });
+}
+
+/**
+ * Wraps the contract's `get-signer-rewards-paid-for-cycle` read-only for an
+ * STX-only cycle.
+ *
+ * Lifetime sBTC rewards already paid out to a signer for the cycle. The
+ * contract increments this counter inside `update-claimable-rewards` by the
+ * most-recently-pulled `rewards-pending`, so the value reflects all prior
+ * `claim-rewards` calls for that `(signer, rewardCycle)` pair.
+ */
+export async function fetchSignerRewardsPaidByCycle(
+  opts: {
+    signerManager: string;
+    rewardCycle: number;
+  } & NetworkClientParam
+): Promise<bigint> {
+  return fetchSignerRewardsPaidRead({ ...opts, index: opts.rewardCycle, isBond: false });
+}
+
+/** @ignore */
+async function fetchSignerRewardsPaidRead(
+  opts: { signerManager: string; index: number; isBond: boolean } & NetworkClientParam
 ): Promise<bigint> {
   const network = networkFrom(opts.network ?? 'mainnet');
   const result = await fetchCallReadOnlyFunction({
@@ -426,30 +466,29 @@ export async function fetchSignerRewardsPaidForCycle(
   return BigInt((result as UIntCV).value);
 }
 
-/**
- * Decode the post-patch `get-claimable-rewards` tuple
- * `{ rewards-paid, rewards-pending, shares-staked, rewards-per-share }`.
- */
-function decodeRewardsLeg(tuple: TupleCV): RewardsLeg {
-  return {
-    rewardsPaid: BigInt((tuple.value['rewards-paid'] as UIntCV).value),
-    rewardsPending: BigInt((tuple.value['rewards-pending'] as UIntCV).value),
-    sharesStaked: BigInt((tuple.value['shares-staked'] as UIntCV).value),
-    rewardsPerShare: BigInt((tuple.value['rewards-per-share'] as UIntCV).value),
-  };
-}
-
-/**
- * One read-only call into `get-claimable-rewards` for a single
- * `(signer, index, isBond)` triple. Per the 2026-05-04 patch this returns a
- * 4-field tuple per leg rather than a bare uint.
- */
-async function fetchClaimableRewardsLeg(
+/** Wraps the contract's `get-claimable-rewards` read-only for a paired-BTC bond leg. */
+async function fetchClaimableRewardsByBond(
   opts: {
     signerManager: string;
-    index: number;
-    isBond: boolean;
+    bondIndex: number;
   } & NetworkClientParam
+): Promise<RewardsLeg> {
+  return fetchClaimableRewardsRead({ ...opts, index: opts.bondIndex, isBond: true });
+}
+
+/** Wraps the contract's `get-claimable-rewards` read-only for an STX-only cycle leg. */
+async function fetchClaimableRewardsByCycle(
+  opts: {
+    signerManager: string;
+    rewardCycle: number;
+  } & NetworkClientParam
+): Promise<RewardsLeg> {
+  return fetchClaimableRewardsRead({ ...opts, index: opts.rewardCycle, isBond: false });
+}
+
+/** @ignore */
+async function fetchClaimableRewardsRead(
+  opts: { signerManager: string; index: number; isBond: boolean } & NetworkClientParam
 ): Promise<RewardsLeg> {
   const network = networkFrom(opts.network ?? 'mainnet');
   const result = await fetchCallReadOnlyFunction({
@@ -461,7 +500,13 @@ async function fetchClaimableRewardsLeg(
     network: opts.network,
     client: opts.client,
   });
-  return decodeRewardsLeg(result as TupleCV);
+  const tuple = result as TupleCV;
+  return {
+    rewardsPaid: BigInt((tuple.value['rewards-paid'] as UIntCV).value),
+    rewardsPending: BigInt((tuple.value['rewards-pending'] as UIntCV).value),
+    sharesStaked: BigInt((tuple.value['shares-staked'] as UIntCV).value),
+    rewardsPerShare: BigInt((tuple.value['rewards-per-share'] as UIntCV).value),
+  };
 }
 
 /**
@@ -470,13 +515,11 @@ async function fetchClaimableRewardsLeg(
  * one STX-only leg keyed by `rewardCycle` and 0..6 bond legs keyed by
  * `bondIndices`.
  *
- * Per the 2026-05-04 contract patch, each on-chain `get-claimable-rewards`
- * call now returns a 4-field tuple
+ * Each on-chain `get-claimable-rewards` call returns a 4-field tuple
  * (`rewards-paid, rewards-pending, shares-staked, rewards-per-share`); this
- * helper aggregates those legs into the shape consumed by
- * `flows/5-pools/21.md` and the dashboard sketches in
- * `flows/6-rewards/{7,15}.md`. Bond legs additionally carry the `bondIndex`
- * (mirroring how `claim-rewards`'s `print` event tags each leg).
+ * helper aggregates those legs into a single structured payload. Bond legs
+ * additionally carry the `bondIndex` (mirroring how `claim-rewards`'s
+ * `print` event tags each leg).
  */
 export async function fetchClaimableRewards(
   opts: {
@@ -487,18 +530,16 @@ export async function fetchClaimableRewards(
 ): Promise<ClaimableRewards> {
   const bondIndices = opts.bondIndices ?? [];
   const [stxRewards, ...bondLegs] = await Promise.all([
-    fetchClaimableRewardsLeg({
+    fetchClaimableRewardsByCycle({
       signerManager: opts.signerManager,
-      index: opts.rewardCycle,
-      isBond: false,
+      rewardCycle: opts.rewardCycle,
       network: opts.network,
       client: opts.client,
     }),
     ...bondIndices.map(bondIndex =>
-      fetchClaimableRewardsLeg({
+      fetchClaimableRewardsByBond({
         signerManager: opts.signerManager,
-        index: bondIndex,
-        isBond: true,
+        bondIndex,
         network: opts.network,
         client: opts.client,
       })
@@ -515,11 +556,11 @@ export async function fetchClaimableRewards(
 }
 
 // ---------------------------------------------------------------------------
-// Andon cord / payout pause — flow 15
+// Andon cord / payout pause
 // ---------------------------------------------------------------------------
 
 /**
- * Wraps `get-last-reward-compute-height`.
+ * Wraps the contract's `get-last-reward-compute-height` read-only.
  *
  * Returns the burn-block height at which `calculate-rewards` was most
  * recently settled (`0` before any settlement). The value is set inside
@@ -542,7 +583,7 @@ export async function fetchLastRewardComputeHeight(opts: NetworkClientParam = {}
 
 /**
  * Compute the andon-cord payout window for the next-pending distribution
- * cycle (flow 15).
+ * cycle.
  *
  * Two pieces feed the answer:
  * - `currentDistributionCycle` — index of the dist cycle the chain tip
@@ -553,17 +594,15 @@ export async function fetchLastRewardComputeHeight(opts: NetworkClientParam = {}
  *   it equals (or exceeds) the upcoming `calculation-height` the cycle
  *   has already fired and cannot be paused.
  *
- * The 250-block delay window is the design-spec gating
- * (`notes/pox-5-design.md` "Andon Cord", `flows/6-rewards/15.md`).
+ * The 250-block delay window is the design-spec gating.
  *
- * missing: `pox-5.clar` (2026-05-04) does NOT enforce a 250-block delay
- * — `calculate-rewards` only checks `last-reward-compute-height <
- * calculation-height`. The delay belongs to a future revision (Launch
- * Scope D19). Likewise the contract has no `paused` flag, so this
- * helper can only return `paused: false` — see `unsure/flow-15.md`.
+ * missing: todo: `pox-5.clar` does NOT enforce a 250-block delay yet —
+ * `calculate-rewards` only checks `last-reward-compute-height <
+ * calculation-height`. The contract also has no `paused` flag, so this
+ * helper can only return `paused: false`.
  *
- * unsure: which dist cycle to surface. The flow-15 markdown sketch
- * implies "the next-pending payout". We pick: if
+ * unsure: todo: which dist cycle to surface. The design sketch implies
+ * "the next-pending payout". We pick: if
  * `lastRewardComputeHeight < calculationHeightForCurrentDistCycle`,
  * the current dist cycle's payout is still pending; otherwise the
  * window has already closed (returned with `canPause: false` and
@@ -589,11 +628,10 @@ export async function fetchPayoutWindow(
   // payout has fired and the window is closed.
   const alreadyFired = lastComputeHeight >= calculationHeight;
 
-  // Pause window: payout fires at `distCycleStartHeight + 1` per the
-  // flow-15 sketch ("automation fires at X+1"); ops have until then —
-  // i.e. up to `ANDON_CORD_PAUSE_BLOCKS` after the dist cycle starts —
-  // to halt. blocksRemaining counts down from 250 to 0 inside the
-  // window.
+  // Pause window: payout fires at `distCycleStartHeight + 1`
+  // ("automation fires at X+1"); ops have until then — i.e. up to
+  // `ANDON_CORD_PAUSE_BLOCKS` after the dist cycle starts — to halt.
+  // blocksRemaining counts down from 250 to 0 inside the window.
   const blocksSinceTick = pox.currentBurnchainBlockHeight - distCycleStartHeight;
   const blocksRemaining = alreadyFired
     ? 0
@@ -604,137 +642,10 @@ export async function fetchPayoutWindow(
     scheduledHeight: distCycleStartHeight,
     blocksRemaining,
     canPause: !alreadyFired && blocksRemaining > 0,
-    // missing: contract has no `paused` flag; see unsure/flow-15.md.
+    // missing: todo: contract has no `paused` flag.
     paused: false,
   };
 }
 
-// ---------------------------------------------------------------------------
-// Early exit (paired-BTC) — flow 13
-// ---------------------------------------------------------------------------
-
-/**
- * Fetch the early-exit lifecycle status for a paired-BTC bond position.
- *
- * The state machine spans both layers:
- * - L2 (`pox-5`): a `request-early-exit` call flips the membership flag and
- *   stops T1 yield accrual.
- * - Off-chain coordinator: observes the L2 event, co-signs the L1 spend
- *   against the pre-authorized early-exit branch, optionally broadcasts.
- * - L1 (Bitcoin): once broadcast & confirmed, the BTC is back in the
- *   staker's wallet. The paired STX stays locked until natural unlock.
- *
- * missing: This is the SDK surface for a contract function that does not
- * exist yet. The 2026-05-04 `pox-5.clar` exposes no `get-early-exit-*`
- * read-only and no flag inside `protocol-bond-memberships`. Until the
- * contract lands, callers cannot read the L2 portion of the status; the
- * coordinator's `requested → co-signed → broadcast → confirmed` view is
- * an upstream service (notes/user-flows.md §1g labels it `[UPSTREAM]`).
- *
- * unsure: split. Plausible carve-ups:
- *   1. Single fn that reads L2 + queries the coordinator (this stub).
- *   2. Two fns: `fetchEarlyExitRequested` (L2 only) +
- *      `earlyExitCoordinatorClient.fetchStatus` (off-chain, separate
- *      package or thin client per `notes/status.md` tier-2 item 14).
- * The flow markdown (flows/3-paired-btc/13.md) sketches a single
- * `fetchEarlyExitStatus({address, network})` so we follow that for now.
- */
-export async function fetchEarlyExitStatus(
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _opts: { address: string } & NetworkClientParam
-): Promise<EarlyExitStatus> {
-  // missing: read-only contract function. Candidate names from the design
-  // sketch: `get-early-exit-status`, `get-bond-membership` (with an added
-  // `early-exit` field). Neither exists in `pox-5.clar` today.
-  //
-  // todo: once the contract lands, replace this stub with a
-  // `fetchCallReadOnlyFunction` call and decode the tuple. The off-chain
-  // co-signer state (`co-signed` / `broadcast` / `confirmed`) likely needs
-  // a separate coordinator client — see unsure/flow-13.md.
-  throw new Error(
-    'fetchEarlyExitStatus: not implemented — pox-5.clar lacks the L2 ' +
-      'early-exit read; coordinator service surface is upstream'
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Watchdog / L1 lock status (paired-BTC) — flow 14
-// ---------------------------------------------------------------------------
-
-/**
- * Fetch the L1 lock status for a paired-BTC bond position.
- *
- * Returns one of `locked` | `spent-reported` | `expired` per the watchdog
- * design (`notes/pox-5-design.md` "Watchdog", `flows/3-paired-btc/14.md`,
- * Launch Scope D21).
- *
- * missing: NO read-only function for this exists in `pox-5.clar`
- * (2026-05-04). `notes/status.md` tier-2 item 15 and open design-question
- * 1 flag the entire watchdog surface as TBD; the only related primitive
- * is the private `validate-p2wsh-exists?` stub at line 1636 of the
- * contract. Replace this stub with a `fetchCallReadOnlyFunction` call
- * once the contract exposes (likely) `get-lock-status` or a
- * `spent-reported` flag inside `protocol-bond-memberships`.
- *
- * unsure: whether spent-reports are keyed per-position (staker) or
- * per-UTXO (txid+vout). Open per `flows/3-paired-btc/14.md`. The opts
- * shape here mirrors the flow-markdown sketch (`{ address, network }`),
- * which assumes per-position.
- */
-export async function fetchLockStatus(
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _opts: { address: string } & NetworkClientParam
-): Promise<LockStatus> {
-  // missing: read-only contract function. todo: wire to
-  // `fetchCallReadOnlyFunction` once pox-5.clar exposes the watchdog
-  // surface; decode the resulting tuple (or membership-flag) into a
-  // `LockStatus`.
-  throw new Error(
-    'fetchLockStatus: not implemented — pox-5.clar lacks the watchdog ' +
-      'surface (tracked in notes/status.md tier-2 #15, Launch Scope D21)'
-  );
-}
-
-/**
- * Collect the Bitcoin SPV proof needed by {@link buildReportUtxoSpent}.
- *
- * unsure: SPV-proof building is non-trivial and the contract's required
- * proof shape is open per `notes/status.md` open-question 1. This helper
- * is sketched but **not implemented** — flagging clearly per the flow
- * markdown ("collectSpendProof won't be part of this SDK").
- *
- * missing: full SPV-proof construction needs:
- *   1. A Bitcoin RPC / Esplora client (mempool.space, electrs, btcd).
- *   2. UTXO history lookup for `(lockTxid, lockVout)` → spending tx.
- *   3. Block header retrieval + merkle-branch generation for the
- *      spending tx.
- *   4. Encoding into whatever shape `pox-5.clar` ends up expecting.
- * None of (1)–(4) belong in `@stacks/bitcoin-staking`'s zero-dependency
- * scope. A separate package or a thin wrapper around an existing SPV
- * lib (e.g. `@scure/btc-signer`, custom electrs-client) is the more
- * likely home; see `unsure/flow-14.md` for the API-endpoint
- * opportunity.
- */
-export async function collectSpendProof(_opts: {
-  /** Bitcoin node / Esplora-compatible base URL. */
-  btcRpcUrl: string;
-  /** Txid of the original L1 lockup transaction. */
-  lockTxid: string;
-  /** Output index of the tracked P2WSH output within `lockTxid`. */
-  lockVout: number;
-  // missing: probably also `network: 'mainnet' | 'testnet'`, optional
-  // headers/auth for the BTC RPC.
-}): Promise<{
-  spendTxid: string;
-  blockHeight: number;
-  merkleBranch: string[];
-}> {
-  // todo: collectSpendProof won't be part of this SDK. SPV-proof
-  // building is non-trivial and contract surface is unfinalized — see
-  // `unsure/flow-14.md`. Stubbed for completeness so `flows/3-paired-btc/14.md`
-  // still type-checks against the package surface.
-  throw new Error(
-    'collectSpendProof: not implemented — SPV-proof building is out of ' +
-      'scope for @stacks/bitcoin-staking; see unsure/flow-14.md'
-  );
-}
+// todo: flow 13 (paired-BTC early exit) — `fetchEarlyExitStatus`.
+// todo: flow 14 (watchdog) — `fetchLockStatus`, `collectSpendProof`.
