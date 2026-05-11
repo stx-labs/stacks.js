@@ -58,3 +58,5 @@ unused
 *.tgz
 
 *.local
+
+.claude
