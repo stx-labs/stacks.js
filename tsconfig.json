@@ -2,6 +2,7 @@
   "extends": "./tsconfig.build.json",
   "compilerOptions": {
     "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
     "paths": {
       "@stacks/api": ["packages/api/src"],
       "@stacks/auth": ["packages/auth/src"],
@@ -15,8 +16,10 @@
       "@stacks/stacking": ["packages/stacking/src"],
       "@stacks/storage": ["packages/storage/src"],
       "@stacks/transactions": ["packages/transactions/src"],
-      "@stacks/wallet-sdk": ["packages/wallet-sdk/src"]
-    }
+      "@stacks/wallet-sdk": ["packages/wallet-sdk/src"],
+      "@stacks/stck": ["packages/stck/src"]
+    },
+    "types": ["jest"]
   },
   "exclude": ["**/node_modules", "**/dist"],
   "typedocOptions": {
