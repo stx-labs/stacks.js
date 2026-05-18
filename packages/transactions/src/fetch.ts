@@ -11,11 +11,12 @@ import {
 import {
   FeeEstimateResponse,
   FeeEstimation,
+  ReadOnlyFunctionOptions,
   TxBroadcastResult,
   TxBroadcastResultOk,
   TxBroadcastResultRejected,
 } from './types';
-import { cvToHex, parseReadOnlyResponse } from './utils';
+import { cvToHex, parseContractId, parseReadOnlyResponse } from './utils';
 import { serializePayloadBytes } from './wire';
 
 export const BROADCAST_PATH = '/v2/transactions';
@@ -284,31 +285,16 @@ export async function fetchAbi({
 /**
  * Calls a function as read-only from a contract interface.
  * It is not necessary that the function is defined as read-only in the contract
- * @param opts.contractName - The contract name
- * @param opts.contractAddress - The contract address
- * @param opts.functionName - The contract function name
- * @param opts.functionArgs - The contract function arguments
- * @param opts.senderAddress - The address of the (simulated) sender
- * @param opts.api - Optional API info (`.url` & `.fetch`) used for fetch call
- * @return Returns an object with a status bool (okay) and a result string that
- * is a serialized clarity value in hex format.
+ *
+ * @return A promise that resolves to the parsed Clarity value returned by the
+ * read-only function call.
  */
-export async function fetchCallReadOnlyFunction({
-  contractName,
-  contractAddress,
-  functionName,
-  functionArgs,
-  senderAddress,
-  network = 'mainnet',
-  client: _client,
-}: {
-  contractName: string;
-  contractAddress: string;
-  functionName: string;
-  functionArgs: ClarityValue[];
-  /** address of the sender */
-  senderAddress: string;
-} & NetworkClientParam): Promise<ClarityValue> {
+export async function fetchCallReadOnlyFunction(
+  opts: ReadOnlyFunctionOptions
+): Promise<ClarityValue> {
+  const [contractAddress, contractName] =
+    'contract' in opts ? parseContractId(opts.contract) : [opts.contractAddress, opts.contractName];
+  const { functionName, functionArgs, senderAddress, network = 'mainnet', client: _client } = opts;
   const json = {
     sender: senderAddress,
     arguments: functionArgs.map(arg => cvToHex(arg)),

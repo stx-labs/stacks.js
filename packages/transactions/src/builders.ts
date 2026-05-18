@@ -36,7 +36,8 @@ import { postConditionModeFrom, postConditionToWire } from './postcondition';
 import { PostCondition, PostConditionModeName } from './postcondition-types';
 import { TransactionSigner } from './signer';
 import { StacksTransactionWire, deriveNetworkFromTx } from './transaction';
-import { omit } from './utils';
+import { ContractIdString } from './types';
+import { omit, parseContractId } from './utils';
 import {
   PostConditionWire,
   addressFromPublicKeys,
@@ -83,7 +84,7 @@ export type SignedMultiSigOptions = UnsignedMultiSigOptions & {
 export type TokenTransferOptions = {
   /** the address of the recipient of the token transfer */
   recipient: string | PrincipalCV;
-  /** the amount to be transfered in microstacks */
+  /** the amount to be transferred in microstacks */
   amount: IntegerType;
   /** the transaction fee in microstacks */
   fee?: IntegerType;
@@ -234,9 +235,38 @@ export async function makeSTXTokenTransfer(
 }
 
 /**
- * Contract deploy transaction options
+ * Contract deploy transaction options (preferred shape).
  */
-export type BaseContractDeployOptions = {
+type PreferredContractDeployOptions = {
+  clarityVersion?: ClarityVersion;
+  /** the name of the contract to deploy */
+  name: string;
+  /** the Clarity code to be deployed */
+  clarityCode: string;
+  /** transaction fee in microstacks */
+  fee?: IntegerType;
+  /** the transaction nonce, which must be increased monotonically with each new transaction */
+  nonce?: IntegerType;
+  /** the post condition mode, specifying whether or not post-conditions must fully cover all
+   * transferred assets */
+  postConditionMode?: PostConditionModeName | PostConditionMode;
+  /** a list of post conditions to add to the transaction */
+  postConditions?: (PostCondition | PostConditionWire | string)[];
+  /** set to true if another account is sponsoring the transaction (covering the transaction fee) */
+  sponsored?: boolean;
+} & NetworkClientParam;
+
+type PreferredUnsignedContractDeployOptions = PreferredContractDeployOptions &
+  ({ publicKey: PublicKey } | UnsignedMultiSigOptions);
+
+type PreferredSignedContractDeployOptions = PreferredContractDeployOptions &
+  ({ senderKey: PrivateKey } | SignedMultiSigOptions);
+
+/**
+ * Contract deploy transaction options (legacy shape).
+ * @deprecated Use {@link ContractDeployOptions} with `name` and `clarityCode` fields instead.
+ */
+type LegacyContractDeployOptions = {
   clarityVersion?: ClarityVersion;
   contractName: string;
   /** the Clarity code to be deployed */
@@ -246,7 +276,7 @@ export type BaseContractDeployOptions = {
   /** the transaction nonce, which must be increased monotonically with each new transaction */
   nonce?: IntegerType;
   /** the post condition mode, specifying whether or not post-conditions must fully cover all
-   * transfered assets */
+   * transferred assets */
   postConditionMode?: PostConditionModeName | PostConditionMode;
   /** a list of post conditions to add to the transaction */
   postConditions?: (PostCondition | PostConditionWire | string)[];
@@ -254,36 +284,80 @@ export type BaseContractDeployOptions = {
   sponsored?: boolean;
 } & NetworkClientParam;
 
-export interface UnsignedContractDeployOptions extends BaseContractDeployOptions {
-  /** a hex string of the public key of the transaction sender */
-  publicKey: PublicKey;
-}
+type LegacyUnsignedContractDeployOptions = LegacyContractDeployOptions &
+  ({ publicKey: PublicKey } | UnsignedMultiSigOptions);
 
-export interface SignedContractDeployOptions extends BaseContractDeployOptions {
-  senderKey: PrivateKey;
-}
+type LegacySignedContractDeployOptions = LegacyContractDeployOptions &
+  ({ senderKey: PrivateKey } | SignedMultiSigOptions);
 
-/** @deprecated Use {@link SignedContractDeployOptions} or {@link UnsignedContractDeployOptions} instead. */
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface ContractDeployOptions extends SignedContractDeployOptions {}
-
-export type UnsignedMultiSigContractDeployOptions = BaseContractDeployOptions &
+type PreferredUnsignedMultiSigContractDeployOptions = PreferredContractDeployOptions &
   UnsignedMultiSigOptions;
 
-export type SignedMultiSigContractDeployOptions = BaseContractDeployOptions & SignedMultiSigOptions;
+type PreferredSignedMultiSigContractDeployOptions = PreferredContractDeployOptions &
+  SignedMultiSigOptions;
+
+type PreferredUnsignedSingleSigContractDeployOptions = PreferredContractDeployOptions & {
+  publicKey: PublicKey;
+};
+
+type PreferredSignedSingleSigContractDeployOptions = PreferredContractDeployOptions & {
+  senderKey: PrivateKey;
+};
+
+type LegacyUnsignedSingleSigContractDeployOptions = LegacyContractDeployOptions & {
+  publicKey: PublicKey;
+};
+
+type LegacySignedSingleSigContractDeployOptions = LegacyContractDeployOptions & {
+  senderKey: PrivateKey;
+};
+
+export type ContractDeployOptions = SignedContractDeployOptions;
+
+export type UnsignedContractDeployOptions =
+  | PreferredUnsignedSingleSigContractDeployOptions
+  | LegacyUnsignedSingleSigContractDeployOptions;
+
+export type SignedContractDeployOptions =
+  | PreferredSignedSingleSigContractDeployOptions
+  | LegacySignedSingleSigContractDeployOptions;
+
+export type UnsignedMultiSigContractDeployOptions =
+  | PreferredUnsignedMultiSigContractDeployOptions
+  | (LegacyContractDeployOptions & UnsignedMultiSigOptions);
+
+export type SignedMultiSigContractDeployOptions =
+  | PreferredSignedMultiSigContractDeployOptions
+  | (LegacyContractDeployOptions & SignedMultiSigOptions);
+
+/** @internal If both shapes are provided, `name`/`clarityCode` take precedence. */
+function toLegacyContractDeployOptions<
+  T extends { name: string; clarityCode: string } | { contractName: string; codeBody: string },
+>(opts: T): T & { contractName: string; codeBody: string } {
+  if ('name' in opts) {
+    const o = opts as T & { name: string; clarityCode: string };
+    return { ...opts, contractName: o.name, codeBody: o.clarityCode };
+  }
+  return opts as T & { contractName: string; codeBody: string };
+}
 
 /**
- * Generates a Clarity smart contract deploy transaction
+ * Generates a Clarity smart contract deploy transaction.
  *
- * @param {SignedContractDeployOptions | SignedMultiSigContractDeployOptions} txOptions - an options object for the contract deploy
+ * Accepts either `name`/`clarityCode` or the legacy `contractName`/`codeBody`
+ * fields.
  *
  * Returns a signed Stacks smart contract deploy transaction.
  *
  * @return {StacksTransactionWire}
  */
 export async function makeContractDeploy(
-  txOptions: SignedContractDeployOptions | SignedMultiSigContractDeployOptions
+  txOptions: SignedContractDeployOptions
+): Promise<StacksTransactionWire>;
+export async function makeContractDeploy(
+  _txOptions: SignedContractDeployOptions
 ): Promise<StacksTransactionWire> {
+  const txOptions = toLegacyContractDeployOptions(_txOptions);
   if ('senderKey' in txOptions) {
     // single-sig
     const publicKey = privateKeyToPublic(txOptions.senderKey);
@@ -311,9 +385,19 @@ export async function makeContractDeploy(
   }
 }
 
+/**
+ * Generates an unsigned Clarity smart contract deploy transaction.
+ *
+ * Accepts either `name`/`clarityCode` or the legacy `contractName`/`codeBody`
+ * fields.
+ */
 export async function makeUnsignedContractDeploy(
-  txOptions: UnsignedContractDeployOptions | UnsignedMultiSigContractDeployOptions
+  txOptions: UnsignedContractDeployOptions
+): Promise<StacksTransactionWire>;
+export async function makeUnsignedContractDeploy(
+  _txOptions: UnsignedContractDeployOptions
 ): Promise<StacksTransactionWire> {
+  const txOptions = toLegacyContractDeployOptions(_txOptions);
   const defaultOptions = {
     fee: BigInt(0),
     nonce: BigInt(0),
@@ -404,12 +488,11 @@ export async function makeUnsignedContractDeploy(
 }
 
 /**
- * Contract function call transaction options
+ * Contract function call transaction options (preferred shape).
  */
-export type ContractCallOptions = {
-  /** the Stacks address of the contract */
-  contractAddress: string;
-  contractName: string;
+type PreferredContractCallOptions = {
+  /** the fully-qualified contract identifier as `<address>.<name>` */
+  contract: ContractIdString;
   functionName: string;
   functionArgs: ClarityValue[];
   /** transaction fee in microstacks */
@@ -417,7 +500,7 @@ export type ContractCallOptions = {
   /** the transaction nonce, which must be increased monotonically with each new transaction */
   nonce?: IntegerType;
   /** the post condition mode, specifying whether or not post-conditions must fully cover all
-   * transfered assets */
+   * transferred assets */
   postConditionMode?: PostConditionModeName | PostConditionMode;
   /** a list of post conditions to add to the transaction */
   postConditions?: (PostCondition | PostConditionWire | string)[];
@@ -428,28 +511,99 @@ export type ContractCallOptions = {
   sponsored?: boolean;
 } & NetworkClientParam;
 
-export interface UnsignedContractCallOptions extends ContractCallOptions {
-  publicKey: PrivateKey;
+/**
+ * Contract function call transaction options (legacy shape, split contract identifier).
+ */
+type LegacyContractCallOptions = {
+  /** the Stacks address of the contract */
+  contractAddress: string;
+  contractName: string;
+  functionName: string;
+  functionArgs: ClarityValue[];
+  /** transaction fee in microstacks */
+  fee?: IntegerType;
+  /** the transaction nonce, which must be increased monotonically with each new transaction */
+  nonce?: IntegerType;
+  /** the post condition mode, specifying whether or not post-conditions must fully cover all
+   * transferred assets */
+  postConditionMode?: PostConditionModeName | PostConditionMode;
+  /** a list of post conditions to add to the transaction */
+  postConditions?: (PostCondition | PostConditionWire | string)[];
+  /** set to true to validate that the supplied function args match those specified in
+   * the published contract */
+  validateWithAbi?: boolean | ClarityAbi;
+  /** set to true if another account is sponsoring the transaction (covering the transaction fee) */
+  sponsored?: boolean;
+} & NetworkClientParam;
+
+export type ContractCallOptions = PreferredContractCallOptions | LegacyContractCallOptions;
+
+type PreferredUnsignedSingleSigContractCallOptions = PreferredContractCallOptions & {
+  publicKey: PublicKey;
+};
+
+type PreferredSignedSingleSigContractCallOptions = PreferredContractCallOptions & {
+  senderKey: PrivateKey;
+};
+
+type PreferredUnsignedMultiSigContractCallOptions = PreferredContractCallOptions &
+  UnsignedMultiSigOptions;
+
+type PreferredSignedMultiSigContractCallOptions = PreferredContractCallOptions &
+  SignedMultiSigOptions;
+
+type LegacyUnsignedSingleSigContractCallOptions = LegacyContractCallOptions & {
+  publicKey: PublicKey;
+};
+
+type LegacySignedSingleSigContractCallOptions = LegacyContractCallOptions & {
+  senderKey: PrivateKey;
+};
+
+export type UnsignedContractCallOptions =
+  | PreferredUnsignedSingleSigContractCallOptions
+  | LegacyUnsignedSingleSigContractCallOptions;
+
+export type SignedContractCallOptions =
+  | PreferredSignedSingleSigContractCallOptions
+  | LegacySignedSingleSigContractCallOptions;
+
+export type UnsignedMultiSigContractCallOptions =
+  | PreferredUnsignedMultiSigContractCallOptions
+  | (LegacyContractCallOptions & UnsignedMultiSigOptions);
+
+export type SignedMultiSigContractCallOptions =
+  | PreferredSignedMultiSigContractCallOptions
+  | (LegacyContractCallOptions & SignedMultiSigOptions);
+
+/** @internal If both shapes are provided, `contract` takes precedence over `contractAddress`/`contractName`. */
+function toLegacyContractCallOptions<
+  T extends { contract: ContractIdString } | { contractAddress: string; contractName: string },
+>(opts: T): T & { contractAddress: string; contractName: string } {
+  if ('contract' in opts) {
+    const [contractAddress, contractName] = parseContractId(
+      (opts as { contract: ContractIdString }).contract
+    );
+    return { ...opts, contractAddress, contractName };
+  }
+  return opts as T & { contractAddress: string; contractName: string };
 }
-
-export interface SignedContractCallOptions extends ContractCallOptions {
-  senderKey: PublicKey;
-}
-
-export type UnsignedMultiSigContractCallOptions = ContractCallOptions & UnsignedMultiSigOptions;
-
-export type SignedMultiSigContractCallOptions = ContractCallOptions & SignedMultiSigOptions;
 
 /**
- * Generates an unsigned Clarity smart contract function call transaction
+ * Generates an unsigned Clarity smart contract function call transaction.
  *
- * @param {UnsignedContractCallOptions | UnsignedMultiSigContractCallOptions} txOptions - an options object for the contract call
+ * Accepts either `contract: "<address>.<name>"` or the legacy split
+ * `contractAddress` and `contractName` fields.
  *
  * @returns {Promise<StacksTransactionWire>}
  */
 export async function makeUnsignedContractCall(
-  txOptions: UnsignedContractCallOptions | UnsignedMultiSigContractCallOptions
+  txOptions: UnsignedContractCallOptions
+): Promise<StacksTransactionWire>;
+export async function makeUnsignedContractCall(
+  _txOptions: UnsignedContractCallOptions
 ): Promise<StacksTransactionWire> {
+  const txOptions = toLegacyContractCallOptions(_txOptions);
   const defaultOptions = {
     fee: BigInt(0),
     nonce: BigInt(0),
@@ -555,17 +709,22 @@ export async function makeUnsignedContractCall(
 }
 
 /**
- * Generates a Clarity smart contract function call transaction
+ * Generates a Clarity smart contract function call transaction.
  *
- * @param {SignedContractCallOptions | SignedMultiSigContractCallOptions} txOptions - an options object for the contract function call
+ * Accepts either `contract: "<address>.<name>"` or the legacy split
+ * `contractAddress` and `contractName` fields.
  *
  * Returns a signed Stacks smart contract function call transaction.
  *
  * @return {StacksTransactionWire}
  */
 export async function makeContractCall(
-  txOptions: SignedContractCallOptions | SignedMultiSigContractCallOptions
+  txOptions: SignedContractCallOptions
+): Promise<StacksTransactionWire>;
+export async function makeContractCall(
+  _txOptions: SignedContractCallOptions
 ): Promise<StacksTransactionWire> {
+  const txOptions = toLegacyContractCallOptions(_txOptions);
   if ('senderKey' in txOptions) {
     // single-sig
     const publicKey = privateKeyToPublic(txOptions.senderKey);

@@ -174,16 +174,18 @@ export interface FeeEstimateResponse {
 }
 
 /**
- * Read only function options
- *
- * @param {String} contractAddress - the c32check address of the contract
- * @param {String} contractName - the contract name
- * @param {String} functionName - name of the function to be called
- * @param {[ClarityValue]} functionArgs - an array of Clarity values as arguments to the function call
- * @param {StacksNetwork} network - the Stacks blockchain network this transaction is destined for
- * @param {String} senderAddress - the c32check address of the sender
+ * Options for a read-only contract function call (preferred shape).
  */
-export type ReadOnlyFunctionOptions = {
+type PreferredReadOnlyFunctionOptions = {
+  /** the fully-qualified contract identifier as `<address>.<name>` */
+  contract: ContractIdString;
+  functionName: string;
+  functionArgs: ClarityValue[];
+  /** address of the sender */
+  senderAddress: string;
+} & NetworkClientParam;
+
+type LegacyReadOnlyFunctionOptions = {
   contractName: string;
   contractAddress: string;
   functionName: string;
@@ -191,3 +193,7 @@ export type ReadOnlyFunctionOptions = {
   /** address of the sender */
   senderAddress: string;
 } & NetworkClientParam;
+
+export type ReadOnlyFunctionOptions =
+  | PreferredReadOnlyFunctionOptions
+  | LegacyReadOnlyFunctionOptions;
