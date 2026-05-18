@@ -203,7 +203,7 @@ export class CLINetworkAdapter {
         } else if (resp.status !== 200) {
           throw new Error(`Bad response status: ${resp.status}`);
         } else {
-          return resp.json().then((namespaceJson: any) => [namespaceJson, blockHeight]);
+          return resp.json().then((namespaceJson: unknown) => [namespaceJson, blockHeight]);
         }
       })
       .then(([namespaceInfo, blockHeight]: [any, number]) => {
