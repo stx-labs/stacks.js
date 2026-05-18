@@ -11,6 +11,7 @@ import type {
   BuildDisallowContractCallerArgs,
   BuildGrantSignerKeyTxArgs,
   BuildRevokeSignerKeyTxArgs,
+  BuildSetBondAdminArgs,
   TxParams,
 } from './types';
 import { networkFrom } from '@stacks/network';
@@ -48,6 +49,22 @@ async function callPox5(
 // ---------------------------------------------------------------------------
 // Bond setup (admin)
 // ---------------------------------------------------------------------------
+
+/**
+ * Build an unsigned `set-bond-admin` transaction.
+ *
+ * Rotates the `bond-admin` data-var to a new principal. Authorization rule:
+ * `contract-caller == current bond-admin` (reverts with `ERR_UNAUTHORIZED`
+ * otherwise). Mainnet deploys initialize `bond-admin` to a burn placeholder
+ * (`'SP000000000000000000002Q6VF78`); the role is expected to be transferred
+ * to a multisig before any `setup-bond` call. On non-mainnet networks the
+ * node rewrites the literal at deploy.
+ */
+export async function buildSetBondAdmin(
+  args: BuildSetBondAdminArgs & TxParams
+): Promise<StacksTransactionWire> {
+  return callPox5('set-bond-admin', [Cl.address(args.newAdmin)], args);
+}
 
 /**
  * Build an unsigned `setup-bond` transaction (admin / Endowment).
@@ -105,6 +122,11 @@ export async function buildSetupBond(
  *   The contract reconstructs and verifies each P2WSH output.
  * - `kind: 'sbtc'` — no L1 (BTC) lockup; the contract pulls `sbtcSats` from the caller
  *   via `lock-sbtc`.
+ *
+ * On success the contract returns an enrollment receipt tuple
+ * `{ signer, staker, amount-ustx, bond-index, first-reward-cycle,
+ * unlock-burn-height, unlock-cycle }` — useful for surfacing the unlock
+ * schedule client-side without re-deriving it.
  */
 export function buildRegisterForBond(
   args: {

@@ -129,6 +129,15 @@ export interface ClaimableRewards {
 }
 
 // ---------------------------------------------------------------------------
+// Build function arg types — bond admin
+// ---------------------------------------------------------------------------
+
+export interface BuildSetBondAdminArgs {
+  /** Principal to install as the new `bond-admin`. */
+  newAdmin: string;
+}
+
+// ---------------------------------------------------------------------------
 // Build function arg types — signer grants
 // ---------------------------------------------------------------------------
 

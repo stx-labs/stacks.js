@@ -217,8 +217,9 @@ registers itself with PoX-5; gated by an existing
 
 | Function | Purpose |
 | --- | --- |
+| `set-bond-admin(new-admin)` | Rotates the `bond-admin` data-var. Only the current `bond-admin` may call (`contract-caller == bond-admin`). |
 | `setup-bond(bond-index, target-rate, stx-value-ratio, min-ustx-ratio, early-unlock-signers, allowlist)` | Admin-only. Configures a bond period and seeds its `(staker, max-sats)` allowlist. `early-unlock-signers` is a 683-byte buffer carrying the multisig descriptor used in the L1 early-exit branch. |
-| `register-for-bond(bond-index, signer-manager, amount-ustx, btc-lockup, signer-calldata)` | Enters a paired bond. `btc-lockup` is `(response {outputs, unlock-bytes} sats-amount)`: `ok` ⇒ L1-paired (BTC), `err` ⇒ sBTC-paired. Caller must already be on the bond's allowlist. Authorization runs through the signer-manager's `validate-stake!`. |
+| `register-for-bond(bond-index, signer-manager, amount-ustx, btc-lockup, signer-calldata)` | Enters a paired bond. `btc-lockup` is `(response {outputs, unlock-bytes} sats-amount)`: `ok` ⇒ L1-paired (BTC), `err` ⇒ sBTC-paired. Caller must already be on the bond's allowlist. Authorization runs through the signer-manager's `validate-stake!`. `ok` returns `{ signer, staker, amount-ustx, bond-index, first-reward-cycle, unlock-burn-height, unlock-cycle }` — the enrollment receipt. |
 | `register-signer(signer-manager, signer-key)` | Signer-manager registers itself; requires a prior `grant-signer-key`. |
 | `stake(signer-manager, amount-ustx, num-cycles, start-burn-ht, signer-calldata)` | STX-only entry. No `pox-address`, no per-tx signer signature, no `max-amount`, no `auth-id`, no `unlock-bytes`. Authorization runs through `validate-stake!`. `start-burn-ht` prevents replay across cycles, as in prior PoX versions. |
 | `stake-update(signer-manager, cycles-to-extend, amount-increase, signer-calldata)` | Unified extend + increase + re-signer for STX-only positions. Replaces the older `stake-extend` / `stake-update` / `stake-extend-pooled` / `stake-update-pooled` family. |
@@ -287,7 +288,11 @@ SDKs need:
 
 ### Data vars
 
-- `bond-admin` — principal allowed to call `setup-bond`.
+- `bond-admin` — principal allowed to call `setup-bond`. Initialized at
+  deploy to a mainnet burn placeholder (`'SP000000000000000000002Q6VF78`);
+  the role is expected to be transferred to a multisig via
+  `set-bond-admin` before any `setup-bond` call. On non-mainnet networks
+  the node rewrites the literal at deploy.
 - `pox-prepare-cycle-length` / `pox-reward-cycle-length` — cycle lengths.
 - `first-burnchain-block-height` — anchor for burn-height ↔ cycle conversion.
 - `configured` — one-time burnchain parameter setup flag.
