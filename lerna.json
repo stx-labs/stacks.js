@@ -1,10 +1,4 @@
 {
-  "version": "7.4.0",
-  "registry": "https://registry.npmjs.org/",
-  "publishConfig": {
-    "access": "public"
-  },
-  "changelogPreset": "conventionalcommits",
   "packages": [
     "packages/*"
   ],

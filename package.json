@@ -9,7 +9,6 @@
   "scripts": {
     "build": "lerna run build",
     "build:docs": "rimraf docs && typedoc",
-    "ci:version": "npx lerna version --conventional-commits --no-push --no-git-tag-version --yes",
     "clean": "lerna clean",
     "lerna": "lerna",
     "lint": "npm run lint:eslint && npm run lint:prettier",
@@ -20,8 +19,10 @@
     "lint:prettier:fix": "prettier --write \"packages/**/src/**/*.{ts,tsx|!(d.ts)}\" *.js --ignore-path .gitignore",
     "madge": "madge --circular --extensions ts --exclude 'd.ts' packages/",
     "pack": "lerna run pack",
+    "release": "npm run build && changeset publish",
     "test": "lerna run test",
     "typecheck": "lerna run typecheck --parallel --no-bail --stream",
+    "version": "changeset version",
     "prepare": "husky install .github/.husky"
   },
   "devDependencies": {
@@ -35,7 +36,6 @@
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "assert": "^2.0.0",
-    "conventional-changelog-conventionalcommits": "^6.1.0",
     "esbuild": "^0.19.0",
     "esbuild-loader": "^4.0.0",
     "eslint": "^8.57.0",
