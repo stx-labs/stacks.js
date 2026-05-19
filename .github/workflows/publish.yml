@@ -1,24 +1,24 @@
-name: release
+name: publish
 
-# All npm-publishing flows live in this single file so npm's trusted-publisher
-# config only needs one workflow filename per package.
+# All npm-publishing flows live in this single file. npm's trusted-publisher
+# config for every `@stacks/*` package points at `publish.yml` — renaming this
+# file requires updating that config on npmjs.com per package.
 #
-#   release     — push to main / workflow_dispatch.
-#                 changesets/action opens/updates the "chore: version
-#                 packages" PR. When that PR is merged, the same action
-#                 publishes the bumped packages to npm under `latest`.
-#                 `commitMode: github-api` gives commits a Verified badge
-#                 without us shipping signing keys to CI.
+#   release  — push to main / workflow_dispatch.
+#              changesets/action opens/updates the "chore: version packages"
+#              PR. When that PR is merged, the same action publishes the
+#              bumped packages to npm under `latest`. `commitMode: github-api`
+#              gives commits a Verified badge without signing keys in CI.
 #
-#   beta        — push to main.
-#                 Snapshot-publishes every push to `@beta`, with versions
-#                 of the form `<next-release>-beta.<N>` (counter scoped to
-#                 the base version, queried from npm).
+#   beta     — push to main.
+#              Snapshot-publishes every push to `@beta`, with versions of the
+#              form `<next-release>-beta.<N>` (counter scoped to the base
+#              version, queried from npm).
 #
-#   publish-pr  — pull_request.
-#                 Same as `beta` but `@pr` dist-tag and versions of the form
-#                 `<next-release>-pr.<PR#>.<N>`. Sticky-header'd into the PR
-#                 description so reviewers can install the canary build.
+#   pr       — pull_request.
+#              Same as `beta` but `@pr` dist-tag and versions of the form
+#              `<next-release>-pr.<PR#>.<N>`. Sticky-header'd into the PR
+#              description so reviewers can install the canary build.
 #
 # Forks never reach the publish step (`is-not-fork` gate from pre-run).
 
@@ -124,7 +124,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_IGNORE_SCRIPTS: 'true'
 
-  publish-pr:
+  pr:
     runs-on: ubuntu-latest
     needs: pre-run
     if: needs.pre-run.outputs.is-not-fork == 'true' && github.event_name == 'pull_request'
