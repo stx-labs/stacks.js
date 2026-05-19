@@ -96,7 +96,7 @@ jobs:
           fi
 
       - run: npx changeset version
-      - run: node scripts/snapshot-version.mjs beta
+      - run: node .github/scripts/snapshot-version.mjs beta
       - run: npm run build
       - run: npx changeset publish --tag beta --no-git-tag
         env:

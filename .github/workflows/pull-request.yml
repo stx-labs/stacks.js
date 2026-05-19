@@ -65,7 +65,7 @@ jobs:
           fi
 
       - run: npx changeset version
-      - run: node scripts/snapshot-version.mjs pr --pr ${{ github.event.pull_request.number }}
+      - run: node .github/scripts/snapshot-version.mjs pr --pr ${{ github.event.pull_request.number }}
       - run: npm run build
       - run: npx changeset publish --tag pr --no-git-tag
         env:
