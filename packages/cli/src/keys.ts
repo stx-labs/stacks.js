@@ -1,7 +1,6 @@
 // TODO: most of this code should be in blockstack.js
 // Will remove most of this code once the wallet functionality is there instead.
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const c32check = require('c32check');
 
 import { HDKey } from '@scure/bip32';

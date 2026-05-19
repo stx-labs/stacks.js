@@ -29,7 +29,6 @@ import {
 
 import { StacksNetwork, TransactionVersion } from '@stacks/network';
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const ZoneFile = require('zone-file');
 
 import {
@@ -313,25 +312,25 @@ export function parseSegwitP2SHKeys(serializedPrivateKeys: string): SegwitP2SHKe
  */
 export function decodePrivateKey(serializedPrivateKey: string): string | CLITransactionSigner {
   const nosignMatches = serializedPrivateKey.match(PRIVATE_KEY_NOSIGN_PATTERN);
-  if (!!nosignMatches) {
+  if (nosignMatches) {
     // no private key
     return parseNullSigner(serializedPrivateKey);
   }
 
   const singleKeyMatches = serializedPrivateKey.match(PRIVATE_KEY_PATTERN);
-  if (!!singleKeyMatches) {
+  if (singleKeyMatches) {
     // one private key
     return serializedPrivateKey;
   }
 
   const multiKeyMatches = serializedPrivateKey.match(PRIVATE_KEY_MULTISIG_PATTERN);
-  if (!!multiKeyMatches) {
+  if (multiKeyMatches) {
     // multisig bundle
     return parseMultiSigKeys(serializedPrivateKey);
   }
 
   const segwitP2SHMatches = serializedPrivateKey.match(PRIVATE_KEY_SEGWIT_P2SH_PATTERN);
-  if (!!segwitP2SHMatches) {
+  if (segwitP2SHMatches) {
     // segwit p2sh bundle
     return parseSegwitP2SHKeys(serializedPrivateKey);
   }
