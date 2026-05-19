@@ -1,14 +1,14 @@
 {
   "extends": "../../tsconfig.build.json",
   "compilerOptions": {
+    "target": "ES2022", // OVERRIDE for top-level await
+
     "noEmit": false,
     "outDir": "./dist",
     "rootDir": "./src",
     "tsBuildInfoFile": "./tsconfig.build.tsbuildinfo",
     "composite": true
   },
-  "references": [
-    { "path": "../transactions/tsconfig.build.json" }
-  ],
+  "references": [{ "path": "../transactions/tsconfig.build.json" }],
   "include": ["src/**/*"]
 }
