@@ -5,7 +5,7 @@
 //
 // Usage: node .github/scripts/snapshot-version.mjs <beta|pr> [--pr <number>]
 
-import { readFile, writeFile, readdir } from 'node:fs/promises';
+import { readFile, writeFile, readdir, appendFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 
 const [tag, , prNumber] = process.argv.slice(2);
@@ -44,6 +44,8 @@ await Promise.all(named.map(({ file, json }) =>
   writeFile(file, JSON.stringify(rewrite(json, version, internals), null, 2) + '\n'),
 ));
 named.forEach(({ json }) => console.log(`  ${json.name} → ${version}`));
+
+if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `version=${version}\n`);
 
 function rewrite(json, version, internals) {
   const rewriteDeps = (deps) =>

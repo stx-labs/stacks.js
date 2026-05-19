@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write # sticky-header on the PR body
   id-token: write # npm OIDC trusted publishing
 
 jobs:
@@ -65,8 +66,26 @@ jobs:
           fi
 
       - run: npx changeset version
-      - run: node .github/scripts/snapshot-version.mjs pr --pr ${{ github.event.pull_request.number }}
+      - id: snapshot
+        run: node .github/scripts/snapshot-version.mjs pr --pr ${{ github.event.pull_request.number }}
       - run: npm run build
       - run: npx changeset publish --tag pr --no-git-tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update PR sticky header
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          VERSION: ${{ steps.snapshot.outputs.version }}
+        run: |
+          MARKER='<!-- Sticky Header Marker -->'
+          HEADER=$(printf '> This PR was published to npm with the version `%s` (dist-tag `pr`).\n> e.g. `npm install @stacks/common@%s --save-exact`\n' "$VERSION" "$VERSION")
+          BODY=$(gh pr view "$PR_NUMBER" --json body --jq .body)
+          NEW=$(MARKER="$MARKER" HEADER="$HEADER" BODY="$BODY" node -e '
+            const { MARKER, HEADER, BODY } = process.env;
+            const i = BODY.indexOf(MARKER);
+            const tail = i >= 0 ? BODY.slice(i + MARKER.length).replace(/^\n+/, "") : BODY;
+            process.stdout.write(`${HEADER}${MARKER}\n\n${tail}`);
+          ')
+          printf '%s' "$NEW" | gh pr edit "$PR_NUMBER" --body-file -
