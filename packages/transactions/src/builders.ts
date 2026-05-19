@@ -264,7 +264,6 @@ export interface SignedContractDeployOptions extends BaseContractDeployOptions {
 }
 
 /** @deprecated Use {@link SignedContractDeployOptions} or {@link UnsignedContractDeployOptions} instead. */
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface ContractDeployOptions extends SignedContractDeployOptions {}
 
 export type UnsignedMultiSigContractDeployOptions = BaseContractDeployOptions &

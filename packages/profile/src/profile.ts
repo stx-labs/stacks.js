@@ -354,7 +354,6 @@ export function resolveZoneFileToProfile(
         zoneFileJson = null;
       }
     } catch (e) {
-      // eslint-disable-next-line  @typescript-eslint/prefer-promise-reject-errors
       reject(e);
     }
 
@@ -365,7 +364,6 @@ export function resolveZoneFileToProfile(
       try {
         return resolve(Person.fromLegacyFormat(JSON.parse(opts.zoneFile)).profile());
       } catch (error) {
-        // eslint-disable-next-line  @typescript-eslint/prefer-promise-reject-errors
         return reject(error);
       }
     }
@@ -384,7 +382,6 @@ export function resolveZoneFileToProfile(
           Logger.error(
             `resolveZoneFileToProfile: error fetching token file ${tokenFileUrl}: ${error}`
           );
-          // eslint-disable-next-line  @typescript-eslint/prefer-promise-reject-errors
           reject(error);
         });
     } else {

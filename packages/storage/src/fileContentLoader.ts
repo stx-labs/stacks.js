@@ -123,7 +123,6 @@ export class FileContentLoader {
         const reader = new FileReader();
         const readPromise = new Promise<Uint8Array>((resolve, reject) => {
           reader.onerror = err => {
-            // eslint-disable-next-line  @typescript-eslint/prefer-promise-reject-errors
             reject(err);
           };
           reader.onload = () => {

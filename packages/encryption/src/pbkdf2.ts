@@ -68,13 +68,17 @@ export class WebCryptoPbkdf2 implements Pbkdf2 {
 
     const passwordBytes = utf8ToBytes(password);
     try {
-      const key = await this.subtleCrypto.importKey('raw', passwordBytes as any, 'PBKDF2', false, [
-        'deriveBits',
-      ]);
+      const key = await this.subtleCrypto.importKey(
+        'raw',
+        passwordBytes as BufferSource,
+        'PBKDF2',
+        false,
+        ['deriveBits']
+      );
       const result = await this.subtleCrypto.deriveBits(
         {
           name: 'PBKDF2',
-          salt: salt as any,
+          salt: salt as BufferSource,
           iterations,
           hash: { name: algo },
         },
@@ -115,7 +119,7 @@ export class WebCryptoPartialPbkdf2 implements Pbkdf2 {
     const passwordBytes = utf8ToBytes(password);
     const algo = digest === 'sha512' ? 'SHA-512' : 'SHA-256';
     const algoOpts = { name: 'HMAC', hash: algo };
-    const hmacDigest = (key: ArrayBuffer, data: ArrayBuffer) =>
+    const hmacDigest = (key: BufferSource, data: BufferSource) =>
       this.subtleCrypto
         .importKey('raw', key, algoOpts, true, ['sign'])
         .then(cryptoKey => this.subtleCrypto.sign(algoOpts, cryptoKey, data))
@@ -131,10 +135,10 @@ export class WebCryptoPartialPbkdf2 implements Pbkdf2 {
 
     for (let i = 1; i <= l; i++) {
       writeUInt32BE(block1, i, saltLength);
-      const T = await hmacDigest(passwordBytes as any, block1 as any);
+      const T = await hmacDigest(passwordBytes as BufferSource, block1 as BufferSource);
       let U = T;
       for (let j = 1; j < iterations; j++) {
-        U = await hmacDigest(passwordBytes as any, U as any);
+        U = await hmacDigest(passwordBytes as BufferSource, U as BufferSource);
         for (let k = 0; k < hLen; k++) {
           T[k] ^= U[k];
         }
