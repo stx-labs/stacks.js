@@ -74,18 +74,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update PR sticky header
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          VERSION: ${{ steps.snapshot.outputs.version }}
-        run: |
-          MARKER='<!-- Sticky Header Marker -->'
-          HEADER=$(printf '> This PR was published to npm with the version `%s` (dist-tag `pr`).\n> e.g. `npm install @stacks/common@%s --save-exact`\n' "$VERSION" "$VERSION")
-          BODY=$(gh pr view "$PR_NUMBER" --json body --jq .body)
-          NEW=$(MARKER="$MARKER" HEADER="$HEADER" BODY="$BODY" node -e '
-            const { MARKER, HEADER, BODY } = process.env;
-            const i = BODY.indexOf(MARKER);
-            const tail = i >= 0 ? BODY.slice(i + MARKER.length).replace(/^\n+/, "") : BODY;
-            process.stdout.write(`${HEADER}${MARKER}\n\n${tail}`);
-          ')
-          printf '%s' "$NEW" | gh pr edit "$PR_NUMBER" --body-file -
+        uses: janniks/pull-request-fixed-header@5d331404c3ece209cb49d932fcf0f85c995ce5b5 # v1.1.0
+        with:
+          header: |
+            > This PR was published to npm with the version `${{ steps.snapshot.outputs.version }}` (dist-tag `pr`).
+            > e.g. `npm install @stacks/common@${{ steps.snapshot.outputs.version }} --save-exact`
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
