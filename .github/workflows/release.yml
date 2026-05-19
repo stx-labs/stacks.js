@@ -85,7 +85,7 @@ jobs:
 
       - name: Seed dummy changeset if none present
         run: |
-          if ! ls .changeset/*.md 2>/dev/null | grep -vi readme | head -1 > /dev/null; then
+          if ! ls .changeset/*.md 2>/dev/null | grep -vqi readme; then
             cat > .changeset/__snapshot.md <<'EOF'
           ---
           "@stacks/common": patch
@@ -97,7 +97,16 @@ jobs:
 
       - run: npx changeset version
       - run: node .github/scripts/snapshot-version.mjs beta
-      - run: npm run build
+
+      # See pull-request.yml for the same UMD-skipping rationale.
+      - name: Build CJS+ESM per workspace (skip UMD)
+        run: |
+          for pkg in packages/*/; do
+            [ -f "$pkg/package.json" ] || continue
+            ( cd "$pkg" && npm run build:cjs --if-present && npm run build:esm --if-present ) || echo "build failed for $pkg (continuing)"
+          done
+
       - run: npx changeset publish --tag beta --no-git-tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_IGNORE_SCRIPTS: 'true'
