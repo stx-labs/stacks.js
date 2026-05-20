@@ -6,7 +6,7 @@
   ],
   "license": "MIT",
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
+    "build": "npm run clean --workspaces --if-present && npm run build:cjs --workspaces --if-present && npm run build:esm --workspaces --if-present && npm run build:umd --workspaces --if-present",
     "build:docs": "rimraf docs && typedoc",
     "clean": "npm run clean --workspaces --if-present",
     "lint": "npm run lint:check && npm run fmt:check",
