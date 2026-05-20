@@ -791,6 +791,30 @@ const TEST_CASES_PARSER = [
   { input: '0x68656c6c6f21', expected: Cl.bufferFromHex('68656c6c6f21') },
   { input: '"hello world"', expected: Cl.stringAscii('hello world') },
   { input: 'u"hello world"', expected: Cl.stringUtf8('hello world') },
+
+  // Regression: regex escape removal (oxlint no-useless-escape fixes)
+  // clInt: /-?[0-9]+/ — the `-` sign must still work
+  { input: '-0', expected: Cl.int(0) },
+  { input: '-999999', expected: Cl.int(-999999) },
+  // clPrincipal: /[a-zA-Z0-9-]+/ — hyphen in contract names must still match
+  {
+    input: "'SP2JXKMSH007NPYAQHKJPQMAQYAD90NQGTVJVQ02B.a-b-c-d",
+    expected: Cl.address('SP2JXKMSH007NPYAQHKJPQMAQYAD90NQGTVJVQ02B.a-b-c-d'),
+  },
+  {
+    input: "'SP2JXKMSH007NPYAQHKJPQMAQYAD90NQGTVJVQ02B.my-long-contract-name-99",
+    expected: Cl.address('SP2JXKMSH007NPYAQHKJPQMAQYAD90NQGTVJVQ02B.my-long-contract-name-99'),
+  },
+  // clTuple: colon and comma separators must still work
+  // todo: parser requires whitespace after colon, '{a:1,b:2,c:3}' should also work
+  {
+    input: '{a: 1,b: 2,c: 3}',
+    expected: Cl.tuple({ a: Cl.int(1), b: Cl.int(2), c: Cl.int(3) }),
+  },
+  {
+    input: '{ x : -1 , y : -2 }',
+    expected: Cl.tuple({ x: Cl.int(-1), y: Cl.int(-2) }),
+  },
   { input: '"hello \\"world\\""', expected: Cl.stringAscii('hello "world"') },
   { input: '"hello \\\\"', expected: Cl.stringAscii('hello \\') },
   { input: '"hello \\\\\\", \\"world\\""', expected: Cl.stringAscii('hello \\", "world"') },

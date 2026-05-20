@@ -166,7 +166,7 @@ function capture(combinator: Combinator, map?: (value: string) => Capture): Comb
 
 // CLARITY VALUE PARSERS
 function clInt(): Combinator {
-  return capture(regex(/\-?[0-9]+/), v => Cl.int(parseInt(v)));
+  return capture(regex(/-?[0-9]+/), v => Cl.int(parseInt(v)));
 }
 
 function clUint(): Combinator {
@@ -179,9 +179,9 @@ function clBool(): Combinator {
 
 function clPrincipal(): Combinator {
   return sequence([
-    regex(/\'/),
+    regex(/'/),
     capture(
-      sequence([regex(/[A-Z0-9]+/), optional(sequence([regex(/\./), regex(/[a-zA-Z0-9\-]+/)]))]),
+      sequence([regex(/[A-Z0-9]+/), optional(sequence([regex(/\./), regex(/[a-zA-Z0-9-]+/)]))]),
       Cl.address
     ),
   ]);
@@ -240,14 +240,14 @@ function clTuple(): Combinator {
       sequence(
         [
           capture(regex(/[a-zA-Z][a-zA-Z0-9_]*/)), // key
-          regex(/\s*\:/),
+          regex(/\s*:/),
           whitespace(), // todo: can this be optional?
           clValue(), // value
         ],
         ([k, v]) => Cl.tuple({ [k as string]: v as ClarityValue })
       ),
       c => Cl.tuple(Object.assign({}, ...c.map(t => (t as TupleCV).value))),
-      regex(/\s*\,\s*/)
+      regex(/\s*,\s*/)
     ),
     regex(/\}/),
   ]);
@@ -334,7 +334,6 @@ function clValue(map: (combinator: Combinator) => Combinator = v => v) {
  */
 export function parse(clarityValueString: string): ClarityValue {
   const result = clValue(entire)(clarityValueString);
-  // eslint-disable-next-line @typescript-eslint/only-throw-error
   if (!result.success || !result.capture) throw 'Parse error'; // todo: we can add better error messages and add position tracking
   return result.capture as ClarityValue;
 }
@@ -346,7 +345,6 @@ export function internal_parseCommaSeparated(clarityValueString: string): Clarit
   );
   const result = combinator(clarityValueString);
   if (!result.success || !result.capture)
-    // eslint-disable-next-line @typescript-eslint/only-throw-error
     throw `Error trying to parse string: ${clarityValueString}`;
   return (result.capture as ListCV<ClarityValue>).value;
 }
