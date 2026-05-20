@@ -1,8 +1,14 @@
 import * as btc from '@scure/btc-signer';
-import { hexToBytes } from '@stacks/common';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { bytesToHex, hexToBytes } from '@stacks/common';
 import type { StacksNetwork, StacksNetworkName } from '@stacks/network';
 import { Address } from '@stacks/transactions';
-import { rewardCycleToUnlockHeight } from './cycles';
+import {
+  BOND_END_OFFSET_PERIODS,
+  bondPeriodToRewardCycle,
+  rewardCycleToBurnHeight,
+  rewardCycleToUnlockHeight,
+} from './cycles';
 import { networkNameFrom } from './network';
 import type { PoxInfo } from './types';
 
@@ -14,6 +20,10 @@ const BTC_NETWORKS: Record<StacksNetworkName, typeof btc.NETWORK> = {
   devnet: REGTEST_NETWORK,
   mocknet: REGTEST_NETWORK,
 };
+
+// ---------------------------------------------------------------------------
+// Default unlock-script (the simplest "tail" — single sig)
+// ---------------------------------------------------------------------------
 
 /**
  * Build the default unlock script: `<compressedPubKey> OP_CHECKSIG`.
@@ -60,97 +70,269 @@ export function parseDefaultUnlockScript(unlockBytes: Uint8Array | string): Uint
   return undefined;
 }
 
-/**
- * Build the full P2WSH locking script for PoX-5 Bitcoin staking.
- *
- * The node constructs this same script from the `unlockBytes` submitted
- * on-chain. The prefix is deterministic, parameterized by the Stacks
- * address and unlock height.
- *
- * Layout (per spec):
- * ```
- * <stxAddressPayload 22B>  OP_DROP
- * <unlockHeight>           OP_CHECKLOCKTIMEVERIFY  OP_DROP
- * <unlockBytes>            (arbitrary, up to 683 bytes)
- * ```
- */
-export function buildLockingScript(opts: {
-  stxAddress: string;
-  unlockHeight: number;
-  /** Pre-encoded unlock-script tail. Mutually exclusive with `earlyExitPubkeys`. */
-  unlockBytes?: Uint8Array | string;
-  /**
-   * todo: check w stacks-core how this is encoded
-   * Early-exit signer pubkeys (compressed, hex). When provided, the unlock-script
-   * tail is constructed as a multisig spendable by `earlyExitThreshold`-of-N.
-   * Mutually exclusive with `unlockBytes`.
-   *
-   * unsure: todo: exact early-exit script encoding. The contract stores a 683-byte
-   * opaque `early-unlock-signers` descriptor; how that maps to a discrete
-   * pubkey list is not specified. This implementation emits a standard
-   * Bitcoin `OP_<M> <pubkey...> OP_<N> OP_CHECKMULTISIG` tail as a placeholder.
-   */
-  earlyExitPubkeys?: string[];
-  /** Threshold M for the M-of-N early-exit multisig. Defaults to 1. */
-  earlyExitThreshold?: number;
-}): Uint8Array {
-  const unlock = resolveUnlockBytes(opts);
+// ---------------------------------------------------------------------------
+// Low-level primitives that mirror the pox-5.clar helpers
+// ---------------------------------------------------------------------------
 
-  // Stacks address payload: 0x05 || version (1 byte) || hash160 (20 bytes) = 22 bytes.
-  // The L1 redeem-script format can only commit to a standard principal — there is
-  // no room for a contract name in 22 bytes. Reject contract principals up-front.
-  const parsed = Address.parse(opts.stxAddress) as {
+/** Bitcoin opcodes used in lockup-script construction. */
+const OP_0 = 0x00;
+const OP_PUSHDATA1 = 0x4c;
+const OP_PUSHDATA2 = 0x4d;
+const OP_IF = 0x63;
+const OP_ELSE = 0x67;
+const OP_ENDIF = 0x68;
+const OP_DROP = 0x75;
+const OP_CLTV = 0xb1;
+
+/**
+ * Mirror of pox-5.clar `push-script-bytes`.
+ *
+ * Encodes the Bitcoin script-push prefix for an arbitrary byte buffer:
+ * - `[]` → `OP_0` (`0x00`)
+ * - 1..=75 bytes → `<len>` then bytes
+ * - 76..=255 bytes → `OP_PUSHDATA1 (0x4c)` + 1-byte length + bytes
+ * - 256..=65535 bytes → `OP_PUSHDATA2 (0x4d)` + 2-byte LE length + bytes
+ *
+ * Throws for inputs longer than 65535 bytes (no OP_PUSHDATA4 in the contract
+ * either).
+ */
+export function pushScriptBytes(bytes: Uint8Array): Uint8Array {
+  const len = bytes.length;
+  if (len === 0) return new Uint8Array([OP_0]);
+  if (len <= 75) {
+    const out = new Uint8Array(1 + len);
+    out[0] = len;
+    out.set(bytes, 1);
+    return out;
+  }
+  if (len <= 255) {
+    const out = new Uint8Array(2 + len);
+    out[0] = OP_PUSHDATA1;
+    out[1] = len;
+    out.set(bytes, 2);
+    return out;
+  }
+  if (len <= 0xffff) {
+    const out = new Uint8Array(3 + len);
+    out[0] = OP_PUSHDATA2;
+    out[1] = len & 0xff;
+    out[2] = (len >> 8) & 0xff;
+    out.set(bytes, 3);
+    return out;
+  }
+  throw new Error(`pushScriptBytes: payload too large (${len} bytes; max 65535)`);
+}
+
+/**
+ * Mirror of pox-5.clar `serialize-c-script-num`.
+ *
+ * Minimal little-endian signed-magnitude encoding (standard Bitcoin ScriptNum)
+ * for non-negative integers. If the top bit of the most-significant byte is
+ * set, a `0x00` byte is appended to keep the number unsigned.
+ *
+ * - 0 → `[]`
+ * - 1..=127 → 1 byte
+ * - 128..=255 → 2 bytes (LE + `0x00` sign byte)
+ * - 256..=32767 → 2 bytes (LE)
+ * - 32768..=65535 → 3 bytes (LE + `0x00` sign byte)
+ * - 65536..=2^31-1 → 3..=4 bytes (LE, with sign byte if needed)
+ *
+ * The contract restricts output to 5 bytes (`as-max-len? ... u5`), which is
+ * enough for any conceivable burn height. We mirror that cap.
+ *
+ * @throws if `n` is negative, non-integer, or larger than the 5-byte cap.
+ */
+export function serializeCScriptNum(n: number | bigint): Uint8Array {
+  const big = typeof n === 'bigint' ? n : BigInt(n);
+  if (big < 0n) throw new Error('serializeCScriptNum: negative values not supported');
+  if (big === 0n) return new Uint8Array(0);
+
+  // Strip to minimal LE byte representation.
+  const bytes: number[] = [];
+  let v = big;
+  while (v > 0n) {
+    bytes.push(Number(v & 0xffn));
+    v >>= 8n;
+  }
+  // If top bit of MSB is set, append a sign byte (0x00) to keep value positive.
+  if ((bytes[bytes.length - 1] & 0x80) !== 0) bytes.push(0x00);
+
+  if (bytes.length > 5) {
+    throw new Error(
+      `serializeCScriptNum: encoding exceeds 5-byte ScriptNum cap (got ${bytes.length})`
+    );
+  }
+  return Uint8Array.from(bytes);
+}
+
+/**
+ * Mirror of pox-5.clar `push-c-script-num`.
+ *
+ * Push a ScriptNum onto the stack. Uses single-byte opcodes (`OP_0`,
+ * `OP_1`..`OP_16`) for small values and `push-script-bytes(serialize-c-script-num(n))`
+ * otherwise.
+ */
+export function pushCScriptNum(n: number | bigint): Uint8Array {
+  const big = typeof n === 'bigint' ? n : BigInt(n);
+  if (big === 0n) return new Uint8Array([OP_0]);
+  if (big <= 16n) return new Uint8Array([0x50 + Number(big)]); // OP_1 = 0x51, ..., OP_16 = 0x60
+  return pushScriptBytes(serializeCScriptNum(big));
+}
+
+/**
+ * Encode a standard-principal Stacks address as a Clarity consensus-buff prefix:
+ * `0x05 || version(1B) || hash160(20B)` (22 bytes total).
+ *
+ * Mirrors `to-consensus-buff?` for a standard principal — the type tag is `0x05`.
+ *
+ * @throws if `addr` is a contract principal (those use `0x06` and append
+ *   `name-length(1B) || name`; contract principals can't act as L1 stakers).
+ */
+export function toConsensusBuffStandardPrincipal(addr: string): Uint8Array {
+  const parsed = Address.parse(addr) as {
     version: number;
     hash160: string;
     contractName?: string;
   };
   if (parsed.contractName) {
     throw new Error(
-      `buildLockingScript: contract principals are not supported (got "${opts.stxAddress}"); ` +
-        'the BTC redeem-script payload only encodes a 20-byte hash160 of a standard principal'
+      `toConsensusBuffStandardPrincipal: expected a standard principal, got contract principal "${addr}"`
     );
   }
-
-  const addrPayload = new Uint8Array(22);
-  addrPayload[0] = 0x05;
-  addrPayload[1] = parsed.version;
-  addrPayload.set(hexToBytes(parsed.hash160), 2);
-
-  const heightNum = btc.ScriptNum().encode(BigInt(opts.unlockHeight));
-
-  // Inline the unlock script ops so the full script is a single flat encoding
-  const unlockOps = btc.Script.decode(unlock);
-
-  return btc.Script.encode([
-    addrPayload,
-    'DROP',
-    heightNum,
-    'CHECKLOCKTIMEVERIFY',
-    'DROP',
-    ...unlockOps,
-  ]);
+  const out = new Uint8Array(22);
+  out[0] = 0x05;
+  out[1] = parsed.version;
+  out.set(hexToBytes(parsed.hash160), 2);
+  return out;
 }
 
-/** @ignore */
-function resolveUnlockBytes(opts: {
-  unlockBytes?: Uint8Array | string;
-  earlyExitPubkeys?: string[];
-  earlyExitThreshold?: number;
+// ---------------------------------------------------------------------------
+// Lockup script construction (canonical)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the canonical L1 lockup script that the pox-5 contract verifies.
+ *
+ * This is a byte-for-byte mirror of `construct-lockup-script(staker,
+ * unlock-burn-height, unlock-bytes, early-unlock-bytes)` from `pox-5.clar`:
+ *
+ * ```text
+ * <staker-consensus-buff push>   // 22B standard-principal payload
+ * OP_DROP
+ * OP_IF
+ *   <unlock-burn-height push>    // serialized as c-script-num
+ *   OP_CHECKLOCKTIMEVERIFY
+ *   OP_DROP
+ *   <unlock-bytes push>
+ * OP_ELSE
+ *   <early-unlock-bytes push>
+ *   <unlock-bytes push>
+ * OP_ENDIF
+ * ```
+ *
+ * The `unlock-bytes` (and `early-unlock-bytes`) tail is opaque to the
+ * contract — it can be any push-data buffer, e.g. `<pubkey> OP_CHECKSIG` from
+ * {@link buildDefaultUnlockScript} or a multisig descriptor.
+ *
+ * The `early-unlock-bytes` come from the per-bond `protocol-bonds.early-unlock-signers`
+ * configuration on-chain; the SDK does not synthesize them — callers fetch them
+ * via `fetchBond(...)` and pass them through.
+ *
+ * Only standard principals are accepted as `staker` (contract principals
+ * cannot stake on L1).
+ */
+export function buildLockingScript(opts: {
+  /** Stacks standard principal of the staker. */
+  stxAddress: string;
+  /** Burn-block height at which the OP_CLTV branch becomes spendable. */
+  unlockHeight: number | bigint;
+  /** Tail pushed in BOTH branches (the actual spend-condition). */
+  unlockBytes: Uint8Array | string;
+  /**
+   * Per-bond early-unlock descriptor, pushed before `unlockBytes` in the
+   * `OP_ELSE` (early-exit) branch. Sourced from `protocol-bonds.early-unlock-signers`
+   * — opaque to the SDK.
+   */
+  earlyUnlockBytes: Uint8Array | string;
 }): Uint8Array {
-  if (opts.unlockBytes !== undefined) {
-    return typeof opts.unlockBytes === 'string' ? hexToBytes(opts.unlockBytes) : opts.unlockBytes;
-  }
-  if (opts.earlyExitPubkeys !== undefined) {
-    return buildEarlyExitUnlockScript({
-      pubkeys: opts.earlyExitPubkeys,
-      threshold: opts.earlyExitThreshold ?? 1,
-    });
-  }
-  throw new Error('buildLockingScript: provide either `unlockBytes` or `earlyExitPubkeys`');
+  const staker = toConsensusBuffStandardPrincipal(opts.stxAddress);
+  const unlockBytes =
+    typeof opts.unlockBytes === 'string' ? hexToBytes(opts.unlockBytes) : opts.unlockBytes;
+  const earlyUnlockBytes =
+    typeof opts.earlyUnlockBytes === 'string'
+      ? hexToBytes(opts.earlyUnlockBytes)
+      : opts.earlyUnlockBytes;
+
+  const stakerPush = pushScriptBytes(staker);
+  const heightPush = pushCScriptNum(opts.unlockHeight);
+  const unlockPush = pushScriptBytes(unlockBytes);
+  const earlyPush = pushScriptBytes(earlyUnlockBytes);
+
+  // Total length: stakerPush || OP_DROP OP_IF || heightPush || OP_CLTV OP_DROP
+  //             || unlockPush || OP_ELSE || earlyPush || unlockPush || OP_ENDIF
+  const totalLen =
+    stakerPush.length +
+    2 + // OP_DROP, OP_IF
+    heightPush.length +
+    2 + // OP_CLTV, OP_DROP
+    unlockPush.length +
+    1 + // OP_ELSE
+    earlyPush.length +
+    unlockPush.length +
+    1; // OP_ENDIF
+
+  const out = new Uint8Array(totalLen);
+  let o = 0;
+  out.set(stakerPush, o);
+  o += stakerPush.length;
+  out[o++] = OP_DROP;
+  out[o++] = OP_IF;
+  out.set(heightPush, o);
+  o += heightPush.length;
+  out[o++] = OP_CLTV;
+  out[o++] = OP_DROP;
+  out.set(unlockPush, o);
+  o += unlockPush.length;
+  out[o++] = OP_ELSE;
+  out.set(earlyPush, o);
+  o += earlyPush.length;
+  out.set(unlockPush, o);
+  o += unlockPush.length;
+  out[o++] = OP_ENDIF;
+  return out;
 }
 
 /**
- * Build the P2WSH Bitcoin address for a PoX-5 locking script.
+ * Compute the P2WSH `scriptPubKey` for a witness script: `0x00 0x20 || sha256(script)`
+ * (34 bytes). Mirrors `construct-lockup-output-script` from the contract.
+ */
+export function computeP2wshOutputScript(script: Uint8Array): Uint8Array {
+  const hash = sha256(script);
+  const out = new Uint8Array(34);
+  out[0] = 0x00;
+  out[1] = 0x20;
+  out.set(hash, 2);
+  return out;
+}
+
+/**
+ * Build the P2WSH `scriptPubKey` (34 bytes) for a full L1 lockup. This is the
+ * `expected-script-hash` the contract derives in `register-for-bond` and
+ * asserts equal to each declared output's `scriptPubKey`.
+ *
+ * Equivalent to {@link computeP2wshOutputScript}({@link buildLockingScript}(...)).
+ */
+export function buildLockupP2wshOutputScript(opts: {
+  stxAddress: string;
+  unlockHeight: number | bigint;
+  unlockBytes: Uint8Array | string;
+  earlyUnlockBytes: Uint8Array | string;
+}): Uint8Array {
+  return computeP2wshOutputScript(buildLockingScript(opts));
+}
+
+/**
+ * Build the P2WSH Bitcoin address for an L1 lockup.
  *
  * Combines {@link buildLockingScript} and P2WSH derivation into a single call.
  * Accepts either a pre-encoded `unlockBytes` tail or a compressed `publicKey`
@@ -159,40 +341,35 @@ function resolveUnlockBytes(opts: {
  *
  * @example
  * ```ts
- * // From a compressed public key (most common — single-sig spend):
  * const address = buildLockingBitcoinAddress({
  *   stxAddress: 'SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7',
  *   unlockHeight: 850_000,
  *   publicKey: '02a1633cafcc01ebfb6d78e39f687a1f0995c62fc95f51ead10a02ee0be551b5dc',
- *   network: 'mainnet',
- * });
- *
- * // From a pre-encoded unlock-script tail (custom spend conditions):
- * const address2 = buildLockingBitcoinAddress({
- *   stxAddress: 'SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7',
- *   unlockHeight: 850_000,
- *   unlockBytes: customScriptBytes,
+ *   earlyUnlockBytes: bond.earlyUnlockSigners, // from fetchBond(...)
  *   network: 'mainnet',
  * });
  * ```
  */
 export function buildLockingBitcoinAddress(opts: {
   stxAddress: string;
-  unlockHeight: number;
+  unlockHeight: number | bigint;
   unlockBytes: Uint8Array | string;
+  earlyUnlockBytes: Uint8Array | string;
   network: StacksNetworkName | StacksNetwork;
 }): string;
 export function buildLockingBitcoinAddress(opts: {
   stxAddress: string;
-  unlockHeight: number;
+  unlockHeight: number | bigint;
   publicKey: Uint8Array | string;
+  earlyUnlockBytes: Uint8Array | string;
   network: StacksNetworkName | StacksNetwork;
 }): string;
 export function buildLockingBitcoinAddress(opts: {
   stxAddress: string;
-  unlockHeight: number;
+  unlockHeight: number | bigint;
   unlockBytes?: Uint8Array | string;
   publicKey?: Uint8Array | string;
+  earlyUnlockBytes: Uint8Array | string;
   network: StacksNetworkName | StacksNetwork;
 }): string {
   const unlockBytes =
@@ -200,7 +377,12 @@ export function buildLockingBitcoinAddress(opts: {
   if (!unlockBytes) {
     throw new Error('buildLockingBitcoinAddress: provide either `unlockBytes` or `publicKey`');
   }
-  const script = buildLockingScript({ ...opts, unlockBytes });
+  const script = buildLockingScript({
+    stxAddress: opts.stxAddress,
+    unlockHeight: opts.unlockHeight,
+    unlockBytes,
+    earlyUnlockBytes: opts.earlyUnlockBytes,
+  });
   return lockingScriptToP2wsh(script, networkNameFrom(opts.network));
 }
 
@@ -220,38 +402,64 @@ export function lockingScriptToP2wsh(
   return result.address;
 }
 
+// ---------------------------------------------------------------------------
+// BTC SPV proof normalization helpers
+// ---------------------------------------------------------------------------
+
+/** Hard cap from the contract: `(buff 100000)`. */
+const MAX_TX_BYTES = 100_000;
+
 /**
- * Build a standard `M-of-N CHECKMULTISIG` unlock-script tail for the early-exit
- * branch of a paired-BTC lockup.
- *
- * todo: check w stacks-core how this is encoded
- * unsure: todo: real on-chain shape. The PoX-5 contract stores `early-unlock-signers`
- * as an opaque 683-byte buffer descriptor (see `setup-bond` in `pox-5.clar`).
- * The exact wire format that the L1 verifier matches is not yet specified; this
- * helper emits a vanilla Bitcoin multisig tail as a working placeholder so that
- * downstream P2WSH derivation produces stable addresses for testing.
+ * Normalize a raw Bitcoin transaction to bytes. Accepts either hex or
+ * `Uint8Array`. Enforces the contract's 100,000-byte cap.
  */
-export function buildEarlyExitUnlockScript(opts: {
-  pubkeys: string[];
-  threshold: number;
-}): Uint8Array {
-  const { pubkeys, threshold } = opts;
-  if (pubkeys.length === 0) throw new Error('earlyExitPubkeys must be non-empty');
-  if (threshold < 1 || threshold > pubkeys.length) {
-    throw new Error('earlyExitThreshold out of range');
+export function serializeBitcoinTx(tx: Uint8Array | string): Uint8Array {
+  const bytes = typeof tx === 'string' ? hexToBytes(tx) : tx;
+  if (bytes.length > MAX_TX_BYTES) {
+    throw new Error(
+      `serializeBitcoinTx: tx is ${bytes.length} bytes; exceeds the ${MAX_TX_BYTES}-byte contract cap`
+    );
   }
-  const pubBytes = pubkeys.map(p => {
-    const bytes = hexToBytes(p);
-    if (bytes.length !== 33) throw new Error('Expected 33-byte compressed public key');
-    return bytes;
-  });
-  // missing: todo: contract-defined early-exit script shape — emits a generic
-  // M-of-N multisig pending the spec.
-  return btc.Script.encode([threshold, ...pubBytes, pubBytes.length, 'CHECKMULTISIG']);
+  return bytes;
 }
 
 /**
- * Compute the deterministic L1 unlock height for a staking commitment.
+ * Normalize an 80-byte Bitcoin block header. Accepts either hex or
+ * `Uint8Array`. Throws if the length is not exactly 80.
+ */
+export function serializeBitcoinHeader(header: Uint8Array | string): Uint8Array {
+  const bytes = typeof header === 'string' ? hexToBytes(header) : header;
+  if (bytes.length !== 80) {
+    throw new Error(`serializeBitcoinHeader: expected 80 bytes, got ${bytes.length}`);
+  }
+  return bytes;
+}
+
+/**
+ * Compute the Bitcoin txid in BIG-ENDIAN (display) order — i.e. the
+ * double-sha256 of the raw tx, then byte-reversed.
+ *
+ * Mirrors `get-reversed-txid` in the contract (which returns the
+ * little-endian / "internal" form `sha256(sha256(tx))`); this helper returns
+ * the reversed form because that's what block explorers and most external
+ * tools expect. Reverse the result if you need the contract's
+ * `get-reversed-txid` value.
+ */
+export function computeBitcoinTxid(rawTx: Uint8Array): Uint8Array {
+  const inner = sha256(rawTx);
+  const outer = sha256(inner);
+  // Reverse to big-endian display form.
+  const out = new Uint8Array(outer.length);
+  for (let i = 0; i < outer.length; i++) out[i] = outer[outer.length - 1 - i];
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Unlock-height helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute the deterministic L1 unlock height for a STAKER lock.
  *
  * Set to halfway through the staker's last cycle (i.e.
  * {@link rewardCycleToUnlockHeight} of `firstRewardCycle + numCycles - 1`),
@@ -266,4 +474,38 @@ export function computeUnlockHeight(opts: {
     cycle: opts.firstRewardCycle + opts.numCycles - 1,
     poxInfo: opts.poxInfo,
   });
+}
+
+/**
+ * Compute the L1 unlock height for a paired-BTC BOND lockup.
+ *
+ * Mirrors the contract's `get-bond-l1-unlock-height`:
+ * ```
+ * unlock = bondPeriodToBurnHeight(bondIndex + BOND_END_OFFSET_PERIODS)
+ *        - floor(rewardCycleLength / 2)
+ * ```
+ *
+ * `firstBondPeriodCycle` should be sourced once from `fetchFirstPox5RewardCycle`
+ * (per-deployment constant); see `cycles.ts` for the snapshot guidance.
+ */
+export function computeBondUnlockHeight(opts: {
+  bondIndex: number;
+  firstBondPeriodCycle: number;
+  poxInfo: PoxInfo;
+}): number {
+  const endCycle = bondPeriodToRewardCycle({
+    bondIndex: opts.bondIndex + BOND_END_OFFSET_PERIODS,
+    firstBondPeriodCycle: opts.firstBondPeriodCycle,
+  });
+  const endBurnHeight = rewardCycleToBurnHeight({ cycle: endCycle, poxInfo: opts.poxInfo });
+  return endBurnHeight - Math.floor(opts.poxInfo.rewardCycleLength / 2);
+}
+
+// ---------------------------------------------------------------------------
+// Re-export helper for ergonomics
+// ---------------------------------------------------------------------------
+
+/** @internal Convenience for callers needing the hex of a built lockup script. */
+export function lockingScriptHex(script: Uint8Array): string {
+  return bytesToHex(script);
 }

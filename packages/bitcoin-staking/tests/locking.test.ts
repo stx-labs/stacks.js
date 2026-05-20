@@ -5,15 +5,38 @@ import {
   buildLockingBitcoinAddress,
   buildLockingScript,
   computeUnlockHeight,
+  lockingScriptToP2wsh,
   parseDefaultUnlockScript,
+  serializeCScriptNum,
 } from '../src/locking';
 
 // A known compressed public key (33 bytes)
 const TEST_PUBKEY_HEX = '0316e35d38b52d4886e40065e4952a49535ce914e02294be58e252d1998f129b19';
 const TEST_PUBKEY = hexToBytes(TEST_PUBKEY_HEX);
 
-// A known Stacks testnet address
+// A known Stacks testnet address (standard principal)
 const TEST_STX_ADDRESS = 'ST000000000000000000002AMW42H';
+
+// Fixed test buffer for `earlyUnlockBytes` — opaque to the SDK.
+const TEST_EARLY_UNLOCK = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
+
+// Opcodes we expect inside the script
+const OP_IF = 0x63;
+const OP_ELSE = 0x67;
+const OP_ENDIF = 0x68;
+const OP_DROP = 0x75;
+const OP_CLTV = 0xb1;
+
+/** Find the first index of `needle` in `hay` (or -1). */
+function findSubarray(hay: Uint8Array, needle: Uint8Array): number {
+  outer: for (let i = 0; i + needle.length <= hay.length; i++) {
+    for (let j = 0; j < needle.length; j++) {
+      if (hay[i + j] !== needle[j]) continue outer;
+    }
+    return i;
+  }
+  return -1;
+}
 
 describe('buildDefaultUnlockScript', () => {
   it('builds a valid <pubkey> CHECKSIG script', () => {
@@ -66,83 +89,121 @@ describe('parseDefaultUnlockScript', () => {
 describe('buildLockingScript', () => {
   const unlockBytes = buildDefaultUnlockScript(TEST_PUBKEY);
 
-  it('produces a script with the correct structure', () => {
+  it('contains OP_IF / OP_CLTV / OP_ELSE / OP_ENDIF opcodes in the right order', () => {
     const script = buildLockingScript({
       stxAddress: TEST_STX_ADDRESS,
       unlockHeight: 850_000,
       unlockBytes,
+      earlyUnlockBytes: TEST_EARLY_UNLOCK,
     });
 
-    const decoded = btc.Script.decode(script);
+    // The opcodes are constants — find their positions and check ordering.
+    const ifIdx = script.indexOf(OP_IF);
+    const cltvIdx = script.indexOf(OP_CLTV);
+    const elseIdx = script.indexOf(OP_ELSE);
+    const endifIdx = script.indexOf(OP_ENDIF);
 
-    // Expect: <22-byte addr payload> DROP <height> CHECKLOCKTIMEVERIFY DROP <pubkey> CHECKSIG
-    expect(decoded[0]).toBeInstanceOf(Uint8Array);
-    expect((decoded[0] as Uint8Array).length).toBe(22);
-    expect(decoded[1]).toBe('DROP');
-    // decoded[2] is the height ScriptNum
-    expect(decoded[3]).toBe('CHECKLOCKTIMEVERIFY');
-    expect(decoded[4]).toBe('DROP');
-    // unlock script ops follow
-    expect(decoded[5]).toBeInstanceOf(Uint8Array); // pubkey
-    expect(decoded[6]).toBe('CHECKSIG');
+    expect(ifIdx).toBeGreaterThanOrEqual(0);
+    expect(cltvIdx).toBeGreaterThan(ifIdx);
+    expect(elseIdx).toBeGreaterThan(cltvIdx);
+    expect(endifIdx).toBeGreaterThan(elseIdx);
+
+    // OP_DROP must immediately precede OP_IF (the staker-buff drop) and
+    // immediately follow OP_CLTV (the height drop).
+    expect(script[ifIdx - 1]).toBe(OP_DROP);
+    expect(script[cltvIdx + 1]).toBe(OP_DROP);
   });
 
-  it('encodes the stacks address payload correctly', () => {
-    const script = buildLockingScript({
-      stxAddress: TEST_STX_ADDRESS,
-      unlockHeight: 100,
-      unlockBytes,
-    });
-
-    const decoded = btc.Script.decode(script);
-    const addrPayload = decoded[0] as Uint8Array;
-
-    // First byte is 0x05
-    expect(addrPayload[0]).toBe(0x05);
-    // Remaining 21 bytes are version + hash160
-    expect(addrPayload.length).toBe(22);
-  });
-
-  it('encodes unlock height as ScriptNum', () => {
+  it('embeds the serialized ScriptNum for unlockHeight=850000 (3 bytes: 50 f8 0c)', () => {
     const script = buildLockingScript({
       stxAddress: TEST_STX_ADDRESS,
       unlockHeight: 850_000,
       unlockBytes,
+      earlyUnlockBytes: TEST_EARLY_UNLOCK,
     });
 
-    const decoded = btc.Script.decode(script);
-    const heightBytes = decoded[2] as Uint8Array;
+    const expected = serializeCScriptNum(850_000n);
+    expect(bytesToHex(expected)).toBe('50f80c');
 
-    // 850000 = 0x0CF850 → little-endian ScriptNum = [0x50, 0xF8, 0x0C]
-    expect(bytesToHex(heightBytes)).toBe('50f80c');
+    // The height push has a length prefix (0x03) followed by the bytes. Look
+    // for `<len><bytes>` immediately after OP_IF.
+    const ifIdx = script.indexOf(OP_IF);
+    expect(script[ifIdx + 1]).toBe(expected.length);
+    for (let i = 0; i < expected.length; i++) {
+      expect(script[ifIdx + 2 + i]).toBe(expected[i]);
+    }
   });
 
-  it('handles small heights correctly (variable-length ScriptNum)', () => {
+  it('embeds the serialized ScriptNum for unlockHeight=100 (single byte: 64)', () => {
     const script = buildLockingScript({
       stxAddress: TEST_STX_ADDRESS,
       unlockHeight: 100,
       unlockBytes,
+      earlyUnlockBytes: TEST_EARLY_UNLOCK,
     });
 
-    const decoded = btc.Script.decode(script);
-    const heightBytes = decoded[2] as Uint8Array;
+    const expected = serializeCScriptNum(100n);
+    expect(bytesToHex(expected)).toBe('64');
 
-    // 100 = 0x64 → single byte
-    expect(bytesToHex(heightBytes)).toBe('64');
+    // For values 1..=16 the contract uses OP_<N> (single-opcode). 100 is
+    // larger than 16, so it's pushed via <len=1><0x64>.
+    const ifIdx = script.indexOf(OP_IF);
+    expect(script[ifIdx + 1]).toBe(1);
+    expect(script[ifIdx + 2]).toBe(0x64);
   });
 
-  it('accepts unlockBytes as hex string', () => {
+  it('places earlyUnlockBytes followed by unlockBytes between OP_ELSE and OP_ENDIF', () => {
+    const script = buildLockingScript({
+      stxAddress: TEST_STX_ADDRESS,
+      unlockHeight: 850_000,
+      unlockBytes,
+      earlyUnlockBytes: TEST_EARLY_UNLOCK,
+    });
+
+    const elseIdx = script.indexOf(OP_ELSE);
+    // After OP_ELSE: <len> <earlyUnlockBytes...>
+    expect(script[elseIdx + 1]).toBe(TEST_EARLY_UNLOCK.length);
+    for (let i = 0; i < TEST_EARLY_UNLOCK.length; i++) {
+      expect(script[elseIdx + 2 + i]).toBe(TEST_EARLY_UNLOCK[i]);
+    }
+
+    // The unlockBytes must also appear in the script — twice (once in each branch).
+    const unlockHits: number[] = [];
+    let from = 0;
+    while (from < script.length) {
+      const idx = findSubarray(script.subarray(from), unlockBytes);
+      if (idx < 0) break;
+      unlockHits.push(from + idx);
+      from = from + idx + 1;
+    }
+    expect(unlockHits.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('accepts unlockBytes and earlyUnlockBytes as hex strings', () => {
     const fromBytes = buildLockingScript({
       stxAddress: TEST_STX_ADDRESS,
       unlockHeight: 850_000,
       unlockBytes,
+      earlyUnlockBytes: TEST_EARLY_UNLOCK,
     });
     const fromHex = buildLockingScript({
       stxAddress: TEST_STX_ADDRESS,
       unlockHeight: 850_000,
       unlockBytes: bytesToHex(unlockBytes),
+      earlyUnlockBytes: bytesToHex(TEST_EARLY_UNLOCK),
     });
     expect(bytesToHex(fromBytes)).toBe(bytesToHex(fromHex));
+  });
+
+  it('rejects contract principals as stxAddress', () => {
+    expect(() =>
+      buildLockingScript({
+        stxAddress: `${TEST_STX_ADDRESS}.some-contract`,
+        unlockHeight: 100,
+        unlockBytes,
+        earlyUnlockBytes: TEST_EARLY_UNLOCK,
+      })
+    ).toThrow();
   });
 });
 
@@ -152,6 +213,7 @@ describe('buildLockingBitcoinAddress', () => {
     stxAddress: TEST_STX_ADDRESS,
     unlockHeight: 850_000,
     unlockBytes,
+    earlyUnlockBytes: TEST_EARLY_UNLOCK,
   };
 
   it('produces a mainnet bc1q address', () => {
@@ -169,6 +231,13 @@ describe('buildLockingBitcoinAddress', () => {
     expect(address).toMatch(/^bcrt1q/);
   });
 
+  it('matches the address derived from the raw locking script', () => {
+    // Compute the expected address fresh from the new script — no hardcoding.
+    const script = buildLockingScript(baseOpts);
+    const expectedMainnet = lockingScriptToP2wsh(script, 'mainnet');
+    expect(buildLockingBitcoinAddress({ ...baseOpts, network: 'mainnet' })).toBe(expectedMainnet);
+  });
+
   it('is deterministic', () => {
     const a = buildLockingBitcoinAddress({ ...baseOpts, network: 'mainnet' });
     const b = buildLockingBitcoinAddress({ ...baseOpts, network: 'mainnet' });
@@ -181,6 +250,25 @@ describe('buildLockingBitcoinAddress', () => {
     expect(buildLockingBitcoinAddress({ ...baseOpts, network: 'mainnet' })).not.toBe(
       buildLockingBitcoinAddress({ ...otherOpts, network: 'mainnet' })
     );
+  });
+
+  it('changes when earlyUnlockBytes changes', () => {
+    const altOpts = { ...baseOpts, earlyUnlockBytes: new Uint8Array([0x01, 0x02, 0x03]) };
+    expect(buildLockingBitcoinAddress({ ...baseOpts, network: 'mainnet' })).not.toBe(
+      buildLockingBitcoinAddress({ ...altOpts, network: 'mainnet' })
+    );
+  });
+
+  it('accepts publicKey as an alternative to unlockBytes', () => {
+    const fromPubkey = buildLockingBitcoinAddress({
+      stxAddress: TEST_STX_ADDRESS,
+      unlockHeight: 850_000,
+      publicKey: TEST_PUBKEY,
+      earlyUnlockBytes: TEST_EARLY_UNLOCK,
+      network: 'mainnet',
+    });
+    const fromUnlock = buildLockingBitcoinAddress({ ...baseOpts, network: 'mainnet' });
+    expect(fromPubkey).toBe(fromUnlock);
   });
 });
 

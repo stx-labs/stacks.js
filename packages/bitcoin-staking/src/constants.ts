@@ -11,7 +11,21 @@ export const BOND_GAP_CYCLES = 2;
 /** @internal Hard cap for STX-only stake duration. */
 export const MAX_NUM_CYCLES = 96;
 
-/** Address versions corresponding to the pox-5 contract `pox-addr` tuple */
+/**
+ * Reserve ratio in basis points (1500 = 15%). Mirrors the pox-5 contract's
+ * `RESERVE_RATIO` constant — the share of STX that must remain unbonded as
+ * reserve when paired-BTC bonds are open.
+ */
+export const RESERVE_RATIO_BPS = 1500;
+
+/**
+ * Address versions corresponding to the pox-5 contract `pox-addr` tuple.
+ *
+ * Note: the post-patch pox-5 contract removed `MAX_ADDRESS_VERSION`,
+ * `MAX_ADDRESS_VERSION_BUFF_20`, and `MAX_ADDRESS_VERSION_BUFF_32`, so these
+ * version values no longer mirror an on-chain check. They are still needed
+ * for client-side address parsing in `btc-address.ts`.
+ */
 export enum PoXAddressVersion {
   // Taken from https://github.com/stx-labs/stacks.js/blob/efd2255f979ed64b90ac33246d99cd4809620400/packages/stacking/src/constants.ts#L1-L17
 

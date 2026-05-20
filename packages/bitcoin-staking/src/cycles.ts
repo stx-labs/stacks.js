@@ -1,4 +1,4 @@
-import { BOND_GAP_CYCLES } from './constants';
+import { BOND_GAP_CYCLES, BOND_LENGTH_CYCLES } from './constants';
 import type { PoxInfo } from './types';
 
 /**
@@ -11,11 +11,18 @@ import type { PoxInfo } from './types';
  * (and pass `firstBondPeriodCycle` for bond math) and call these locally
  * instead of paying a contract round-trip per query.
  *
- * The contract does NOT currently expose `first-bond-period-cycle` via a
- * read-only or map; callers must supply it from a deployment-time value or a
- * future read-only. Per `pox-5.clar:309-313` it is equal to
- * `first-pox-5-reward-cycle`.
+ * `first-bond-period-cycle` is not exposed via the contract's `get-pox-info`
+ * read-only; source it once via `fetchFirstPox5RewardCycle()` (see `fetch.ts`)
+ * — per `pox-5.clar` it equals `first-pox-5-reward-cycle`. This module stays
+ * pure-math: it never performs I/O.
  */
+
+/**
+ * Bond-end offset, measured in bond periods. A bond is active for
+ * `BOND_LENGTH_CYCLES / BOND_GAP_CYCLES` bond gaps (= 6) after its open. This
+ * lifts the hardcoded `+ u6` in the contract's bond math.
+ */
+export const BOND_END_OFFSET_PERIODS = BOND_LENGTH_CYCLES / BOND_GAP_CYCLES;
 
 /** Mirrors the pox-5.clar `bond-period-to-reward-cycle` read-only function. */
 export function bondPeriodToRewardCycle(opts: {
@@ -81,13 +88,21 @@ export function distributionCycleToBurnHeight(opts: { cycle: number; poxInfo: Po
 }
 
 /**
- * Inspired by the pox-5.clar `is-in-prepare-phase` read-only function.
+ * Mirrors the pox-5.clar `is-in-prepare-phase` read-only function.
+ *
+ * Post-patch the contract uses `reward-cycle-to-burn-height(next-cycle)`
+ * (NOT `reward-cycle-to-unlock-height(next-cycle)`) as the boundary; the
+ * prepare phase is the trailing `prepareCycleLength` burn-blocks of the
+ * current cycle.
  */
 export function isInPreparePhase(opts: { burnHeight: number; poxInfo: PoxInfo }): boolean {
   if (opts.burnHeight < opts.poxInfo.firstBurnchainBlockHeight) return false;
   const cycle = burnHeightToRewardCycle(opts);
-  const nextCycleUnlock = rewardCycleToUnlockHeight({ cycle: cycle + 1, poxInfo: opts.poxInfo });
-  return opts.burnHeight >= nextCycleUnlock - opts.poxInfo.prepareCycleLength;
+  const nextCycleBurnHeight = rewardCycleToBurnHeight({
+    cycle: cycle + 1,
+    poxInfo: opts.poxInfo,
+  });
+  return opts.burnHeight >= nextCycleBurnHeight - opts.poxInfo.prepareCycleLength;
 }
 
 /**
@@ -109,11 +124,11 @@ export function minUstxForSatsAmount(opts: {
 /**
  * Mirrors the pox-5.clar `is-bond-active-at-height` read-only function (math portion).
  *
- * Note: This function skips the bon existence check.
- * The contract also checks `(is-some (map-get? protocol-bonds bond-index))`
+ * Note: skips the existence check. The contract also asserts
+ * `(is-some (map-get? protocol-bonds bond-index))`.
  *
- * Note: The contract uses a hardcoded `+ u6` for bond-end (six bond gaps =
- * `BOND_LENGTH_CYCLES` reward cycles)
+ * The bond-end offset (`BOND_END_OFFSET_PERIODS = 6`) is six bond gaps —
+ * `BOND_LENGTH_CYCLES / BOND_GAP_CYCLES` reward cycles.
  */
 export function isBondActiveAtHeight(opts: {
   bondIndex: number;
@@ -123,7 +138,7 @@ export function isBondActiveAtHeight(opts: {
 }): boolean {
   const bondStart = bondPeriodToBurnHeight(opts);
   const bondEnd = bondPeriodToBurnHeight({
-    bondIndex: opts.bondIndex + 6,
+    bondIndex: opts.bondIndex + BOND_END_OFFSET_PERIODS,
     firstBondPeriodCycle: opts.firstBondPeriodCycle,
     poxInfo: opts.poxInfo,
   });

@@ -7,10 +7,9 @@ import {
 } from '@stacks/transactions';
 import { POX5_CONTRACT_NAME } from './constants';
 import type {
+  BondLockup,
   BuildAllowContractCallerArgs,
   BuildDisallowContractCallerArgs,
-  BuildGrantSignerKeyTxArgs,
-  BuildRevokeSignerKeyTxArgs,
   BuildSetBondAdminArgs,
   TxParams,
 } from './types';
@@ -72,6 +71,9 @@ export async function buildSetBondAdmin(
  * Restricted to the bond admin (`bond-admin` data-var). Must be called within
  * `BOND_GAP_CYCLES` of the bond's start and before its open height.
  *
+ * Each allowlist entry caps a staker by both sats and uSTX (`max-sats`,
+ * `max-ustx`). The contract enforces both bounds at `register-for-bond` time.
+ *
  * unsure: todo: the 683-byte `earlyUnlockSigners` descriptor format is open.
  * Currently passed through as opaque bytes; the helper in `locking.ts`
  * (`buildEarlyExitUnlockScript`) emits a placeholder M-of-N tail.
@@ -83,7 +85,9 @@ export async function buildSetupBond(
     stxValueRatio: IntegerType;
     minUstxRatioBps: IntegerType;
     earlyUnlockSigners: Uint8Array | string;
-    allowlist: { staker: string; maxSats: IntegerType }[];
+    /** Stacks principal authorized to call `announce-l1-early-exit` for this bond. */
+    earlyUnlockAdmin: string;
+    allowlist: { staker: string; maxSats: IntegerType; maxUstx: IntegerType }[];
   } & TxParams
 ): Promise<StacksTransactionWire> {
   const allowlistCV = Cl.list(
@@ -91,6 +95,7 @@ export async function buildSetupBond(
       Cl.tuple({
         staker: Cl.address(entry.staker),
         'max-sats': Cl.uint(entry.maxSats),
+        'max-ustx': Cl.uint(entry.maxUstx),
       })
     )
   );
@@ -103,6 +108,7 @@ export async function buildSetupBond(
       Cl.uint(args.stxValueRatio),
       Cl.uint(args.minUstxRatioBps),
       clBufferFrom(args.earlyUnlockSigners),
+      Cl.address(args.earlyUnlockAdmin),
       allowlistCV,
     ],
     args
@@ -119,9 +125,12 @@ export async function buildSetupBond(
  * Two `lockup` shapes:
  * - `kind: 'btc'`  — caller has funded one or more L1 (BTC) timelocked outputs whose
  *   redeem script is the locking script returned by {@link buildLockingScript}.
- *   The contract reconstructs and verifies each P2WSH output.
+ *   Each output is accompanied by a full SPV proof (block header, merkle path,
+ *   tx-index/tx-count, raw tx bytes); the contract reconstructs and verifies
+ *   each P2WSH output against the bitcoin chainstate.
  * - `kind: 'sbtc'` — no L1 (BTC) lockup; the contract pulls `sbtcSats` from the caller
- *   via `lock-sbtc`.
+ *   via `lock-sbtc`. On the wire this is encoded as `(err uint)` — the contract
+ *   reuses the response's error branch to carry the sBTC amount.
  *
  * On success the contract returns an enrollment receipt tuple
  * `{ signer, staker, amount-ustx, bond-index, first-reward-cycle,
@@ -133,17 +142,7 @@ export function buildRegisterForBond(
     bondIndex: number;
     signerManager: string;
     amountUstx: IntegerType;
-    lockup:
-      | {
-          kind: 'btc';
-          outputs: {
-            amountSats: IntegerType;
-            txid: Uint8Array | string;
-            outputIndex: number;
-          }[];
-          unlockBytes: Uint8Array | string;
-        }
-      | { kind: 'sbtc'; sbtcSats: IntegerType };
+    lockup: BondLockup;
     signerCalldata?: Uint8Array | string;
   } & TxParams
 ): Promise<StacksTransactionWire> {
@@ -161,29 +160,111 @@ export function buildRegisterForBond(
 }
 
 /** @ignore */
-function lockupToCV(
-  lockup:
-    | {
-        kind: 'btc';
-        outputs: { amountSats: IntegerType; txid: Uint8Array | string; outputIndex: number }[];
-        unlockBytes: Uint8Array | string;
-      }
-    | { kind: 'sbtc'; sbtcSats: IntegerType }
-): ClarityValue {
+function lockupToCV(lockup: BondLockup): ClarityValue {
   if (lockup.kind === 'sbtc') return Cl.error(Cl.uint(lockup.sbtcSats));
   return Cl.ok(
     Cl.tuple({
       outputs: Cl.list(
         lockup.outputs.map(o =>
           Cl.tuple({
-            amount: Cl.uint(o.amountSats),
-            txid: clBufferFrom(o.txid),
+            height: Cl.uint(o.height),
+            tx: clBufferFrom(o.tx),
             'output-index': Cl.uint(o.outputIndex),
+            header: clBufferFrom(o.header),
+            'leaf-hashes': Cl.list(o.leafHashes.map(h => clBufferFrom(h))),
+            'tx-count': Cl.uint(o.txCount),
+            'tx-index': Cl.uint(o.txIndex),
+            amount: Cl.uint(o.amount),
           })
         )
       ),
       'unlock-bytes': clBufferFrom(lockup.unlockBytes),
     })
+  );
+}
+
+/**
+ * Build an unsigned `update-bond-registration` transaction.
+ *
+ * Rotates the signer-manager bound to the caller's existing bond membership.
+ * `oldSignerManager` must equal the current signer recorded on the membership
+ * (the contract enforces this — `ERR_INVALID_OLD_SIGNER_MANAGER`). The new
+ * signer-manager must be different (`ERR_UPDATE_BOND_SAME_SIGNER`) and must
+ * already be registered. The contract calls `validate-stake!` on the new
+ * manager and `checkpoint-staker` on the old one (errors from the latter are
+ * swallowed). Takes effect from the next reward cycle, or from the bond's
+ * start cycle if the bond hasn't begun yet.
+ */
+export async function buildUpdateBondRegistration(
+  args: {
+    /** Contract address of the new signer-manager. */
+    signerManager: string;
+    /** Contract address of the signer-manager currently bound to the membership. */
+    oldSignerManager: string;
+    /** Opaque calldata forwarded to the new `validate-stake!`. */
+    signerCalldata?: Uint8Array | string;
+  } & TxParams
+): Promise<StacksTransactionWire> {
+  return callPox5(
+    'update-bond-registration',
+    [
+      Cl.address(args.signerManager),
+      Cl.address(args.oldSignerManager),
+      clOptionalBufferFrom(args.signerCalldata),
+    ],
+    args
+  );
+}
+
+/**
+ * Build an unsigned `announce-l1-early-exit` transaction.
+ *
+ * Triggers the L1 early-unlock path for a bond participant. Only callable by
+ * the bond's `early-unlock-admin` (`ERR_UNAUTHORIZED` otherwise), and only
+ * when the membership has `is-l1-lock = true`
+ * (`ERR_CANNOT_ANNOUNCE_L1_EARLY_UNLOCK`). `oldSignerManager` must match the
+ * staker's currently bound signer (`ERR_INVALID_OLD_SIGNER_MANAGER`). On
+ * success the staker's bond shares are zeroed and the signer's totals
+ * decremented.
+ */
+export async function buildAnnounceL1EarlyExit(
+  args: {
+    /** Staker principal whose L1 early-exit is being announced. */
+    staker: string;
+    /** Contract address of the signer-manager currently bound to the staker. */
+    oldSignerManager: string;
+  } & TxParams
+): Promise<StacksTransactionWire> {
+  return callPox5(
+    'announce-l1-early-exit',
+    [Cl.address(args.staker), Cl.address(args.oldSignerManager)],
+    args
+  );
+}
+
+/**
+ * Build an unsigned `unstake-sbtc` transaction.
+ *
+ * Withdraws a portion (or all) of a bond participant's locked sBTC. Only
+ * valid when the membership is sBTC-backed (`is-l1-lock = false`,
+ * `ERR_CANNOT_UNSTAKE_SBTC`). The `signerManager` arg must match the
+ * staker's current signer (`ERR_INVALID_OLD_SIGNER_MANAGER`).
+ * `amountToWithdrawSats` must be ≤ the staker's current sBTC shares
+ * (`ERR_INVALID_UNSTAKE_SBTC_AMOUNT`). The sBTC is transferred to the staker
+ * via `sbtc-token.transfer` from the contract.
+ */
+export async function buildUnstakeSbtc(
+  args: {
+    /** Contract address of the signer-manager currently bound to the staker. */
+    signerManager: string;
+    /** sBTC sats to withdraw. Must be ≤ the staker's current sBTC shares. */
+    amountToWithdrawSats: IntegerType;
+  } & TxParams
+): Promise<StacksTransactionWire> {
+  return callPox5(
+    'unstake-sbtc',
+    [Cl.address(args.signerManager), Cl.uint(args.amountToWithdrawSats)],
+    args
   );
 }
 
@@ -196,6 +277,13 @@ function lockupToCV(
  *
  * Authorization is delegated to the signer-manager contract via
  * `validate-stake!`. The paired-BTC entry is `register-for-bond`.
+ *
+ * Note: post-patch the signer-manager trait gained a new method
+ * `checkpoint-staker`, which pox-5 calls on the *previous* signer-manager
+ * during rotation / unstake flows (`stake-update`, `unstake`,
+ * `unstake-sbtc`, `update-bond-registration`, `announce-l1-early-exit`).
+ * Any signer-manager implementation must implement it; pox-5 ignores its
+ * return value.
  */
 export async function buildStake(
   args: {
@@ -226,10 +314,12 @@ export async function buildStake(
  * Build an unsigned PoX-5 `stake-update` transaction (STX-only).
  *
  * A single call can extend the lock by N cycles, top up the locked amount,
- * and rotate the signer-manager. Pass `0` / `0n` to skip a dimension (same
- * `signerManager` keeps the current binding from the staker's perspective,
- * but the contract still re-runs `validate-stake!` against whichever
- * signer-manager is passed).
+ * and rotate the signer-manager. Pass `0` / `0n` to skip a dimension. The
+ * caller's *current* signer-manager must be passed as `oldSignerManager`
+ * — the contract asserts it matches the recorded signer
+ * (`ERR_INVALID_OLD_SIGNER_MANAGER`) and calls `checkpoint-staker` on it
+ * before applying the update (errors from `checkpoint-staker` are
+ * swallowed).
  *
  * unsure: todo: the API takes `cyclesToExtend`/`amountIncrease` with `0` meaning
  * "skip". The contract's own min-num-cycles guard (`check-pox-lock-period`)
@@ -239,8 +329,10 @@ export async function buildStake(
  */
 export async function buildStakeUpdate(
   args: {
-    /** Contract address of the signer-manager implementing `signer-manager-trait`. */
+    /** Contract address of the (possibly new) signer-manager. */
     signerManager: string;
+    /** Contract address of the signer-manager currently recorded for the staker. */
+    oldSignerManager: string;
     /** Number of cycles to extend the lock by. Defaults to `0` (no extension). */
     cyclesToExtend?: number;
     /** Additional uSTX to lock on top of the current `amount-ustx`. Defaults to `0n` (no top-up). */
@@ -253,6 +345,7 @@ export async function buildStakeUpdate(
     'stake-update',
     [
       Cl.address(args.signerManager),
+      Cl.address(args.oldSignerManager),
       Cl.uint(args.cyclesToExtend ?? 0),
       Cl.uint(args.amountIncrease ?? 0n),
       clOptionalBufferFrom(args.signerCalldata),
@@ -270,54 +363,17 @@ export async function buildStakeUpdate(
  * `ERR_UNSTAKE_IN_PREPARE_PHASE` if invoked during the prepare phase, so
  * callers should gate on {@link isInPreparePhase} first.
  *
- * No arguments — the staker is derived from `tx-sender` and the position is
- * looked up via `get-staker-info`.
- *
- * unsure: todo: the contract `(define-public (unstake) ...)` takes no args. If a
- * future revision adds an explicit position selector (e.g. for multi-position
- * stakers) this signature will need to grow.
+ * `oldSignerManager` must match the staker's currently recorded signer
+ * (`ERR_INVALID_OLD_SIGNER_MANAGER`) — pox-5 calls `checkpoint-staker` on it
+ * before zeroing the position.
  */
-export async function buildUnstake(args: TxParams): Promise<StacksTransactionWire> {
-  return callPox5('unstake', [], args);
-}
-
-// ---------------------------------------------------------------------------
-// Signer key grants
-// ---------------------------------------------------------------------------
-
-/**
- * Build an unsigned `grant-signer-key` transaction. Records on-chain the
- * SIP-018 signature produced by [[signSignerKeyGrant]]; replay-gated by
- * `(signerKey, signerManager, authId)`. Anyone may submit; the signer
- * does not need to be the tx-sender.
- */
-export async function buildGrantSignerKey(
-  args: BuildGrantSignerKeyTxArgs & TxParams
+export async function buildUnstake(
+  args: {
+    /** Contract address of the signer-manager currently recorded for the staker. */
+    oldSignerManager: string;
+  } & TxParams
 ): Promise<StacksTransactionWire> {
-  return callPox5(
-    'grant-signer-key',
-    [
-      Cl.bufferFromHex(args.signerKey),
-      Cl.address(args.signerManager),
-      Cl.uint(args.authId),
-      Cl.bufferFromHex(args.signerSignature),
-    ],
-    args
-  );
-}
-
-/**
- * Build an unsigned `revoke-signer-grant` transaction. tx-sender must be
- * the Stacks address whose hash160 matches `signerKey`.
- */
-export async function buildRevokeSignerGrant(
-  args: BuildRevokeSignerKeyTxArgs & TxParams
-): Promise<StacksTransactionWire> {
-  return callPox5(
-    'revoke-signer-grant',
-    [Cl.address(args.signerManager), Cl.bufferFromHex(args.signerKey)],
-    args
-  );
+  return callPox5('unstake', [Cl.address(args.oldSignerManager)], args);
 }
 
 // ---------------------------------------------------------------------------
@@ -397,8 +453,10 @@ export async function buildCalculateRewards(
  * Returns a tuple
  * `{ stx-rewards, bond-rewards (list), bond-totals, total-rewards }` and
  * mirrors that shape in the `print` event so callers can break the payout
- * down per bond. Reverts with `ERR_NO_CLAIMABLE_REWARDS` if every leg is
- * empty — gate on {@link fetchClaimableRewards} first.
+ * down per bond. Each `bond-rewards` entry has shape
+ * `{ earned, bond-index, rewards-per-token }` — see {@link BondRewardsLeg}.
+ * Reverts with `ERR_NO_CLAIMABLE_REWARDS` if every leg is empty — gate on
+ * {@link fetchClaimableRewards} first.
  *
  * `tx-sender` should be the signer-manager (the contract uses
  * `contract-caller` as the signer address).
@@ -422,6 +480,5 @@ export async function buildClaimRewards(
   );
 }
 
-// todo: flow 13 (paired-BTC early exit) — `buildEarlyExitRequest`.
 // todo: flow 14 (watchdog spent-report) — `buildReportUtxoSpent`.
 // todo: flow 15 (andon cord) — `buildPausePayout`.

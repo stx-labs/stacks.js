@@ -37,11 +37,12 @@ export interface CycleInfo {
 /**
  * Lock summary returned by `pox-5.get-staker-info`.
  *
- * The contract's `staker-info` map only records the lock dimensions
- * (`amount-ustx`, `first-reward-cycle`, `num-cycles`); it does NOT carry
- * pool/solo discrimination, signer key, BTC reward address, or unlock-script.
- * Those live in separate maps (e.g. `staker-signer-cycle-memberships`) and
- * are surfaced by their own fetch helpers.
+ * The contract's `staker-info` map records the lock dimensions
+ * (`amount-ustx`, `first-reward-cycle`, `num-cycles`) plus the staker's
+ * `signer` principal. It does NOT carry pool/solo discrimination, signer key,
+ * BTC reward address, or unlock-script. Those live in separate maps (e.g.
+ * `staker-signer-cycle-memberships`) and are surfaced by their own fetch
+ * helpers.
  */
 export type StakerInfo = { staked: false } | { staked: true; details: StakerLock };
 
@@ -49,6 +50,8 @@ export interface StakerLock {
   amountUstx: bigint;
   firstRewardCycle: number;
   numCycles: number;
+  /** Stacks principal of the signer the staker is delegated to. */
+  signer: string;
 }
 
 /**
@@ -66,12 +69,17 @@ export interface AccountStatus {
  * Active paired-BTC bond membership for a staker. Returned as `undefined` when
  * the staker has no current bond (the contract returns `none` when the bond's
  * unlock cycle has been reached).
+ *
+ * Mirrors the post-patch `protocol-bond-memberships` map value
+ * `{ bond-index, amount-ustx, signer, is-l1-lock }`.
  */
 export interface BondMembership {
   bondIndex: number;
-  amountSats: bigint;
   amountUstx: bigint;
-  rewardPerSharePaid: bigint;
+  /** Stacks principal of the signer this membership is bound to. */
+  signer: string;
+  /** True if the BTC side is an L1 lockup; false if backed by sBTC. */
+  isL1Lock: boolean;
 }
 
 /**
@@ -98,6 +106,8 @@ export interface Bond {
   minUstxRatioBps: number;
   /** Hex describing the early-unlock signer set (683 bytes). */
   earlyUnlockSigners: string;
+  /** Stacks principal authorized to trigger early-unlock for this bond. */
+  earlyUnlockAdmin: string;
   /** Sum of allowlist `max-sats` (capacity). Optional; see note above. */
   capacitySats?: bigint;
 }
@@ -107,24 +117,31 @@ export interface Bond {
 // ---------------------------------------------------------------------------
 
 /**
- * One leg of `get-claimable-rewards`. Mirrors the post-patch contract tuple
- * `{ rewards-paid, rewards-pending, shares-staked, rewards-per-share }` plus an
- * extra `bondIndex` field on the bond legs for caller-side disambiguation
- * (the contract emits the same shape per bond inside `claim-rewards`).
+ * Earned-rewards amount in micro-STX. Mirrors the post-patch
+ * `pox-5.get-earned -> uint` read-only. Kept as an alias for clarity at
+ * call sites that previously consumed `RewardsLeg`.
  */
-export interface RewardsLeg {
-  rewardsPending: bigint;
-  rewardsPaid: bigint;
-  sharesStaked: bigint;
-  rewardsPerShare: bigint;
-}
+export type EarnedRewards = bigint;
 
-export interface BondRewardsLeg extends RewardsLeg {
+/**
+ * Backwards-friendly alias for `EarnedRewards`. The pre-patch `RewardsLeg`
+ * was a 4-field tuple; the new contract returns a single `uint`. We keep the
+ * name as an alias so other waves can adopt the new shape without churn.
+ */
+export type RewardsLeg = EarnedRewards;
+
+/**
+ * One entry of the list returned inside `claim-rewards`'s response. Mirrors
+ * the post-patch tuple `{ earned, bond-index, rewards-per-token }`.
+ */
+export interface BondRewardsLeg {
+  earned: bigint;
   bondIndex: number;
+  rewardsPerToken: bigint;
 }
 
 export interface ClaimableRewards {
-  stxRewards: RewardsLeg;
+  stxRewards: EarnedRewards;
   bondRewards: BondRewardsLeg[];
 }
 
@@ -135,28 +152,6 @@ export interface ClaimableRewards {
 export interface BuildSetBondAdminArgs {
   /** Principal to install as the new `bond-admin`. */
   newAdmin: string;
-}
-
-// ---------------------------------------------------------------------------
-// Build function arg types — signer grants
-// ---------------------------------------------------------------------------
-
-export interface BuildGrantSignerKeyTxArgs {
-  /** 33-byte compressed signer pubkey (hex). */
-  signerKey: string;
-  /** Contract address of the signer-manager being granted permission. */
-  signerManager: string;
-  /** Per-grant nonce. */
-  authId: IntegerType;
-  /** 65-byte recoverable SIP-018 signature. */
-  signerSignature: string;
-}
-
-export interface BuildRevokeSignerKeyTxArgs {
-  /** 33-byte compressed signer pubkey (hex). */
-  signerKey: string;
-  /** Contract address of the signer-manager being revoked permission. */
-  signerManager: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -181,37 +176,68 @@ export interface BuildDisallowContractCallerArgs {
 // todo: flow 14 (watchdog) — `LockStatus`.
 // todo: flow 15 (andon cord) — `PayoutWindow`.
 
+// ---------------------------------------------------------------------------
+// BTC L1 lockup proof types
+// ---------------------------------------------------------------------------
+//
+// NOTE: BTC SPV proof types used by `register-for-bond` live here, but the
+// helpers that *construct* them (parsing tx bytes, computing merkle paths,
+// etc.) live in `locking.ts` (added by Wave 2). The pre-patch `SpendProof`
+// type has been deleted — it didn't match the new contract's proof shape.
+
 /**
- * Bitcoin SPV-style proof that an L1 lockup UTXO has been spent.
+ * Per-output proof tuple required by `register-for-bond` when committing an
+ * L1 BTC lockup. Mirrors the contract's expected tuple shape.
  *
- * unsure: todo: the proof shape is open. Plausible shapes include:
- *   - Raw spending tx + merkle branch + block header chain (full SPV).
- *   - Node-side P2WSH match (contract calls a future built-in akin to
- *     `validate-p2wsh-exists?`).
- *   - Compact `(txid, vout)` reference + signed attestation from the
- *     node's burn-chain indexer.
- * Fields below mirror the design sketch.
+ * NOTE: a full merkle-proof builder is not provided by this SDK — the surface
+ * area (block parsing, varint handling, witness stripping, merkle-tree
+ * construction with Bitcoin's odd-row duplication quirk) is large enough that
+ * callers should source proofs from a dedicated indexer / proof service. The
+ * fields below document the expected shapes precisely so callers can supply
+ * the values directly.
  */
-export interface SpendProof {
-  /** Txid of the Bitcoin transaction spending the tracked lockup output. */
-  spendTxid: Uint8Array | string;
-  /** Burn-block height containing `spendTxid`. */
-  blockHeight: number;
-  /** Merkle branch proving inclusion of `spendTxid` in the block. */
-  merkleBranch: (Uint8Array | string)[];
-  // missing: todo: likely also need `blockHeader`, the spending input index,
-  // and the raw spending tx bytes for full SPV validation. Punted until the
-  // contract's verification path is finalized.
+export interface BondL1LockupOutput {
+  /** BTC block height containing the tx. */
+  height: number;
+  /**
+   * Raw BTC tx bytes (buff 100000). MUST be the legacy / non-segwit
+   * serialization — i.e. the bytes that hash (double-sha256) to the txid —
+   * not the witness-extended `wtxid` serialization. Pre-segwit clients and
+   * the `tx` field of the Bitcoin RPC `getrawtransaction` (with verbose=0)
+   * both produce the correct form.
+   */
+  tx: Uint8Array | string;
+  /** Index of the relevant output within the tx. */
+  outputIndex: number;
+  /** 80-byte BTC block header (buff 80). */
+  header: Uint8Array | string;
+  /**
+   * Sibling hashes along the merkle path from leaf to root, ordered
+   * bottom-up (closest sibling first). Each hash is the raw 32-byte
+   * little-endian (internal) form — NOT the reversed display form.
+   *
+   * Up to 14 entries (the contract's `(list 14 (buff 32))` cap, which
+   * accommodates blocks of up to 2^14 = 16,384 transactions).
+   *
+   * The verifier folds the path by repeatedly hashing
+   * `double-sha256(left || right)`, choosing left/right at each level based
+   * on the bit of `txIndex` at that level (LSB first). A correctly
+   * constructed path reproduces the block's merkle root from the leaf txid.
+   */
+  leafHashes: (Uint8Array | string)[];
+  /** Total transaction count in the block. */
+  txCount: number;
+  /** Position of the tx in the block (0-indexed). */
+  txIndex: number;
+  /** Sats — must match the parsed output amount. */
+  amount: bigint;
 }
 
-// ---------------------------------------------------------------------------
-// Signer types
-// ---------------------------------------------------------------------------
-
-export interface SignerKeyGrantOptions {
-  /** Contract address of the signer-manager being authorized. */
-  signerManager: string;
-  /** Per-grant nonce; replay-gated by `(signerKey, signerManager, authId)`. */
-  authId: IntegerType;
-  network: StacksNetworkName | StacksNetwork;
-}
+/**
+ * Discriminated union describing the BTC-side commitment associated with a
+ * bond membership. Either a list of L1 lockup outputs accompanied by an
+ * unlock-script, or an sBTC sats amount.
+ */
+export type BondLockup =
+  | { kind: 'btc'; outputs: BondL1LockupOutput[]; unlockBytes: Uint8Array | string }
+  | { kind: 'sbtc'; sbtcSats: bigint };

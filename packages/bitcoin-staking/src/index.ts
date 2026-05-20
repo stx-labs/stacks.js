@@ -1,11 +1,11 @@
 export * from './types';
 export * from './constants';
 export * from './network';
-export * from './signer';
 export * from './locking';
 export * from './build';
 export * from './fetch';
 export * from './cycles';
+export * from './errors';
 
 /**
  * ### `BtcAddress.` Bitcoin Address Namespace
