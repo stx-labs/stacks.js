@@ -21,7 +21,7 @@
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "version": "changeset version",
-    "prepare": "husky install .github/.husky"
+    "prepare": "husky .github/.husky"
   },
   "devDependencies": {
     "@changesets/cli": "^2.26.2",
@@ -32,7 +32,7 @@
     "assert": "^2.0.0",
     "esbuild": "^0.19.0",
     "esbuild-loader": "^4.0.0",
-    "husky": "^8.0.3",
+    "husky": "^9.1.7",
     "inspectpack": "^4.7.1",
     "jest": "^29.6.2",
     "jest-fetch-mock": "^3.0.3",
