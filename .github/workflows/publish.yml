@@ -109,18 +109,15 @@ jobs:
       - run: npx changeset version
       - run: node .github/scripts/snapshot-version.mjs beta
 
-      # CJS+ESM only — UMD has a known module-resolution bug after the
-      # snapshot rewrite. Per-package failures are non-fatal here; whatever
-      # builds gets published.
-      - name: Build CJS+ESM per workspace (skip UMD)
+      - name: Build packages
         run: |
-          for pkg in packages/*/; do
-            [ -f "$pkg/package.json" ] || continue
-            ( cd "$pkg" && npm run build:cjs --if-present && npm run build:esm --if-present ) || echo "build failed for $pkg (continuing)"
-          done
+          npm run clean --workspaces --if-present
+          npm run build:cjs --workspaces --if-present
+          npm run build:esm --workspaces --if-present
+          npm run build:umd --workspaces --if-present
 
-      # NPM_CONFIG_IGNORE_SCRIPTS skips each package's prepublishOnly hook
-      # (which would re-run the UMD build and fail).
+      # NPM_CONFIG_IGNORE_SCRIPTS skips each package's prepublishOnly hook,
+      # avoiding duplicate test/build work during publish.
       - run: npx changeset publish --tag beta --no-git-tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -158,12 +155,12 @@ jobs:
       - id: snapshot
         run: node .github/scripts/snapshot-version.mjs pr --pr ${{ inputs.pr-number }}
 
-      - name: Build CJS+ESM per workspace (skip UMD)
+      - name: Build packages
         run: |
-          for pkg in packages/*/; do
-            [ -f "$pkg/package.json" ] || continue
-            ( cd "$pkg" && npm run build:cjs --if-present && npm run build:esm --if-present ) || echo "build failed for $pkg (continuing)"
-          done
+          npm run clean --workspaces --if-present
+          npm run build:cjs --workspaces --if-present
+          npm run build:esm --workspaces --if-present
+          npm run build:umd --workspaces --if-present
 
       - run: npx changeset publish --tag pr --no-git-tag
         env:
