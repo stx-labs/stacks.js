@@ -46,7 +46,7 @@ export class WebCryptoSha2Hash implements Sha2Hash {
       throw new Error(`Unsupported hash algorithm ${algorithm}`);
     }
     try {
-      const hash = await this.subtleCrypto.digest(algo, data as any);
+      const hash = await this.subtleCrypto.digest(algo, data as BufferSource);
       return new Uint8Array(hash);
     } catch (error) {
       console.log(error);

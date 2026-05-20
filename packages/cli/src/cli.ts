@@ -44,7 +44,6 @@ import * as path from 'path';
 import * as process from 'process';
 import * as winston from 'winston';
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const c32check = require('c32check');
 
 import { UserData } from '@stacks/auth';
@@ -466,7 +465,6 @@ async function migrateSubdomains(_network: CLINetworkAdapter, args: string[]): P
   return fetch(migrationURL, options)
     .then(response => {
       if (response.status === 404) {
-        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
         return Promise.reject({
           status: response.status,
           error: response.statusText,
@@ -521,7 +519,6 @@ function balance(_network: CLINetworkAdapter, args: string[]): Promise<string> {
   return fetch(`${url}${ACCOUNT_PATH}/${address}?proof=0`)
     .then(response => {
       if (response.status === 404) {
-        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
         return Promise.reject({
           status: response.status,
           error: response.statusText,
@@ -1257,7 +1254,6 @@ function gaiaDumpBucket(_network: CLINetworkAdapter, args: string[]): Promise<st
             });
             resolve();
           } catch (e) {
-            // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
             reject(e);
           }
         });

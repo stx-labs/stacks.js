@@ -7,7 +7,6 @@ export function encryptBackupPhrase(plaintextBuffer: string, password: string): 
 }
 
 export function decryptBackupPhrase(
-  // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
   dataBuffer: string | Buffer,
   password: string
 ): Promise<string> {

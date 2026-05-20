@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/ban-types */
-
 import { hexToBytes } from '@stacks/common';
 import {
   Cl,

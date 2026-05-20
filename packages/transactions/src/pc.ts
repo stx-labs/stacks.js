@@ -33,7 +33,6 @@ import { parsePostConditionAmount, wireToPostCondition } from './postcondition';
  * Pc.principal('STB44HYPYAT2BB2QE513NSP81HTMYWBJP02HPGK6.mycontract').willSendGte(2000).ft();
  * ```
  */
-// eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
 export function principal(principal: AddressString | ContractIdString) {
   const [address, name] = principal.split('.');
 
