@@ -2,7 +2,7 @@ const webpack = require('webpack');
 const path = require('path');
 
 // Run with ANALYZE ENV to show bundle size (only works with cjs)
-// e.g.: ANALYZE=true lerna run --scope @stacks/wallet-sdk build
+// e.g.: ANALYZE=true npm run build -w @stacks/wallet-sdk
 const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
 const { DuplicatesPlugin } = require('inspectpack/plugin');
 
