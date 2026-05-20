@@ -247,6 +247,7 @@ export function deserializeMemoString(
     ? serialized
     : new BytesReader(serialized);
   let content = bytesToUtf8(bytesReader.readBytes(MEMO_MAX_LENGTH_BYTES));
+  // eslint-disable-next-line no-control-regex -- intentional: strip trailing null bytes
   content = content.replace(/\u0000*$/, ''); // remove all trailing unicode null characters
   return { type: StacksWireType.MemoString, content };
 }

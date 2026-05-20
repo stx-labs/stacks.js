@@ -97,7 +97,7 @@ test.skip('sha2 digest tests', async () => {
       expect(bytesToHex(result512)).toEqual(expected512);
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     const nodeCryptoHasher = new sha2Hash.NodeCryptoSha2Hash(require('crypto').createHash);
     for (const [input, expected256, expected512] of vectors) {
       const result256 = await nodeCryptoHasher.digest(utf8ToBytes(input), 'sha256');
@@ -133,14 +133,14 @@ test('sha2 native digest fallback tests', async () => {
   expect(bytesToHex(result512)).toEqual(expectedOutput512);
 
   // Test Node.js `crypto.createHash` fallback
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const nodeCrypto = require('crypto');
   const createHashOrig = nodeCrypto.createHash;
   nodeCrypto.createHash = () => {
     throw new Error('Artificial broken hash');
   };
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     const nodeCryptoHasher = new sha2Hash.NodeCryptoSha2Hash(require('crypto').createHash);
     const result256 = await nodeCryptoHasher.digest(input, 'sha256');
     expect(bytesToHex(result256)).toEqual(expectedOutput256);
@@ -551,17 +551,17 @@ test('buffer interop', () => {
   const data =
     '1c94d7de0000000304d583f007c71e6e5fef354c046e8c64b1adebd6904dcb007a1222f07313643873455ab2a3ab3819e99d518cc7d33c18bde02494aa74efc35a8970b2007b2fc715f6067cee27f5c92d020b1806b0444994aab80050a6732131d2947a51bacb3952fb9286124b3c2b3196ff7edce66dee0dbd9eb59558e0044bddb3a78f48a66cf8d78bb46bb472bd2d5ec420c831fc384293252459524ee2d668869f33c586a94467d0ce8671260f4cc2e87140c873b6ca79fb86c6d77d134d7beb2018845a9e71e6c7ecdedacd8a676f1f873c5f9c708cc6070642d44d2505aa9cdba26c50ad6f8d3e547fb0cba710a7f7be54ff7ea7e98a809ddee5ef85f6f259b3a17a8d8dbaac618b80fe266a1e63ec19e476bee9177b51894ee';
   const dataShort = data.slice(0, data.length - 1);
-  // eslint-disable-next-line node/prefer-global/buffer
+
   const dataBuffer = Buffer.from(data, 'hex');
   const dataBytes = hexToBytes(data);
 
   expect(dataBytes.byteLength).not.toBe(dataBuffer.byteLength); // Buffer handles odd length hex strings differently than Stacks.js `hexToBytes`
 
-  // eslint-disable-next-line node/prefer-global/buffer
+
   expect(Buffer.from(dataBytes)).not.toEqual(dataBuffer);
 
   expect(dataShort.length).toBe(data.length - 1);
-  // eslint-disable-next-line node/prefer-global/buffer
+
   expect(Buffer.from(dataShort, 'hex')).toEqual(dataBuffer); // On odd length hex strings Buffer.from 'hex' will essentially remove the last string character
 });
 

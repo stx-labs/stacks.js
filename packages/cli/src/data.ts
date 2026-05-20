@@ -3,7 +3,6 @@ import * as URL from 'url';
 import * as crypto from 'crypto';
 import * as jsontokens from 'jsontokens';
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const ZoneFile = require('zone-file');
 
 import { canonicalPrivateKey, getPublicKeyFromPrivateKey } from './utils';

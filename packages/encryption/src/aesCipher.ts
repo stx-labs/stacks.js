@@ -87,15 +87,15 @@ export class WebCryptoAesCipher implements AesCipher {
     }
     const cryptoKey = await this.subtleCrypto.importKey(
       'raw',
-      key as any,
+      key as BufferSource,
       { name: algo, length },
       false,
       ['encrypt']
     );
     const result = await this.subtleCrypto.encrypt(
-      { name: algo, iv: iv as any },
+      { name: algo, iv: iv as BufferSource },
       cryptoKey,
-      data as any
+      data as BufferSource
     );
     return new Uint8Array(result);
   }
@@ -119,15 +119,15 @@ export class WebCryptoAesCipher implements AesCipher {
     }
     const cryptoKey = await this.subtleCrypto.importKey(
       'raw',
-      key as any,
+      key as BufferSource,
       { name: algo, length },
       false,
       ['decrypt']
     );
     const result = await this.subtleCrypto.decrypt(
-      { name: algo, iv: iv as any },
+      { name: algo, iv: iv as BufferSource },
       cryptoKey,
-      data as any
+      data as BufferSource
     );
     return new Uint8Array(result);
   }

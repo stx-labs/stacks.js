@@ -409,5 +409,4 @@ export interface UserSession {
   ): ReturnType<typeof UserSession.prototype.makeAuthRequestToken>;
 }
 
-// eslint-disable-next-line @typescript-eslint/unbound-method
 UserSession.prototype.makeAuthRequest = UserSession.prototype.makeAuthRequestToken;
