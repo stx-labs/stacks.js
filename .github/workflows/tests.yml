@@ -40,7 +40,7 @@ jobs:
         run: npm run madge
 
       - name: Run tests
-        run: npm run lerna run test --stream --parallel -- -- --coverage
+        run: npm run test --workspaces --if-present -- --coverage
 
       - name: Upload test coverage
         uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2
