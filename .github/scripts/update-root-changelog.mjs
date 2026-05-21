@@ -27,7 +27,7 @@ const version = [...versions][0];
 const root = await readFile(ROOT_CHANGELOG, 'utf8');
 const section = renderSection({
   date: new Date().toISOString().slice(0, 10),
-  previousVersion: previousReleaseVersion(root),
+  previousVersion: previousReleaseVersion(root, version),
   version,
   groups: groupByBody(releases),
 });
@@ -95,11 +95,10 @@ function upsertSection(markdown, version, section) {
   return `${markdown.slice(0, firstRelease.index)}${section}${markdown.slice(firstRelease.index)}`;
 }
 
-function previousReleaseVersion(markdown) {
-  const match = /^##\s+\[(\d+\.\d+\.\d+)\]/m.exec(markdown);
-  if (match) return match[1];
-  const plain = /^##\s+(\d+\.\d+\.\d+)/m.exec(markdown);
-  return plain?.[1] ?? 'HEAD';
+function previousReleaseVersion(markdown, version) {
+  const releases = [...markdown.matchAll(/^##\s+(?:\[(\d+\.\d+\.\d+)\]|\d+\.\d+\.\d+)/gm)]
+    .map((match) => match[1] ?? match[0].replace(/^##\s+/, ''));
+  return releases.find((release) => release !== version) ?? 'HEAD';
 }
 
 function git(args) {
