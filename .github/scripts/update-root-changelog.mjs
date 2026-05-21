@@ -5,6 +5,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const ROOT_CHANGELOG = 'CHANGELOG.md';
+const REPO_SLUG = 'stx-labs/stacks.js';
 const PACKAGE_CHANGELOG_RE = /^packages\/[^/]+\/CHANGELOG\.md$/;
 
 const changed = git(['diff', '--name-only', '--', 'packages/*/CHANGELOG.md'])
@@ -24,11 +25,10 @@ if (versions.size !== 1) throw new Error(`Expected one release version, found: $
 
 const version = [...versions][0];
 const root = await readFile(ROOT_CHANGELOG, 'utf8');
-const rootPackage = JSON.parse(await readFile('package.json', 'utf8'));
 const section = renderSection({
+  date: new Date().toISOString().slice(0, 10),
+  previousVersion: previousReleaseVersion(root),
   version,
-  previousVersion: previousRootVersion(root, version),
-  repo: repoSlug(rootPackage),
   groups: groupByBody(releases),
 });
 
@@ -48,7 +48,7 @@ async function readRelease(changelogPath) {
 }
 
 function rootBody(body) {
-  return body
+  const normalized = body
     .replace(/^- Updated dependencies.*:\n(?:  - .+\n?)+/gm, '')
     .replace(/^All notable changes to this project will be documented in this file\.\n?/gm, '')
     .replace(/^See \[Conventional Commits\]\(https:\/\/conventionalcommits\.org\) for commit guidelines\.\n?/gm, '')
@@ -57,6 +57,8 @@ function rootBody(body) {
     .map((block) => block.trim())
     .filter((block) => block && !/^#### .+$/.test(block))
     .join('\n\n');
+
+  return normalized || '**Note:** Updated sibling dependencies only.';
 }
 
 function topRelease(markdown) {
@@ -76,19 +78,16 @@ function groupByBody(releases) {
   }, new Map()).values()];
 }
 
-function renderSection({ version, previousVersion, repo, groups }) {
-  const date = new Date().toISOString().slice(0, 10);
-  const link = previousVersion
-    ? `https://github.com/${repo}/compare/v${previousVersion}...v${version}`
-    : `https://github.com/${repo}/releases/tag/v${version}`;
+function renderSection({ date, previousVersion, version, groups }) {
+  const compare = `https://github.com/${REPO_SLUG}/compare/v${previousVersion}...v${version}`;
   const packages = groups
     .map(({ names, body }) => `### ${names.join(', ')}\n\n${body}`)
     .join('\n\n');
-  return `## [${version}](${link}) (${date})\n\n${packages}\n\n`;
+  return `## [${version}](${compare}) (${date})\n\n${packages}\n\n`;
 }
 
 function upsertSection(markdown, version, section) {
-  const existing = new RegExp(`^## \\[${escapeRegExp(version)}\\][\\s\\S]*?(?=^##\\s+)`, 'm');
+  const existing = new RegExp(`^##(?: \\[${escapeRegExp(version)}\\]| ${escapeRegExp(version)})[\\s\\S]*?(?=^##\\s+)`, 'm');
   if (existing.test(markdown)) return markdown.replace(existing, section);
 
   const firstRelease = /^##\s+/m.exec(markdown);
@@ -96,18 +95,11 @@ function upsertSection(markdown, version, section) {
   return `${markdown.slice(0, firstRelease.index)}${section}${markdown.slice(firstRelease.index)}`;
 }
 
-function previousRootVersion(markdown, currentVersion) {
-  return [...markdown.matchAll(/^##\s+\[?([0-9]+\.[0-9]+\.[0-9][^\]\s]*)\]?/gm)]
-    .map((match) => match[1])
-    .find((version) => version !== currentVersion);
-}
-
-function repoSlug(packageJson) {
-  return (packageJson.repository?.url ?? 'https://github.com/stx-labs/stacks.js.git')
-    .replace(/^git\+/, '')
-    .replace(/^https:\/\/github\.com\//, '')
-    .replace(/^git@github\.com:/, '')
-    .replace(/\.git$/, '');
+function previousReleaseVersion(markdown) {
+  const match = /^##\s+\[(\d+\.\d+\.\d+)\]/m.exec(markdown);
+  if (match) return match[1];
+  const plain = /^##\s+(\d+\.\d+\.\d+)/m.exec(markdown);
+  return plain?.[1] ?? 'HEAD';
 }
 
 function git(args) {
