@@ -47,10 +47,14 @@ The `createNetwork` function is the recommended way to configure custom network 
 #### Basic Usage
 
 ```typescript
-import { createNetwork, STACKS_MAINNET } from '@stacks/network';
+import { createNetwork } from '@stacks/network';
 
 // From a network name string
 const network = createNetwork('mainnet');
+```
+
+```typescript
+import { createNetwork, STACKS_MAINNET } from '@stacks/network';
 
 // From a network constant
 const network = createNetwork(STACKS_MAINNET);
@@ -66,6 +70,10 @@ import { createNetwork } from '@stacks/network';
 
 // Shorthand: pass the API key as the second argument
 const network = createNetwork('mainnet', 'your-api-key-here');
+```
+
+```typescript
+import { createNetwork } from '@stacks/network';
 
 // Using the options object
 const network = createNetwork({
