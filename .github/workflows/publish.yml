@@ -168,7 +168,7 @@ jobs:
           NPM_CONFIG_IGNORE_SCRIPTS: 'true'
 
       - name: Update PR sticky header
-        uses: janniks/pull-request-fixed-header@57bc082ecbd040df344747d5b8644af5fad02c95 # v1.2.0
+        uses: janniks/pull-request-fixed-header@f41837c1d1cee46efb1481db5b6045748202ff09 # v1.3.0
         with:
           header: |
             > This PR was published to npm with the version `${{ steps.snapshot.outputs.version }}` (dist-tag `pr`).
