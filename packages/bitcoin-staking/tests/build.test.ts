@@ -6,7 +6,9 @@ import {
 } from '@stacks/transactions';
 import {
   buildAnnounceL1EarlyExit,
+  buildGrantSignerKey,
   buildRegisterForBond,
+  buildRevokeSignerGrant,
   buildSetupBond,
   buildStakeUpdate,
   buildUnstake,
@@ -38,7 +40,7 @@ function asTuple(cv: ClarityValue): Record<string, ClarityValue> {
 }
 
 describe('buildSetupBond', () => {
-  it('emits an allowlist where each entry has staker / max-sats / max-ustx and includes early-unlock-admin', async () => {
+  it('emits an allowlist where each entry has staker / max-sats and includes early-unlock-admin', async () => {
     const tx = await buildSetupBond({
       bondIndex: 1,
       targetRateBps: 400,
@@ -47,8 +49,8 @@ describe('buildSetupBond', () => {
       earlyUnlockSigners: new Uint8Array([0x00]),
       earlyUnlockAdmin: STAKER,
       allowlist: [
-        { staker: STAKER, maxSats: 100000n, maxUstx: 500000n },
-        { staker: STAKER, maxSats: 200000n, maxUstx: 600000n },
+        { staker: STAKER, maxSats: 100000n },
+        { staker: STAKER, maxSats: 200000n },
       ],
       ...COMMON_TX,
     });
@@ -71,9 +73,8 @@ describe('buildSetupBond', () => {
       const fields = asTuple(entry);
       expect(fields['staker']).toBeDefined();
       expect(fields['max-sats']).toBeDefined();
-      expect(fields['max-ustx']).toBeDefined();
       expect(fields['max-sats'].type).toBe(ClarityType.UInt);
-      expect(fields['max-ustx'].type).toBe(ClarityType.UInt);
+      expect(fields['max-ustx']).toBeUndefined();
     }
   });
 });
@@ -215,12 +216,46 @@ describe('buildUnstakeSbtc', () => {
   });
 });
 
-describe('removed legacy builders', () => {
-  it('does not re-export buildGrantSignerKey', () => {
-    expect((pkg as Record<string, unknown>).buildGrantSignerKey).toBeUndefined();
+describe('buildGrantSignerKey', () => {
+  it('emits grant-signer-key with 4 args in (signer-key, signer-manager, auth-id, signer-sig) order', async () => {
+    const signerKey = new Uint8Array(33).fill(0xaa);
+    const signerSignature = new Uint8Array(65).fill(0xbb);
+    const tx = await buildGrantSignerKey({
+      signerKey,
+      signerManager: SIGNER_MANAGER,
+      authId: 7n,
+      signerSignature,
+      ...COMMON_TX,
+    });
+    const payload = payloadOf(tx);
+    expect(payload.functionName.content).toBe('grant-signer-key');
+    expect(payload.functionArgs).toHaveLength(4);
+    expect(payload.functionArgs[0].type).toBe(ClarityType.Buffer);
+    expect(payload.functionArgs[1].type).toBe(ClarityType.PrincipalContract);
+    expect(payload.functionArgs[2].type).toBe(ClarityType.UInt);
+    expect(payload.functionArgs[3].type).toBe(ClarityType.Buffer);
   });
+});
 
-  it('does not re-export buildRevokeSignerGrant', () => {
-    expect((pkg as Record<string, unknown>).buildRevokeSignerGrant).toBeUndefined();
+describe('buildRevokeSignerGrant', () => {
+  it('emits revoke-signer-grant with 2 args (signer-manager, signer-key)', async () => {
+    const signerKey = new Uint8Array(33).fill(0xaa);
+    const tx = await buildRevokeSignerGrant({
+      signerKey,
+      signerManager: SIGNER_MANAGER,
+      ...COMMON_TX,
+    });
+    const payload = payloadOf(tx);
+    expect(payload.functionName.content).toBe('revoke-signer-grant');
+    expect(payload.functionArgs).toHaveLength(2);
+    expect(payload.functionArgs[0].type).toBe(ClarityType.PrincipalContract);
+    expect(payload.functionArgs[1].type).toBe(ClarityType.Buffer);
+  });
+});
+
+describe('package exports', () => {
+  it('re-exports buildGrantSignerKey and buildRevokeSignerGrant', () => {
+    expect((pkg as Record<string, unknown>).buildGrantSignerKey).toBe(buildGrantSignerKey);
+    expect((pkg as Record<string, unknown>).buildRevokeSignerGrant).toBe(buildRevokeSignerGrant);
   });
 });

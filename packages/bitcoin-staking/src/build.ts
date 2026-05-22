@@ -10,6 +10,8 @@ import type {
   BondLockup,
   BuildAllowContractCallerArgs,
   BuildDisallowContractCallerArgs,
+  BuildGrantSignerKeyTxArgs,
+  BuildRevokeSignerKeyTxArgs,
   BuildSetBondAdminArgs,
   TxParams,
 } from './types';
@@ -71,12 +73,9 @@ export async function buildSetBondAdmin(
  * Restricted to the bond admin (`bond-admin` data-var). Must be called within
  * `BOND_GAP_CYCLES` of the bond's start and before its open height.
  *
- * Each allowlist entry caps a staker by both sats and uSTX (`max-sats`,
- * `max-ustx`). The contract enforces both bounds at `register-for-bond` time.
- *
- * unsure: todo: the 683-byte `earlyUnlockSigners` descriptor format is open.
- * Currently passed through as opaque bytes; the helper in `locking.ts`
- * (`buildEarlyExitUnlockScript`) emits a placeholder M-of-N tail.
+ * Each allowlist entry caps a staker by `max-sats`. The contract enforces this
+ * cap at `register-for-bond` time; the required uSTX side is derived from
+ * `min-ustx-for-sats-amount(max-sats, stx-value-ratio, min-ustx-ratio)`.
  */
 export async function buildSetupBond(
   args: {
@@ -87,7 +86,7 @@ export async function buildSetupBond(
     earlyUnlockSigners: Uint8Array | string;
     /** Stacks principal authorized to call `announce-l1-early-exit` for this bond. */
     earlyUnlockAdmin: string;
-    allowlist: { staker: string; maxSats: IntegerType; maxUstx: IntegerType }[];
+    allowlist: { staker: string; maxSats: IntegerType }[];
   } & TxParams
 ): Promise<StacksTransactionWire> {
   const allowlistCV = Cl.list(
@@ -95,7 +94,6 @@ export async function buildSetupBond(
       Cl.tuple({
         staker: Cl.address(entry.staker),
         'max-sats': Cl.uint(entry.maxSats),
-        'max-ustx': Cl.uint(entry.maxUstx),
       })
     )
   );
@@ -476,6 +474,64 @@ export async function buildClaimRewards(
   return callPox5(
     'claim-rewards',
     [Cl.list(args.bondIndices.map(i => Cl.uint(i))), Cl.uint(args.rewardCycle)],
+    args
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Signer-key grant (SIP-018) builders
+// ---------------------------------------------------------------------------
+
+/**
+ * Build an unsigned `grant-signer-key` transaction.
+ *
+ * Records a SIP-018 grant that authorizes `signerManager` to register
+ * `signerKey` via `register-signer`. The contract:
+ *
+ *  1. Asserts the `(signer-key, signer-manager, auth-id)` triple has not
+ *     previously been consumed (`used-signer-key-grants`) — replay guard.
+ *  2. Recovers the public key from `signerSignature` over the SIP-018
+ *     message hash built by {@link signerKeyGrantMessage}, and asserts it
+ *     equals `signerKey`.
+ *  3. Marks the auth-id used and writes `signer-key-grants[signer-key,
+ *     signer-manager] = true`.
+ *
+ * The signature is generated off-chain by the signer-key holder via
+ * {@link signSignerKeyGrant}.
+ *
+ * On-chain arg order: `(signer-key, signer-manager, auth-id, signer-sig)`.
+ */
+export async function buildGrantSignerKey(
+  args: BuildGrantSignerKeyTxArgs
+): Promise<StacksTransactionWire> {
+  return callPox5(
+    'grant-signer-key',
+    [
+      clBufferFrom(args.signerKey),
+      Cl.address(args.signerManager),
+      Cl.uint(args.authId),
+      clBufferFrom(args.signerSignature),
+    ],
+    args
+  );
+}
+
+/**
+ * Build an unsigned `revoke-signer-grant` transaction.
+ *
+ * Deletes a previously granted `signer-key-grants[signer-key,
+ * signer-manager]` entry. `tx-sender` must be the Stacks principal derived
+ * from `signerKey` (hash160 of the compressed pubkey, network-versioned) —
+ * the contract enforces this and returns `ERR_UNAUTHORIZED` otherwise.
+ *
+ * On-chain arg order: `(signer-manager, signer-key)`.
+ */
+export async function buildRevokeSignerGrant(
+  args: BuildRevokeSignerKeyTxArgs
+): Promise<StacksTransactionWire> {
+  return callPox5(
+    'revoke-signer-grant',
+    [Cl.address(args.signerManager), clBufferFrom(args.signerKey)],
     args
   );
 }

@@ -34,11 +34,24 @@ describe('describePox5Error', () => {
   it('returns undefined for unknown codes', () => {
     expect(describePox5Error(9999)).toBeUndefined();
   });
+
+  it('describes ERR_INVALID_LOCKUP_AMOUNT (45)', () => {
+    const info = describePox5Error(45);
+    expect(info).toBeDefined();
+    expect(info!.code).toBe(45);
+    expect(info!.name).toBe('ERR_INVALID_LOCKUP_AMOUNT');
+    expect(info!.description.length).toBeGreaterThan(0);
+  });
+
+  it('describes ERR_UNAUTHORIZED (1) and ERR_CANNOT_SETUP_BOND_TOO_SOON (2)', () => {
+    expect(describePox5Error(1)?.name).toBe('ERR_UNAUTHORIZED');
+    expect(describePox5Error(2)?.name).toBe('ERR_CANNOT_SETUP_BOND_TOO_SOON');
+  });
 });
 
 describe('Pox5ErrorCode enum', () => {
-  it('has UpdateBondSameSigner = 44', () => {
-    expect(Pox5ErrorCode.UpdateBondSameSigner).toBe(44);
+  it('has InvalidLockupAmount = 45', () => {
+    expect(Pox5ErrorCode.InvalidLockupAmount).toBe(45);
   });
 
   it('every enum value has a corresponding name and description', () => {

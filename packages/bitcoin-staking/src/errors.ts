@@ -7,6 +7,8 @@
  * call.
  */
 export enum Pox5ErrorCode {
+  Unauthorized = 1,
+  CannotSetupBondTooSoon = 2,
   CannotSetupBondTooLate = 3,
   BondAlreadySetup = 4,
   StakerAlreadyAdded = 5,
@@ -43,10 +45,13 @@ export enum Pox5ErrorCode {
   InvalidLockupScript = 42,
   BondAlreadyStarted = 43,
   UpdateBondSameSigner = 44,
+  InvalidLockupAmount = 45,
 }
 
 /** The on-chain Clarity constant name for each error (e.g. `ERR_BOND_NOT_FOUND`). */
 export const POX5_ERROR_NAMES: Record<Pox5ErrorCode, string> = {
+  [Pox5ErrorCode.Unauthorized]: 'ERR_UNAUTHORIZED',
+  [Pox5ErrorCode.CannotSetupBondTooSoon]: 'ERR_CANNOT_SETUP_BOND_TOO_SOON',
   [Pox5ErrorCode.CannotSetupBondTooLate]: 'ERR_CANNOT_SETUP_BOND_TOO_LATE',
   [Pox5ErrorCode.BondAlreadySetup]: 'ERR_BOND_ALREADY_SETUP',
   [Pox5ErrorCode.StakerAlreadyAdded]: 'ERR_STAKER_ALREADY_ADDED',
@@ -83,10 +88,15 @@ export const POX5_ERROR_NAMES: Record<Pox5ErrorCode, string> = {
   [Pox5ErrorCode.InvalidLockupScript]: 'ERR_INVALID_LOCKUP_SCRIPT',
   [Pox5ErrorCode.BondAlreadyStarted]: 'ERR_BOND_ALREADY_STARTED',
   [Pox5ErrorCode.UpdateBondSameSigner]: 'ERR_UPDATE_BOND_SAME_SIGNER',
+  [Pox5ErrorCode.InvalidLockupAmount]: 'ERR_INVALID_LOCKUP_AMOUNT',
 };
 
 /** Human-readable descriptions per error code. */
 export const POX5_ERROR_DESCRIPTIONS: Record<Pox5ErrorCode, string> = {
+  [Pox5ErrorCode.Unauthorized]:
+    'The caller is not authorized for this operation (generic authorization failure).',
+  [Pox5ErrorCode.CannotSetupBondTooSoon]:
+    'Bond setup attempted before the registration window opened (more than `BOND_GAP_CYCLES` reward cycles before bond start).',
   [Pox5ErrorCode.CannotSetupBondTooLate]:
     'Bond setup attempted after the registration window closed.',
   [Pox5ErrorCode.BondAlreadySetup]: 'A bond has already been set up for this bond period.',
@@ -136,6 +146,8 @@ export const POX5_ERROR_DESCRIPTIONS: Record<Pox5ErrorCode, string> = {
   [Pox5ErrorCode.BondAlreadyStarted]: 'A staker tried to register for a bond after it already started.',
   [Pox5ErrorCode.UpdateBondSameSigner]:
     'Cannot call `update-bond-registration` with the same signer.',
+  [Pox5ErrorCode.InvalidLockupAmount]:
+    'The lockup output amount does not match the specified amount of sats.',
 };
 
 /**

@@ -435,7 +435,6 @@ export async function fetchTotalUstxStacked(
  * Returns the staker's allowlisted sats allocation for a bond, or `0n` when
  * the staker is not on the bond's allowlist (no entry => not allowed).
  */
-// TODO: verify protocol-bond-allowances map still exists post-upgrade
 export async function fetchBondAllowance(
   opts: { bondIndex: number; address: string } & NetworkClientParam
 ): Promise<bigint> {
@@ -640,6 +639,95 @@ export async function fetchSignerRewardsPerTokenSettled(
     client: opts.client,
   });
   return BigInt((result as UIntCV).value);
+}
+
+// ---------------------------------------------------------------------------
+// Signer-key grant reads
+// ---------------------------------------------------------------------------
+
+/**
+ * Wraps the contract's `get-signer-info` read-only.
+ *
+ * Returns the signer-key currently registered for `signerManager` (i.e. the
+ * 33-byte compressed secp256k1 pubkey stored in the `signers` map). Returns
+ * `undefined` when no signer is registered for the principal.
+ *
+ * The hex string is the lowercase, un-prefixed compressed pubkey form.
+ */
+export async function fetchSignerInfo(
+  opts: { signerManager: string } & NetworkClientParam
+): Promise<{ signerKey: string } | undefined> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName: 'get-signer-info',
+    functionArgs: [Cl.address(opts.signerManager)],
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+
+  const optional = result as OptionalCV<BufferCV>;
+  if (optional.type === ClarityType.OptionalNone) return undefined;
+  return { signerKey: optional.value.value as string };
+}
+
+/**
+ * Wraps the contract's `verify-signer-key-grant` read-only.
+ *
+ * Returns `true` when an active grant exists in `signer-key-grants` for the
+ * `(signer-key, signer-manager)` pair, `false` otherwise (the contract
+ * returns `(err ERR_SIGNER_KEY_GRANT_NOT_FOUND)` in the absent case — both
+ * branches are normalized to a boolean here).
+ */
+export async function fetchVerifySignerKeyGrant(
+  opts: {
+    signerKey: Uint8Array | string;
+    signerManager: string;
+  } & NetworkClientParam
+): Promise<boolean> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const signerKeyArg =
+    typeof opts.signerKey === 'string' ? Cl.bufferFromHex(opts.signerKey) : Cl.buffer(opts.signerKey);
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName: 'verify-signer-key-grant',
+    functionArgs: [Cl.address(opts.signerManager), signerKeyArg],
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+
+  // Response is `(ok bool)` on success, `(err uint)` on missing grant.
+  return result.type === ClarityType.ResponseOk;
+}
+
+/**
+ * Wraps the contract's `get-signer-grant-message-hash` read-only.
+ *
+ * Returns the 32-byte SIP-018 hash for `{ topic: "grant-authorization",
+ * signer-manager, auth-id }` under the `POX_5_SIGNER_DOMAIN`. Useful as an
+ * on-chain cross-check against {@link getSignerKeyGrantMessageHash}.
+ *
+ * The hex string is lowercase and un-prefixed.
+ */
+export async function fetchSignerGrantMessageHash(
+  opts: { signerManager: string; authId: bigint | number } & NetworkClientParam
+): Promise<string> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName: 'get-signer-grant-message-hash',
+    functionArgs: [Cl.address(opts.signerManager), Cl.uint(opts.authId)],
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+
+  return (result as BufferCV).value as string;
 }
 
 // todo: flow 13 (paired-BTC early exit) — `fetchEarlyExitStatus`.

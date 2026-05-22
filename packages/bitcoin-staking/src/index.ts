@@ -6,6 +6,7 @@ export * from './build';
 export * from './fetch';
 export * from './cycles';
 export * from './errors';
+export * from './signer';
 
 /**
  * ### `BtcAddress.` Bitcoin Address Namespace

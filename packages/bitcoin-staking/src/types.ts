@@ -155,6 +155,44 @@ export interface BuildSetBondAdminArgs {
 }
 
 // ---------------------------------------------------------------------------
+// Signer-key grant (SIP-018) types
+// ---------------------------------------------------------------------------
+
+/**
+ * Inputs to the SIP-018 signer-key grant message hash. Mirrors the args of
+ * pox-5's `get-signer-grant-message-hash` plus the `chain-id` carried in
+ * the `POX_5_SIGNER_DOMAIN`.
+ */
+export interface SignerKeyGrantOptions {
+  /** Stacks principal of the signer-manager contract being authorized. */
+  signerManager: string;
+  /** Replay nonce — must be unique per grant. */
+  authId: bigint | number;
+  /** Stacks chain id (e.g. `1` for mainnet, `0x80000000` for testnet). */
+  chainId: number;
+}
+
+/** Arguments for {@link buildGrantSignerKey} — wraps pox-5 `grant-signer-key`. */
+export interface BuildGrantSignerKeyTxArgs extends TxParams {
+  /** Compressed secp256k1 public key (33 bytes) of the signer. */
+  signerKey: Uint8Array | string;
+  /** Stacks principal of the signer-manager being authorized. */
+  signerManager: string;
+  /** Replay nonce — must match the value signed in the SIP-018 grant. */
+  authId: bigint | number;
+  /** Recoverable secp256k1 signature in RSV order (65 bytes). */
+  signerSignature: Uint8Array | string;
+}
+
+/** Arguments for {@link buildRevokeSignerGrant} — wraps pox-5 `revoke-signer-grant`. */
+export interface BuildRevokeSignerKeyTxArgs extends TxParams {
+  /** Compressed secp256k1 public key (33 bytes) of the signer. */
+  signerKey: Uint8Array | string;
+  /** Stacks principal of the signer-manager whose grant is being revoked. */
+  signerManager: string;
+}
+
+// ---------------------------------------------------------------------------
 // Build function arg types — contract-caller authorization
 // ---------------------------------------------------------------------------
 
