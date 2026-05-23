@@ -428,11 +428,11 @@ export type ContractCallOptions = {
 } & NetworkClientParam;
 
 export interface UnsignedContractCallOptions extends ContractCallOptions {
-  publicKey: PrivateKey;
+  publicKey: PublicKey;
 }
 
 export interface SignedContractCallOptions extends ContractCallOptions {
-  senderKey: PublicKey;
+  senderKey: PrivateKey;
 }
 
 export type UnsignedMultiSigContractCallOptions = ContractCallOptions & UnsignedMultiSigOptions;
