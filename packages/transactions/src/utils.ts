@@ -29,7 +29,13 @@ export const rightPadHexToLength = (hexString: string, length: number): string =
 export const exceedsMaxLengthBytes = (string: string, maxLengthBytes: number): boolean =>
   string ? utf8ToBytes(string).length > maxLengthBytes : false;
 
-/** @internal @deprecated */
+/**
+ * @internal
+ * @deprecated Internal helper. Uses `structuredClone`, which throws on
+ * non-cloneable values such as functions — do not use on user-supplied option
+ * objects that may carry a custom `client.fetch`. Reserved for cloning pure
+ * data (transactions, post-conditions, Clarity values).
+ */
 export function cloneDeep<T>(obj: T): T {
   const cloned = structuredClone(obj);
   // structuredClone strips prototypes; restore the top-level one so class
@@ -40,12 +46,15 @@ export function cloneDeep<T>(obj: T): T {
   return cloned;
 }
 
-// todo: remove this function and instead delete param without clone (if possible)?
-export function omit<T, K extends keyof any>(obj: T, prop: K): Omit<T, K> {
-  const clone = cloneDeep(obj);
-  // @ts-expect-error
-  delete clone[prop];
-  return clone;
+/**
+ * @internal
+ * @deprecated Internal helper. Shallow — returns a new top-level object with
+ * `prop` removed; nested values are shared by reference with `obj`. Callers
+ * must not mutate the result's nested fields.
+ */
+export function omit<T extends object, K extends keyof any>(obj: T, prop: K): Omit<T, K> {
+  const { [prop as keyof T]: _omitted, ...rest } = obj;
+  return rest as Omit<T, K>;
 }
 
 export const hash160 = (input: Uint8Array): Uint8Array => {
