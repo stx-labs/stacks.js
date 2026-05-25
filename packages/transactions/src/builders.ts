@@ -264,7 +264,6 @@ export interface SignedContractDeployOptions extends BaseContractDeployOptions {
 }
 
 /** @deprecated Use {@link SignedContractDeployOptions} or {@link UnsignedContractDeployOptions} instead. */
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface ContractDeployOptions extends SignedContractDeployOptions {}
 
 export type UnsignedMultiSigContractDeployOptions = BaseContractDeployOptions &
@@ -429,11 +428,11 @@ export type ContractCallOptions = {
 } & NetworkClientParam;
 
 export interface UnsignedContractCallOptions extends ContractCallOptions {
-  publicKey: PrivateKey;
+  publicKey: PublicKey;
 }
 
 export interface SignedContractCallOptions extends ContractCallOptions {
-  senderKey: PublicKey;
+  senderKey: PrivateKey;
 }
 
 export type UnsignedMultiSigContractCallOptions = ContractCallOptions & UnsignedMultiSigOptions;

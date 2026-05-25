@@ -32,12 +32,7 @@ export type AddressRepr = { hash160: string; contractName?: string } & (
  * // { version: 22, versionChar: 'P', hash160: '0000000000000000000000000000000000000000', contractName: 'pox' }
  * ```
  */
-export function parse(
-  address:
-    | AddressString
-    // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
-    | ContractIdString
-): Required<AddressRepr> {
+export function parse(address: AddressString | ContractIdString): Required<AddressRepr> {
   const [addr, contractName] = address.split('.');
   const parsed = c32addressDecode(addr);
   return {

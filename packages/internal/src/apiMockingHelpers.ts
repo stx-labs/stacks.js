@@ -34,7 +34,6 @@ export function setApiMocks(responseMap: { [key: string]: any }, mockTxBroadcast
       ...responseMap,
     };
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   fetchMock.mockIf(MATCHER.ALL, (async (request: Request) => {
     const { path } = (request as any)[Object.getOwnPropertySymbols(request)[1]].parsedURL; // may depend on js runtime
 
@@ -102,15 +101,11 @@ export async function waitForBlock(burnBlockId: number, client?: StackingClient)
 
   let current: number;
   for (let i = 1; i <= MAX_ITERATIONS; i++) {
-    try {
-      const poxInfo = await client.getPoxInfo();
-      current = poxInfo?.current_burnchain_block_height as number;
-      if (current && current >= burnBlockId) {
-        console.log(`→ block ${current} reached`);
-        return;
-      }
-    } catch (e: any) {
-      throw e;
+    const poxInfo = await client.getPoxInfo();
+    current = poxInfo?.current_burnchain_block_height as number;
+    if (current && current >= burnBlockId) {
+      console.log(`→ block ${current} reached`);
+      return;
     }
     console.log(`waiting (${i}x) for block ${burnBlockId} (current block: ${current})`);
     await sleep(ITERATION_INTERVAL);
@@ -131,15 +126,11 @@ export async function waitForCycle(cycleId: number, client?: StackingClient) {
 
   let current: number;
   for (let i = 1; i <= MAX_ITERATIONS; i++) {
-    try {
-      const poxInfo = await client.getPoxInfo();
-      current = poxInfo?.reward_cycle_id;
-      if (current && current >= cycleId) {
-        console.log(`→ cycle ${current} reached`);
-        return;
-      }
-    } catch (e: any) {
-      throw e;
+    const poxInfo = await client.getPoxInfo();
+    current = poxInfo?.reward_cycle_id;
+    if (current && current >= cycleId) {
+      console.log(`→ cycle ${current} reached`);
+      return;
     }
     console.log(`waiting (${i}x) for cycle ${cycleId} (current cycle: ${current})`);
     await sleep(ITERATION_INTERVAL);
