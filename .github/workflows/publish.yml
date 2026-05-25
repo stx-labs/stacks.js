@@ -4,21 +4,34 @@ name: publish
 # config for every `@stacks/*` package points at `publish.yml` — renaming this
 # file requires updating that config on npmjs.com per package.
 #
-#   release  — push to main / workflow_dispatch.
-#              changesets/action opens/updates the "chore: version packages"
-#              PR. When that PR is merged, the same action publishes the
-#              bumped packages to npm under `latest`. `commitMode: github-api`
-#              gives commits a Verified badge without signing keys in CI.
+# The "chore: version packages" PR itself is opened/updated by `version.yml`;
+# that workflow never publishes. Only this file publishes to npm.
 #
-#   beta     — push to main.
-#              Snapshot-publishes every push to `@beta`, with versions of the
-#              form `<next-release>-beta.<N>` (counter scoped to the base
-#              version, queried from npm).
+# Triggers (the `target` dispatch input is classified by `validate-dispatch`):
 #
-#   pr       — pull_request.
-#              Same as `beta` but `@pr` dist-tag and versions of the form
-#              `<next-release>-pr.<PR#>.<N>`. Sticky-header'd into the PR
-#              description so reviewers can install the canary build.
+#   release   — auto on push to main where the head commit is "chore: version
+#               packages" (i.e. the version PR was just merged), OR
+#               workflow_dispatch from main with `target` empty.
+#               Publishes the bumped packages to npm under `latest`, pushes
+#               per-package git tags, and creates a GitHub Release per package.
+#               `changeset publish` only publishes versions that aren't already
+#               on npm (npm itself forbids overwriting), so a manual dispatch
+#               here is safe to re-run when a previous release left some
+#               packages unpublished — it'll fill the gaps and no-op for the
+#               rest.
+#
+#   snapshot  — workflow_dispatch with `target=main` (publishes from main as
+#               the `@beta` dist-tag, by convention) or `target=<word>`
+#               (publishes from branch `<word>` as the `@<word>` dist-tag).
+#               Versions look like `<next-release>-<tag>.<N>` where `<tag>`
+#               is the dist-tag and `<N>` is a per-tag counter queried from
+#               npm. Use for ad-hoc previews from a long-lived release branch
+#               (e.g. `next`).
+#
+#   pr        — workflow_dispatch with `target=<PR number>`.
+#               Publishes a `@pr` canary built from that PR. Versions look
+#               like `<next-release>-pr.<PR#>.<N>`. Sticky-header'd into the
+#               PR description so reviewers can install the canary.
 #
 # Forks never reach the publish step (`is-not-fork` gate from pre-run).
 
@@ -33,8 +46,13 @@ on:
 
   workflow_dispatch:
     inputs:
-      pr-number:
-        description: 'PR number to publish a canary build for (leave blank for a normal release dispatch)'
+      target:
+        description: |
+          What to publish.
+          empty           — production release to `latest` (only valid from main)
+          main            — `@beta` snapshot from main
+          <word>          — `@<word>` snapshot from branch `<word>` (lowercase letters/digits, must start with a letter)
+          <PR number>     — `@pr` canary for that PR
         type: string
         required: false
         default: ''
@@ -51,10 +69,55 @@ jobs:
     uses: ./.github/workflows/pre-run.yml
     secrets: inherit
 
+  # Classify the dispatch `target` input into a `kind`:
+  #   release  — empty target (manual production publish)
+  #   pr       — positive integer (PR canary)
+  #   snapshot — lowercase word (`main`, `next`, etc. — published as @<word>,
+  #              with `main` re-mapped to the `@beta` dist-tag in the snapshot
+  #              job itself)
+  # Anything else fails the workflow up front so a publish job never starts
+  # against a typo'd target.
+  validate-dispatch:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    outputs:
+      kind: ${{ steps.classify.outputs.kind }}
+    steps:
+      - id: classify
+        env:
+          TARGET: ${{ inputs.target }}
+        run: |
+          # `pr` and `latest` are reserved dist-tags managed by other code paths
+          # (the `pr` job, and the `release` flow respectively); reject them as
+          # snapshot targets so a typo can't bypass those flows.
+          if [ -z "$TARGET" ]; then
+            kind=release
+          elif printf '%s' "$TARGET" | grep -Eq '^[1-9][0-9]*$'; then
+            kind=pr
+          elif [ "$TARGET" = "pr" ] || [ "$TARGET" = "latest" ]; then
+            echo "::error::target '$TARGET' is a reserved dist-tag; use a PR number for a pr canary, or merge the version PR for a latest release"
+            exit 1
+          elif printf '%s' "$TARGET" | grep -Eq '^[a-z][a-z0-9]*$'; then
+            kind=snapshot
+          else
+            echo "::error::target must be empty, a positive PR number, or a single-word lowercase branch name (e.g. 'next'); got '$TARGET'"
+            exit 1
+          fi
+          if [ "$kind" = "release" ] && [ "$GITHUB_REF_NAME" != "main" ]; then
+            echo "::error::release dispatch (empty target) must run from main; current ref is '$GITHUB_REF_NAME'"
+            exit 1
+          fi
+          echo "Validated target='$TARGET' as kind=$kind"
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+
   release:
     runs-on: ubuntu-latest
-    needs: pre-run
-    if: needs.pre-run.outputs.is-not-fork == 'true' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.pr-number == ''))
+    needs: [pre-run, validate-dispatch]
+    # `!failure() && !cancelled()` lets this job run when `validate-dispatch`
+    # is `skipped` (push trigger), but still blocks on a real failure of
+    # `pre-run` or `validate-dispatch`. `ref_name == 'main'` keeps manual
+    # dispatches from accidentally publishing `latest` from a stale branch.
+    if: "!failure() && !cancelled() && needs.pre-run.outputs.is-not-fork == 'true' && github.ref_name == 'main' && ((github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: version packages')) || (github.event_name == 'workflow_dispatch' && needs.validate-dispatch.outputs.kind == 'release'))"
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -67,24 +130,44 @@ jobs:
 
       - run: npm ci
 
-      - name: Create release PR or publish
+      # `npm run release` runs `npm run build && changeset publish`. We use
+      # changesets/action only as the publish runner — it pushes the per-package
+      # git tags that `changeset publish` creates locally and opens a GitHub
+      # Release per package. No `version:` input: version bumps happen in
+      # `version.yml`, never here. NPM_CONFIG_IGNORE_SCRIPTS skips each
+      # package's prepublishOnly hook (avoids duplicate test/build work and the
+      # partial-publish failure mode we hit on 2026-05-22).
+      - name: Publish
         uses: changesets/action@63a615b9cd06ba9a3e6d13796c7fbcb080a60a0b # v1.8.0
         with:
-          version: npm run version
           publish: npm run release
-          title: 'chore: version packages'
-          commit: 'chore: version packages'
-          commitMode: github-api
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_IGNORE_SCRIPTS: 'true'
 
-  beta:
+  snapshot:
     runs-on: ubuntu-latest
-    needs: pre-run
-    if: needs.pre-run.outputs.is-not-fork == 'true' && github.event_name == 'push'
+    needs: [pre-run, validate-dispatch]
+    if: "needs.pre-run.outputs.is-not-fork == 'true' && needs.validate-dispatch.outputs.kind == 'snapshot'"
     steps:
+      # Map target → (ref to publish from, dist-tag to publish under).
+      # `main` is the canonical beta channel, so it gets the `beta` tag.
+      # Any other word doubles as both the branch and the dist-tag.
+      - id: target
+        env:
+          TARGET: ${{ inputs.target }}
+        run: |
+          if [ "$TARGET" = "main" ]; then
+            echo "ref=main" >> "$GITHUB_OUTPUT"
+            echo "tag=beta" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=$TARGET" >> "$GITHUB_OUTPUT"
+            echo "tag=$TARGET" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ steps.target.outputs.ref }}
           fetch-depth: 0
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -107,7 +190,7 @@ jobs:
           fi
 
       - run: npx changeset version
-      - run: node .github/scripts/snapshot-version.mjs beta
+      - run: node .github/scripts/snapshot-version.mjs ${{ steps.target.outputs.tag }}
 
       - name: Build packages
         run: |
@@ -118,15 +201,15 @@ jobs:
 
       # NPM_CONFIG_IGNORE_SCRIPTS skips each package's prepublishOnly hook,
       # avoiding duplicate test/build work during publish.
-      - run: npx changeset publish --tag beta --no-git-tag
+      - run: npx changeset publish --tag ${{ steps.target.outputs.tag }} --no-git-tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_IGNORE_SCRIPTS: 'true'
 
   pr:
     runs-on: ubuntu-latest
-    needs: pre-run
-    if: needs.pre-run.outputs.is-not-fork == 'true' && github.event_name == 'workflow_dispatch' && inputs.pr-number != ''
+    needs: [pre-run, validate-dispatch]
+    if: "needs.pre-run.outputs.is-not-fork == 'true' && needs.validate-dispatch.outputs.kind == 'pr'"
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -153,7 +236,7 @@ jobs:
 
       - run: npx changeset version
       - id: snapshot
-        run: node .github/scripts/snapshot-version.mjs pr --pr ${{ inputs.pr-number }}
+        run: node .github/scripts/snapshot-version.mjs pr --pr ${{ inputs.target }}
 
       - name: Build packages
         run: |
@@ -173,5 +256,5 @@ jobs:
           header: |
             > This PR was published to npm with the version `${{ steps.snapshot.outputs.version }}` (dist-tag `pr`).
             > e.g. `npm install @stacks/common@${{ steps.snapshot.outputs.version }} --save-exact`
-          pr-number: ${{ inputs.pr-number }}
+          pr-number: ${{ inputs.target }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
