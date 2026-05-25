@@ -26,3 +26,17 @@ jobs:
     needs: pre-run
     uses: ./.github/workflows/tests.yml
     secrets: inherit
+
+  ts-shape:
+    runs-on: ubuntu-latest
+    needs: pre-run
+    if: needs.pre-run.outputs.is-not-fork == 'true'
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - uses: janniks/ts-shape-action@25836a4fa2197ebdf51b248d7aa4847f4815c17b # v1.0.4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
