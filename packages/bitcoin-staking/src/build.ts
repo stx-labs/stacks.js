@@ -276,12 +276,10 @@ export async function buildUnstakeSbtc(
  * Authorization is delegated to the signer-manager contract via
  * `validate-stake!`. The paired-BTC entry is `register-for-bond`.
  *
- * Note: post-patch the signer-manager trait gained a new method
- * `checkpoint-staker`, which pox-5 calls on the *previous* signer-manager
- * during rotation / unstake flows (`stake-update`, `unstake`,
- * `unstake-sbtc`, `update-bond-registration`, `announce-l1-early-exit`).
- * Any signer-manager implementation must implement it; pox-5 ignores its
- * return value.
+ * The signer-manager trait must implement `checkpoint-staker`, which pox-5
+ * calls on the *previous* signer-manager during rotation / unstake flows
+ * (`stake-update`, `unstake`, `unstake-sbtc`, `update-bond-registration`,
+ * `announce-l1-early-exit`); pox-5 ignores its return value.
  */
 export async function buildStake(
   args: {

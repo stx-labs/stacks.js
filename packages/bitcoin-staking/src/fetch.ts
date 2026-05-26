@@ -172,7 +172,7 @@ export async function fetchAccountStatus(
  * the bond's unlock cycle has been reached — the contract collapses both
  * cases to `none`).
  *
- * Post-patch shape: `{ bond-index, amount-ustx, signer, is-l1-lock }`.
+ * Tuple shape: `{ bond-index, amount-ustx, signer, is-l1-lock }`.
  */
 export async function fetchBondMembership(
   opts: { address: string } & NetworkClientParam
@@ -347,7 +347,7 @@ export async function fetchTotalSbtcStakedForBond(
 /**
  * Wraps the contract's `get-total-sbtc-staked` read-only.
  *
- * Returns the protocol-wide total sBTC staked (formerly `total-sats-staked`).
+ * Returns the protocol-wide total sBTC staked.
  */
 export async function fetchTotalSbtcStaked(opts: NetworkClientParam = {}): Promise<bigint> {
   const network = networkFrom(opts.network ?? 'mainnet');
@@ -532,11 +532,10 @@ async function fetchSignerSharesStakedRead(
 }
 
 // ---------------------------------------------------------------------------
-// Earned-rewards reads (post-patch)
+// Earned-rewards reads
 //
-// The old `get-claimable-rewards` 4-field tuple is gone. Pending + accrued is
-// now exposed as a single `get-earned -> uint`, with the underlying state
-// split across `get-signer-rewards-per-token-settled-for-cycle` and
+// Pending + accrued is exposed as `get-earned -> uint`, with the underlying
+// state split across `get-signer-rewards-per-token-settled-for-cycle` and
 // `get-signer-unclaimed-rewards-for-cycle`.
 // ---------------------------------------------------------------------------
 

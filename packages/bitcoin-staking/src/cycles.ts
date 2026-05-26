@@ -90,10 +90,8 @@ export function distributionCycleToBurnHeight(opts: { cycle: number; poxInfo: Po
 /**
  * Mirrors the pox-5.clar `is-in-prepare-phase` read-only function.
  *
- * Post-patch the contract uses `reward-cycle-to-burn-height(next-cycle)`
- * (NOT `reward-cycle-to-unlock-height(next-cycle)`) as the boundary; the
- * prepare phase is the trailing `prepareCycleLength` burn-blocks of the
- * current cycle.
+ * The prepare phase is the trailing `prepareCycleLength` burn-blocks of the
+ * current cycle, bounded by `reward-cycle-to-burn-height(next-cycle)`.
  */
 export function isInPreparePhase(opts: { burnHeight: number; poxInfo: PoxInfo }): boolean {
   if (opts.burnHeight < opts.poxInfo.firstBurnchainBlockHeight) return false;

@@ -20,11 +20,7 @@ export const RESERVE_RATIO_BPS = 1500;
 
 /**
  * Address versions corresponding to the pox-5 contract `pox-addr` tuple.
- *
- * Note: the post-patch pox-5 contract removed `MAX_ADDRESS_VERSION`,
- * `MAX_ADDRESS_VERSION_BUFF_20`, and `MAX_ADDRESS_VERSION_BUFF_32`, so these
- * version values no longer mirror an on-chain check. They are still needed
- * for client-side address parsing in `btc-address.ts`.
+ * Used for client-side address parsing in `btc-address.ts`.
  */
 export enum PoXAddressVersion {
   // Taken from https://github.com/stx-labs/stacks.js/blob/efd2255f979ed64b90ac33246d99cd4809620400/packages/stacking/src/constants.ts#L1-L17

@@ -70,7 +70,7 @@ export interface AccountStatus {
  * the staker has no current bond (the contract returns `none` when the bond's
  * unlock cycle has been reached).
  *
- * Mirrors the post-patch `protocol-bond-memberships` map value
+ * Mirrors the `protocol-bond-memberships` map value
  * `{ bond-index, amount-ustx, signer, is-l1-lock }`.
  */
 export interface BondMembership {
@@ -117,22 +117,13 @@ export interface Bond {
 // ---------------------------------------------------------------------------
 
 /**
- * Earned-rewards amount in micro-STX. Mirrors the post-patch
- * `pox-5.get-earned -> uint` read-only. Kept as an alias for clarity at
- * call sites that previously consumed `RewardsLeg`.
+ * Earned-rewards amount in micro-STX. Mirrors `pox-5.get-earned -> uint`.
  */
 export type EarnedRewards = bigint;
 
 /**
- * Backwards-friendly alias for `EarnedRewards`. The pre-patch `RewardsLeg`
- * was a 4-field tuple; the new contract returns a single `uint`. We keep the
- * name as an alias so other waves can adopt the new shape without churn.
- */
-export type RewardsLeg = EarnedRewards;
-
-/**
  * One entry of the list returned inside `claim-rewards`'s response. Mirrors
- * the post-patch tuple `{ earned, bond-index, rewards-per-token }`.
+ * the tuple `{ earned, bond-index, rewards-per-token }`.
  */
 export interface BondRewardsLeg {
   earned: bigint;
@@ -220,8 +211,7 @@ export interface BuildDisallowContractCallerArgs {
 //
 // NOTE: BTC SPV proof types used by `register-for-bond` live here, but the
 // helpers that *construct* them (parsing tx bytes, computing merkle paths,
-// etc.) live in `locking.ts` (added by Wave 2). The pre-patch `SpendProof`
-// type has been deleted — it didn't match the new contract's proof shape.
+// etc.) live in `locking.ts`.
 
 /**
  * Per-output proof tuple required by `register-for-bond` when committing an
