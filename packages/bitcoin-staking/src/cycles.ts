@@ -112,23 +112,54 @@ export function rewardCycleToUnlockHeight(opts: { cycle: number; poxInfo: PoxInf
   return rewardCycleToBurnHeight(opts) + Math.floor(opts.poxInfo.rewardCycleLength / 2);
 }
 
-/** Mirrors the pox-5.clar `burn-height-to-distribution-index` read-only function. */
+/**
+ * Mirrors the pox-5.clar `burn-height-to-distribution-index` read-only
+ * function (see `references/pox-5.clar:2086`).
+ *
+ * Distribution cycles tick twice per reward cycle —
+ * `distributionCycleLength = rewardCycleLength / 2` is the canonical mainnet
+ * convention. `PoxInfo`-pure: no fetch, no network.
+ */
 export function burnHeightToDistributionIndex(opts: {
   burnHeight: number;
   poxInfo: PoxInfo;
 }): number {
-  return Math.floor(
-    (opts.burnHeight - opts.poxInfo.firstBurnchainBlockHeight) /
-      Math.floor(opts.poxInfo.rewardCycleLength / 2)
-  );
+  const distCycleLength = Math.floor(opts.poxInfo.rewardCycleLength / 2);
+  return Math.floor((opts.burnHeight - opts.poxInfo.firstBurnchainBlockHeight) / distCycleLength);
 }
 
-/** Mirrors the pox-5.clar `distribution-cycle-to-burn-height` read-only function. */
-export function distributionCycleToBurnHeight(opts: { cycle: number; poxInfo: PoxInfo }): number {
-  return (
-    opts.poxInfo.firstBurnchainBlockHeight +
-    opts.cycle * Math.floor(opts.poxInfo.rewardCycleLength / 2)
-  );
+/**
+ * Mirrors the pox-5.clar `current-distribution-cycle` read-only function
+ * (see `references/pox-5.clar:2092-2095`).
+ *
+ * Pure, no fetches — equivalent to
+ * `burnHeightToDistributionIndex({ burnHeight: poxInfo.currentBurnchainBlockHeight, poxInfo })`.
+ * Distribution cycles tick twice per reward cycle (every
+ * `rewardCycleLength / 2` burn blocks). Every caller that needs this
+ * value already has (or fetches) {@link PoxInfo}, so derive locally
+ * instead of paying an extra read-only round-trip.
+ */
+export function currentDistributionCycle(poxInfo: PoxInfo): number {
+  return burnHeightToDistributionIndex({
+    burnHeight: poxInfo.currentBurnchainBlockHeight,
+    poxInfo,
+  });
+}
+
+/**
+ * Mirrors the pox-5.clar `distribution-cycle-to-burn-height` read-only
+ * function (see `references/pox-5.clar:2098`).
+ *
+ * Distribution cycles tick twice per reward cycle —
+ * `distributionCycleLength = rewardCycleLength / 2` is the canonical mainnet
+ * convention. `PoxInfo`-pure: no fetch, no network.
+ */
+export function distributionCycleToBurnHeight(opts: {
+  distributionCycle: number;
+  poxInfo: PoxInfo;
+}): number {
+  const distCycleLength = Math.floor(opts.poxInfo.rewardCycleLength / 2);
+  return opts.poxInfo.firstBurnchainBlockHeight + opts.distributionCycle * distCycleLength;
 }
 
 /**

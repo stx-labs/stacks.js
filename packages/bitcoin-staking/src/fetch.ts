@@ -410,16 +410,19 @@ function decodeBondTuple(bondIndex: number, tuple: TupleCV): Bond {
 /**
  * Wraps the contract's `get-total-sbtc-staked-for-bond` read-only.
  *
- * Reads `protocol-bonds-total-staked`, a **monotonic** registration counter:
- * the contract only ever `++`s it (in `register-for-bond`) and never
- * decrements it on `unstake-sbtc`, `announce-l1-early-exit`, or natural bond
- * closure. The value crystallizes at D0, after which `ERR_BOND_ALREADY_STARTED`
- * gates further registrations.
+ * Reads `protocol-bonds-total-staked`. The contract's only write site is
+ * `register-for-bond`, which sets the entry to
+ * `current(total-shares-staked-for-cycle for this bond) + new sats` — i.e.
+ * a snapshot refreshed on every registration. The source `total-shares-staked-for-cycle`
+ * IS decremented by `unstake-sbtc` and `announce-l1-early-exit`, so during
+ * the D-7 → D0 window the snapshot can rebase off a lower value if exits
+ * land between registrations. After D0, `ERR_BOND_ALREADY_STARTED` blocks
+ * further `register-for-bond` calls and the value is frozen at the last
+ * registration's snapshot.
  *
- * Useful for "how full is this bond's registration window so far" (pre-D0) and
- * "what did this bond launch with" (D0+). For **currently-effective** shares
- * (post-exits, post-unstakes), use
- * {@link fetchTotalSharesStakedForCycle} with `{ index: bondIndex, isBond: true }`.
+ * For **currently-effective** shares (post-exits, post-unstakes), use
+ * {@link fetchTotalSharesStakedForCycle} with
+ * `{ index: bondIndex, isBond: true }`.
  *
  * Returns `0n` when no entry exists.
  */
@@ -453,8 +456,9 @@ export async function fetchTotalSbtcStakedForBond(
  * **Live, mutable.** The contract `++`s this on `register-for-bond` / `stake` /
  * `stake-update`, and `--`s it on `unstake-sbtc`, `announce-l1-early-exit`, and
  * `unstake`. The returned value is therefore the **currently-effective** total
- * — contrast with {@link fetchTotalSbtcStakedForBond}, which is a monotonic
- * cumulative registration counter.
+ * — contrast with {@link fetchTotalSbtcStakedForBond}, which is a snapshot
+ * refreshed on each `register-for-bond` and frozen once the registration
+ * window closes at D0.
  *
  * **Rewards denominator.** This is the denominator the contract uses in its
  * `rewards-per-token` math (`update-rewards` for STX cycles and paired-BTC
@@ -573,26 +577,38 @@ export async function fetchBondAllowance(
 // ---------------------------------------------------------------------------
 
 /**
- * Wraps the contract's `current-distribution-cycle` read-only.
+ * **Intentionally not exposed.** Wraps the contract's
+ * `current-distribution-cycle` read-only.
  *
- * Distribution cycles tick twice per signer reward cycle (every
- * `pox-reward-cycle-length / 2` burn blocks ≈ 1,050 blocks). Zero-indexed at
- * `first-burnchain-block-height`.
+ * The same value is derivable from `/v2/pox`'s
+ * `current_burnchain_block_height` / `first_burnchain_block_height` /
+ * `reward_cycle_length` — use the pure helper `currentDistributionCycle`
+ * (re-exported from `cycles.ts`) instead of paying an extra round trip.
+ *
+ * Kept here for completeness and as a regression guard. Throws at runtime if
+ * called.
+ *
+ * @internal
  */
-export async function fetchCurrentDistributionCycle(
-  opts: NetworkClientParam = {}
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+// @ts-expect-error TS6133: intentionally unused — see JSDoc above
+async function _fetchCurrentDistributionCycle(
+  _opts: NetworkClientParam = {}
 ): Promise<number> {
-  const network = networkFrom(opts.network ?? 'mainnet');
-  const result = await fetchCallReadOnlyFunction({
-    contractAddress: network.bootAddress,
-    contractName: POX5_CONTRACT_NAME,
-    functionName: 'current-distribution-cycle',
-    functionArgs: [],
-    senderAddress: network.bootAddress,
-    network: opts.network,
-    client: opts.client,
-  });
-  return Number((result as UIntCV).value);
+  // Reference implementation (intentionally unreachable):
+  //
+  //   const network = networkFrom(_opts.network ?? 'mainnet');
+  //   const result = await fetchCallReadOnlyFunction({
+  //     contractAddress: network.bootAddress,
+  //     contractName: POX5_CONTRACT_NAME,
+  //     functionName: 'current-distribution-cycle',
+  //     functionArgs: [],
+  //     senderAddress: network.bootAddress,
+  //     network: _opts.network,
+  //     client: _opts.client,
+  //   });
+  //   return Number((result as UIntCV).value);
+  throw new Error('not implemented');
 }
 
 /**
@@ -730,7 +746,9 @@ export async function fetchSignerUnclaimedRewards(
  * read-only.
  *
  * Returns the rewards-per-token value at which this signer's leg was last
- * settled. Useful for off-chain accrual previews.
+ * settled. Useful for off-chain accrual previews. Prefer the sugar variants
+ * {@link fetchSignerRewardsPerTokenSettledByBond} /
+ * {@link fetchSignerRewardsPerTokenSettledByCycle} at call sites.
  */
 export async function fetchSignerRewardsPerTokenSettled(
   opts: {
@@ -750,6 +768,28 @@ export async function fetchSignerRewardsPerTokenSettled(
     client: opts.client,
   });
   return BigInt((result as UIntCV).value);
+}
+
+/**
+ * Wraps `get-signer-rewards-per-token-settled-for-cycle` for a paired-BTC
+ * bond leg. Sugar over {@link fetchSignerRewardsPerTokenSettled} with
+ * `isBond: true`.
+ */
+export async function fetchSignerRewardsPerTokenSettledByBond(
+  opts: { signerManager: string; bondIndex: number } & NetworkClientParam
+): Promise<bigint> {
+  return fetchSignerRewardsPerTokenSettled({ ...opts, index: opts.bondIndex, isBond: true });
+}
+
+/**
+ * Wraps `get-signer-rewards-per-token-settled-for-cycle` for an STX-only
+ * cycle leg. Sugar over {@link fetchSignerRewardsPerTokenSettled} with
+ * `isBond: false`.
+ */
+export async function fetchSignerRewardsPerTokenSettledByCycle(
+  opts: { signerManager: string; rewardCycle: number } & NetworkClientParam
+): Promise<bigint> {
+  return fetchSignerRewardsPerTokenSettled({ ...opts, index: opts.rewardCycle, isBond: false });
 }
 
 // ---------------------------------------------------------------------------
@@ -841,9 +881,12 @@ export async function fetchSignerGrantMessageHash(
   return (result as BufferCV).value as string;
 }
 
-// todo: flow 13 (paired-BTC early exit) — `fetchEarlyExitStatus`.
-// todo: flow 14 (watchdog) — `fetchLockStatus`, `collectSpendProof`.
-// todo: flow 15 (andon cord) — `fetchLastRewardComputeHeight`, `fetchPayoutWindow`.
+// Out of scope for `@stacks/bitcoin-staking`. The surfaces below live
+// upstream of the pox-5 contract (off-chain coordinator service, watchdog
+// indexer, and ops multisig) — not planned for this SDK:
+//   - flow 13 (paired-BTC early exit) — `fetchEarlyExitStatus`
+//   - flow 14 (watchdog) — `fetchLockStatus`, `collectSpendProof`
+//   - flow 15 (andon cord) — `fetchLastRewardComputeHeight`, `fetchPayoutWindow`
 
 /**
  * **Intentionally not exposed.** Wraps the contract's
@@ -860,7 +903,8 @@ export async function fetchSignerGrantMessageHash(
  * @internal
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function fetchFirstPox5RewardCycle(_opts: NetworkClientParam = {}): Promise<number> {
+// @ts-expect-error TS6133: intentionally unused — see JSDoc above
+async function _fetchFirstPox5RewardCycle(_opts: NetworkClientParam = {}): Promise<number> {
   // Reference implementation (intentionally unreachable):
   //
   //   const network = networkFrom(_opts.network ?? 'mainnet');
