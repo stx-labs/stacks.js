@@ -31,13 +31,13 @@ export interface BondPhaseRange {
  * (`first-burnchain-block-height`, `pox-reward-cycle-length`,
  * `pox-prepare-cycle-length`, `first-bond-period-cycle`) that change
  * essentially never after deployment. Snapshot them once via {@link fetchPoxInfo}
- * (and pass `firstBondPeriodCycle` for bond math) and call these locally
- * instead of paying a contract round-trip per query.
+ * and call these locally instead of paying a contract round-trip per query.
  *
  * `first-bond-period-cycle` is not exposed via the contract's `get-pox-info`
- * read-only; derive it from the same {@link PoxInfo} snapshot via
- * {@link firstPox5RewardCycle} — per `pox-5.clar` it equals the pox-5 row's
- * `first-reward-cycle-id`. This module stays pure-math: it never performs I/O.
+ * read-only; bond-math helpers derive it internally from the same
+ * {@link PoxInfo} snapshot via {@link firstPox5RewardCycle} — per `pox-5.clar`
+ * it equals the pox-5 row's `first-reward-cycle-id`. This module stays
+ * pure-math: it never performs I/O.
  */
 
 /**
@@ -68,18 +68,41 @@ export function firstPox5RewardCycle(poxInfo: PoxInfo): number | undefined {
  */
 export const BOND_END_OFFSET_PERIODS = BOND_LENGTH_CYCLES / BOND_GAP_CYCLES;
 
-/** Mirrors the pox-5.clar `bond-period-to-reward-cycle` read-only function. */
-export function bondPeriodToRewardCycle(opts: {
-  bondIndex: number;
-  firstBondPeriodCycle: number;
-}): number {
-  return opts.firstBondPeriodCycle + opts.bondIndex * BOND_GAP_CYCLES;
+/**
+ * Internal: derive `firstBondPeriodCycle` from `poxInfo` or throw if pox-5 has
+ * not yet activated on-chain. Shared by every bond-math helper that needs it.
+ */
+function requireFirstBondPeriodCycle(poxInfo: PoxInfo): number {
+  const cycle = firstPox5RewardCycle(poxInfo);
+  if (cycle === undefined) {
+    throw new Error(
+      'pox-5 not activated yet — no firstBondPeriodCycle available in poxInfo.contractVersions[]'
+    );
+  }
+  return cycle;
 }
 
-/** Mirrors the pox-5.clar `bond-period-to-burn-height` read-only function. */
+/**
+ * Mirrors the pox-5.clar `bond-period-to-reward-cycle` read-only function.
+ *
+ * `firstBondPeriodCycle` is derived internally from `poxInfo` via
+ * {@link firstPox5RewardCycle}; throws if pox-5 has not yet activated on-chain.
+ */
+export function bondPeriodToRewardCycle(opts: {
+  bondIndex: number;
+  poxInfo: PoxInfo;
+}): number {
+  return requireFirstBondPeriodCycle(opts.poxInfo) + opts.bondIndex * BOND_GAP_CYCLES;
+}
+
+/**
+ * Mirrors the pox-5.clar `bond-period-to-burn-height` read-only function.
+ *
+ * `firstBondPeriodCycle` is derived internally from `poxInfo` via
+ * {@link firstPox5RewardCycle}; throws if pox-5 has not yet activated on-chain.
+ */
 export function bondPeriodToBurnHeight(opts: {
   bondIndex: number;
-  firstBondPeriodCycle: number;
   poxInfo: PoxInfo;
 }): number {
   return rewardCycleToBurnHeight({
@@ -202,17 +225,18 @@ export function minUstxForSatsAmount(opts: {
  *
  * The bond-end offset (`BOND_END_OFFSET_PERIODS = 6`) is six bond gaps —
  * `BOND_LENGTH_CYCLES / BOND_GAP_CYCLES` reward cycles.
+ *
+ * `firstBondPeriodCycle` is derived internally from `poxInfo` via
+ * {@link firstPox5RewardCycle}; throws if pox-5 has not yet activated on-chain.
  */
 export function isBondActiveAtHeight(opts: {
   bondIndex: number;
   burnHeight: number;
-  firstBondPeriodCycle: number;
   poxInfo: PoxInfo;
 }): boolean {
   const bondStart = bondPeriodToBurnHeight(opts);
   const bondEnd = bondPeriodToBurnHeight({
     bondIndex: opts.bondIndex + BOND_END_OFFSET_PERIODS,
-    firstBondPeriodCycle: opts.firstBondPeriodCycle,
     poxInfo: opts.poxInfo,
   });
   return opts.burnHeight > bondStart && opts.burnHeight <= bondEnd;
@@ -224,9 +248,9 @@ export function isBondActiveAtHeight(opts: {
  * render a bond timeline (progress bar, phase chips, countdown badges)
  * without re-implementing the height math.
  *
- * `PoxInfo`-pure: no fetches, no network. Thread `firstBondPeriodCycle`
- * explicitly (typically `firstPox5RewardCycle(poxInfo)`) so this helper
- * stays a pure function of its inputs.
+ * `PoxInfo`-pure: no fetches, no network. `firstBondPeriodCycle` is derived
+ * internally from `poxInfo` via {@link firstPox5RewardCycle}; throws if pox-5
+ * has not yet activated on-chain.
  *
  * Phase boundaries (see `notes/api-mock-scenarios.md` for the D-day map):
  * - `announced` ≈ D-30 → D-7 (**convention**, see below)
@@ -258,7 +282,6 @@ export function isBondActiveAtHeight(opts: {
 export function bondPhaseRanges(opts: {
   bondIndex: number;
   poxInfo: PoxInfo;
-  firstBondPeriodCycle: number;
 }): BondPhaseRange[] {
   const { rewardCycleLength } = opts.poxInfo;
   const openBurnHeight = bondPeriodToBurnHeight(opts);

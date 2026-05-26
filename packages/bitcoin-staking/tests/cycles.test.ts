@@ -21,7 +21,7 @@ const POX_INFO: PoxInfo = {
     {
       contractId: 'SP000000000000000000002Q6VF78.pox-5',
       activationBurnchainBlockHeight: 666_050,
-      firstRewardCycleId: 0,
+      firstRewardCycleId: 50,
     },
   ],
 };
@@ -57,11 +57,11 @@ describe('isInPreparePhase', () => {
 });
 
 describe('isBondActiveAtHeight', () => {
-  // firstBondPeriodCycle = 50, bondIndex = 0 ⇒ bondStartCycle = 50.
+  // firstBondPeriodCycle = 50 (derived from POX_INFO.contractVersions[0].firstRewardCycleId),
+  // bondIndex = 0 ⇒ bondStartCycle = 50.
   // bondStartBurn = 666050 + 50 * 2100 = 771_050
   // bondEndCycle = 50 + 6*BOND_GAP_CYCLES (=12) = 62
   // bondEndBurn = 666050 + 62 * 2100 = 796_250
-  const firstBondPeriodCycle = 50;
   const bondIndex = 0;
   const BOND_START = 666_050 + 50 * 2100; // 771_050
   const BOND_END = 666_050 + 62 * 2100; // 796_250
@@ -71,7 +71,6 @@ describe('isBondActiveAtHeight', () => {
       isBondActiveAtHeight({
         bondIndex,
         burnHeight: BOND_START + 1,
-        firstBondPeriodCycle,
         poxInfo: POX_INFO,
       })
     ).toBe(true);
@@ -82,7 +81,6 @@ describe('isBondActiveAtHeight', () => {
       isBondActiveAtHeight({
         bondIndex,
         burnHeight: BOND_START,
-        firstBondPeriodCycle,
         poxInfo: POX_INFO,
       })
     ).toBe(false);
@@ -93,7 +91,6 @@ describe('isBondActiveAtHeight', () => {
       isBondActiveAtHeight({
         bondIndex,
         burnHeight: BOND_END,
-        firstBondPeriodCycle,
         poxInfo: POX_INFO,
       })
     ).toBe(true);
@@ -104,10 +101,16 @@ describe('isBondActiveAtHeight', () => {
       isBondActiveAtHeight({
         bondIndex,
         burnHeight: BOND_END + 1,
-        firstBondPeriodCycle,
         poxInfo: POX_INFO,
       })
     ).toBe(false);
+  });
+
+  it('throws when pox-5 is not yet activated (no pox-5 row in contractVersions)', () => {
+    const preActivation: PoxInfo = { ...POX_INFO, contractVersions: [] };
+    expect(() =>
+      isBondActiveAtHeight({ bondIndex, burnHeight: BOND_START + 1, poxInfo: preActivation })
+    ).toThrow(/pox-5 not activated/);
   });
 });
 
