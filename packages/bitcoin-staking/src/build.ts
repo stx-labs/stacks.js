@@ -420,17 +420,18 @@ export async function buildDisallowContractCaller(
  * via `ERR_INVALID_BOND_PERIOD_ORDERING`), pays each up to its target APY
  * out of accrued sBTC, routes 15% (`RESERVE_RATIO`) of the cycle excess to
  * the reserve, and distributes the remainder pro rata to STX-only stakers.
- * Gated by `current-distribution-cycle ≥ X+250` via the
- * `ERR_DISTRIBUTION_ALREADY_COMPUTED` check on `last-reward-compute-height`.
+ * Gated by `calculation-height > last-reward-compute-height` (where
+ * `calculation-height = distribution-cycle-to-burn-height(current-distribution-cycle) - 1`);
+ * reverts with `ERR_DISTRIBUTION_ALREADY_COMPUTED` otherwise.
  *
  * The `bondPeriods` list must include every active bond at
  * `calculation-height` (`assert-all-active-bonds-included`); pass the full
  * `activeBondIndices` set the dashboard surfaces, not a filtered subset.
  *
  * unsure: todo: whether to expose a client-side ordering helper. Today the caller
- * must pre-sort by descending `stx-value-ratio` (older bond index breaks
- * ties). Could wrap once a fetch helper surfaces per-bond `stx-value-ratio`
- * in a single call.
+ * must pre-sort by descending `stx-value-ratio` (on ties the higher
+ * `bond-index` comes first). Could wrap once a fetch helper surfaces
+ * per-bond `stx-value-ratio` in a single call.
  */
 export async function buildCalculateRewards(
   args: {
@@ -452,10 +453,11 @@ export async function buildCalculateRewards(
  * down per bond. Each `bond-rewards` entry has shape
  * `{ earned, bond-index, rewards-per-token }` — see {@link BondRewardsLeg}.
  * Reverts with `ERR_NO_CLAIMABLE_REWARDS` if every leg is empty — gate on
- * {@link fetchClaimableRewards} first.
+ * {@link fetchEarned} first.
  *
- * `tx-sender` should be the signer-manager (the contract uses
- * `contract-caller` as the signer address).
+ * The signer-manager contract must be the `contract-caller` (the contract
+ * uses `contract-caller` as the signer address); for direct calls this
+ * means `tx-sender` is the signer-manager principal.
  *
  * unsure: todo: `rewardCycle` semantics. Common usage passes
  * `currentDistributionCycle - 1` (claim the cycle the caller just settled

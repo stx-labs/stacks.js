@@ -54,6 +54,15 @@ export async function fetchPoxInfo(opts: NetworkClientParam = {}): Promise<PoxIn
       stakedUstx: BigInt(data.next_cycle.stacked_ustx),
       isPoxActive: data.next_cycle.is_pox_active,
     },
+    contractVersions: ((data.contract_versions ?? []) as Array<{
+      contract_id: string;
+      activation_burnchain_block_height: number;
+      first_reward_cycle_id: number;
+    }>).map(v => ({
+      contractId: v.contract_id,
+      activationBurnchainBlockHeight: v.activation_burnchain_block_height,
+      firstRewardCycleId: v.first_reward_cycle_id,
+    })),
   };
 }
 
@@ -215,8 +224,84 @@ export async function fetchBondMembership(
  * Note: the on-chain arg order is `(staker, is-bond, index, signer)`. The TS
  * helper keeps the more natural `(index, isBond)` ordering for callers and
  * reorders internally.
+ *
+ * For new code, prefer the cleaner {@link fetchStakerSharesStakedByBond} /
+ * {@link fetchStakerSharesStakedByCycle} wrappers, which avoid the `isBond`
+ * flag at the call site.
  */
 export async function fetchStakerSharesStakedForCycle(
+  opts: {
+    staker: string;
+    signer: string;
+    index: number;
+    isBond: boolean;
+  } & NetworkClientParam
+): Promise<bigint> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName: 'get-staker-shares-staked-for-cycle',
+    functionArgs: [
+      Cl.address(opts.staker),
+      Cl.bool(opts.isBond),
+      Cl.uint(opts.index),
+      Cl.address(opts.signer),
+    ],
+    senderAddress: opts.staker,
+    network: opts.network,
+    client: opts.client,
+  });
+
+  return BigInt((result as UIntCV).value);
+}
+
+/**
+ * Wraps the contract's `get-staker-shares-staked-for-cycle` read-only for a
+ * paired-BTC bond.
+ *
+ * Per-staker sats locked in the given bond under the given signer-manager.
+ * Unit: sats.
+ *
+ * Same underlying RO as {@link fetchStakerSharesStakedForCycle}; this shape
+ * exists to make call sites cleaner and self-documenting (no `isBond` flag
+ * to remember at the caller). See {@link fetchSignerSharesStakedByBond} for
+ * the sibling per-signer view.
+ */
+export async function fetchStakerSharesStakedByBond(
+  opts: {
+    staker: string;
+    signer: string;
+    bondIndex: number;
+  } & NetworkClientParam
+): Promise<bigint> {
+  return fetchStakerSharesStakedRead({ ...opts, index: opts.bondIndex, isBond: true });
+}
+
+/**
+ * Wraps the contract's `get-staker-shares-staked-for-cycle` read-only for an
+ * STX-only cycle.
+ *
+ * Per-staker uSTX locked in the given reward cycle under the given
+ * signer-manager. Unit: uSTX.
+ *
+ * Same underlying RO as {@link fetchStakerSharesStakedForCycle}; this shape
+ * exists to make call sites cleaner and self-documenting (no `isBond` flag
+ * to remember at the caller). See {@link fetchSignerSharesStakedByCycle} for
+ * the sibling per-signer view.
+ */
+export async function fetchStakerSharesStakedByCycle(
+  opts: {
+    staker: string;
+    signer: string;
+    rewardCycle: number;
+  } & NetworkClientParam
+): Promise<bigint> {
+  return fetchStakerSharesStakedRead({ ...opts, index: opts.rewardCycle, isBond: false });
+}
+
+/** @ignore */
+async function fetchStakerSharesStakedRead(
   opts: {
     staker: string;
     signer: string;
@@ -325,18 +410,67 @@ function decodeBondTuple(bondIndex: number, tuple: TupleCV): Bond {
 /**
  * Wraps the contract's `get-total-sbtc-staked-for-bond` read-only.
  *
+ * Reads `protocol-bonds-total-staked`, a **monotonic** registration counter:
+ * the contract only ever `++`s it (in `register-for-bond`) and never
+ * decrements it on `unstake-sbtc`, `announce-l1-early-exit`, or natural bond
+ * closure. The value crystallizes at D0, after which `ERR_BOND_ALREADY_STARTED`
+ * gates further registrations.
+ *
+ * Useful for "how full is this bond's registration window so far" (pre-D0) and
+ * "what did this bond launch with" (D0+). For **currently-effective** shares
+ * (post-exits, post-unstakes), use
+ * {@link fetchTotalSharesStakedForCycle} with `{ index: bondIndex, isBond: true }`.
+ *
  * Returns `0n` when no entry exists.
  */
 export async function fetchTotalSbtcStakedForBond(
   opts: { bondIndex: number } & NetworkClientParam
 ): Promise<bigint> {
-  // todo: improvement for api, this could be added to a bond lookup endpoint, then becomes unneeded
   const network = networkFrom(opts.network ?? 'mainnet');
   const result = await fetchCallReadOnlyFunction({
     contractAddress: network.bootAddress,
     contractName: POX5_CONTRACT_NAME,
     functionName: 'get-total-sbtc-staked-for-bond',
     functionArgs: [Cl.uint(opts.bondIndex)],
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+  return BigInt((result as UIntCV).value);
+}
+
+/**
+ * Wraps the contract's `get-total-shares-staked-for-cycle` read-only.
+ *
+ * Polymorphic key `{ is-bond, index }`:
+ * - When `isBond: true`, `index` is a bond-index and the returned uint is in
+ *   sats.
+ * - When `isBond: false`, `index` is a reward-cycle and the returned uint is
+ *   in uSTX.
+ *
+ * The caller is responsible for tracking which unit applies.
+ *
+ * **Live, mutable.** The contract `++`s this on `register-for-bond` / `stake` /
+ * `stake-update`, and `--`s it on `unstake-sbtc`, `announce-l1-early-exit`, and
+ * `unstake`. The returned value is therefore the **currently-effective** total
+ * — contrast with {@link fetchTotalSbtcStakedForBond}, which is a monotonic
+ * cumulative registration counter.
+ *
+ * **Rewards denominator.** This is the denominator the contract uses in its
+ * `rewards-per-token` math (`update-rewards` for STX cycles and paired-BTC
+ * bond legs). A wrong reading here mis-computes earned amounts.
+ *
+ * Returns `0n` when no entry exists.
+ */
+export async function fetchTotalSharesStakedForCycle(
+  opts: { index: number; isBond: boolean } & NetworkClientParam
+): Promise<bigint> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName: 'get-total-shares-staked-for-cycle',
+    functionArgs: [Cl.bool(opts.isBond), Cl.uint(opts.index)],
     senderAddress: network.bootAddress,
     network: opts.network,
     client: opts.client,
@@ -379,28 +513,6 @@ export async function fetchBondL1UnlockHeight(
     contractName: POX5_CONTRACT_NAME,
     functionName: 'get-bond-l1-unlock-height',
     functionArgs: [Cl.uint(opts.bondIndex)],
-    senderAddress: network.bootAddress,
-    network: opts.network,
-    client: opts.client,
-  });
-  return BigInt((result as UIntCV).value);
-}
-
-/**
- * Wraps the contract's `get-first-pox-5-reward-cycle` read-only.
- *
- * Returns the first reward cycle in which pox-5 is active. Callers should use
- * this to anchor bond-period math instead of supplying a constant.
- */
-export async function fetchFirstPox5RewardCycle(
-  opts: NetworkClientParam = {}
-): Promise<bigint> {
-  const network = networkFrom(opts.network ?? 'mainnet');
-  const result = await fetchCallReadOnlyFunction({
-    contractAddress: network.bootAddress,
-    contractName: POX5_CONTRACT_NAME,
-    functionName: 'get-first-pox-5-reward-cycle',
-    functionArgs: [],
     senderAddress: network.bootAddress,
     network: opts.network,
     client: opts.client,
@@ -732,3 +844,35 @@ export async function fetchSignerGrantMessageHash(
 // todo: flow 13 (paired-BTC early exit) — `fetchEarlyExitStatus`.
 // todo: flow 14 (watchdog) — `fetchLockStatus`, `collectSpendProof`.
 // todo: flow 15 (andon cord) — `fetchLastRewardComputeHeight`, `fetchPayoutWindow`.
+
+/**
+ * **Intentionally not exposed.** Wraps the contract's
+ * `get-first-pox-5-reward-cycle` read-only.
+ *
+ * The same value is already on `/v2/pox` at
+ * `contractVersions[].firstRewardCycleId` for the `pox-5` row — derive it
+ * locally with the pure helper {@link firstPox5RewardCycle} (re-exported from
+ * `cycles.ts`) instead of paying an extra round trip.
+ *
+ * Kept here for completeness and as a regression guard. Throws at runtime if
+ * called.
+ *
+ * @internal
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function fetchFirstPox5RewardCycle(_opts: NetworkClientParam = {}): Promise<number> {
+  // Reference implementation (intentionally unreachable):
+  //
+  //   const network = networkFrom(_opts.network ?? 'mainnet');
+  //   const result = await fetchCallReadOnlyFunction({
+  //     contractAddress: network.bootAddress,
+  //     contractName: POX5_CONTRACT_NAME,
+  //     functionName: 'get-first-pox-5-reward-cycle',
+  //     functionArgs: [],
+  //     senderAddress: network.bootAddress,
+  //     network: _opts.network,
+  //     client: _opts.client,
+  //   });
+  //   return Number((result as UIntCV).value);
+  throw new Error('not implemented');
+}

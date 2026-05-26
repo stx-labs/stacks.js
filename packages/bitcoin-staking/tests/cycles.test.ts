@@ -17,6 +17,13 @@ const POX_INFO: PoxInfo = {
   rewardSlots: 4000,
   currentCycle: { id: 10, stakedUstx: 0n, isPoxActive: true },
   nextCycle: { id: 11, stakedUstx: 0n, isPoxActive: true },
+  contractVersions: [
+    {
+      contractId: 'SP000000000000000000002Q6VF78.pox-5',
+      activationBurnchainBlockHeight: 666_050,
+      firstRewardCycleId: 0,
+    },
+  ],
 };
 
 describe('BOND_END_OFFSET_PERIODS', () => {

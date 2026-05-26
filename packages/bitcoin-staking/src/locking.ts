@@ -1,6 +1,6 @@
 import * as btc from '@scure/btc-signer';
 import { sha256 } from '@noble/hashes/sha2.js';
-import { bytesToHex, hexToBytes } from '@stacks/common';
+import { hexToBytes } from '@stacks/common';
 import type { StacksNetwork, StacksNetworkName } from '@stacks/network';
 import { Address } from '@stacks/transactions';
 import {
@@ -485,8 +485,9 @@ export function computeUnlockHeight(opts: {
  *        - floor(rewardCycleLength / 2)
  * ```
  *
- * `firstBondPeriodCycle` should be sourced once from `fetchFirstPox5RewardCycle`
- * (per-deployment constant); see `cycles.ts` for the snapshot guidance.
+ * `firstBondPeriodCycle` should be derived once from the same `PoxInfo`
+ * snapshot via {@link firstPox5RewardCycle} (per-deployment constant); see
+ * `cycles.ts` for the snapshot guidance.
  */
 export function computeBondUnlockHeight(opts: {
   bondIndex: number;
@@ -501,11 +502,3 @@ export function computeBondUnlockHeight(opts: {
   return endBurnHeight - Math.floor(opts.poxInfo.rewardCycleLength / 2);
 }
 
-// ---------------------------------------------------------------------------
-// Re-export helper for ergonomics
-// ---------------------------------------------------------------------------
-
-/** @internal Convenience for callers needing the hex of a built lockup script. */
-export function lockingScriptHex(script: Uint8Array): string {
-  return bytesToHex(script);
-}

@@ -26,6 +26,12 @@ export interface PoxInfo {
   rewardSlots: number;
   currentCycle: CycleInfo;
   nextCycle: CycleInfo;
+  /**
+   * One entry per deployed pox contract version (pox-1, pox-2, …, pox-5).
+   * Sourced from the node's `/v2/pox` `contract_versions[]` field. A row only
+   * appears once that version has been activated on-chain.
+   */
+  contractVersions: PoxContractVersion[];
 }
 
 export interface CycleInfo {
@@ -35,14 +41,26 @@ export interface CycleInfo {
 }
 
 /**
+ * One entry of `/v2/pox`'s `contract_versions[]`. Mirrors the node JSON
+ * `{ contract_id, activation_burnchain_block_height, first_reward_cycle_id }`
+ * shape, camelCased.
+ */
+export interface PoxContractVersion {
+  /** Fully-qualified contract id (e.g. `SP000…0002.pox-5`). */
+  contractId: string;
+  /** Burn-block height at which this contract version became active. */
+  activationBurnchainBlockHeight: number;
+  /** First reward cycle in which this contract version is active. */
+  firstRewardCycleId: number;
+}
+
+/**
  * Lock summary returned by `pox-5.get-staker-info`.
  *
- * The contract's `staker-info` map records the lock dimensions
- * (`amount-ustx`, `first-reward-cycle`, `num-cycles`) plus the staker's
- * `signer` principal. It does NOT carry pool/solo discrimination, signer key,
- * BTC reward address, or unlock-script. Those live in separate maps (e.g.
- * `staker-signer-cycle-memberships`) and are surfaced by their own fetch
- * helpers.
+ * Mirrors the `staker-info` map value
+ * `{ amount-ustx, first-reward-cycle, num-cycles, signer }`. This is the
+ * STX-only stake record — paired-BTC bond memberships live in
+ * `protocol-bond-memberships` and are surfaced by {@link BondMembership}.
  */
 export type StakerInfo = { staked: false } | { staked: true; details: StakerLock };
 
