@@ -1,0 +1,13 @@
+{
+  "results": [
+    {
+      "signer": "SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.signer-manager-1",
+      "signer_key": "03cd2cfdbd2ad9332828a7a13ef62cb999e063421c708e863a7ffed71fb61c88c9",
+      "shares_ustx": "120000000000000",
+      "rewards_per_token_settled": "850000000000000",
+      "unclaimed_rewards": "2900000000",
+      "stakers_count": 18
+    }
+  ],
+  "next_cursor": null
+}

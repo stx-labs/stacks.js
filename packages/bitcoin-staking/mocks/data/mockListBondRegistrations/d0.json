@@ -1,0 +1,45 @@
+{
+  "results": [
+    {
+      "bond_index": 7,
+      "principal": "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKPVKG2CE",
+      "tx_id": "0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "block_height": 867200,
+      "amount_ustx": "50000000000",
+      "amount_sats": "5000000000",
+      "signer": "SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.signer-manager-1",
+      "is_l1_lock": true,
+      "lockup_address": "bc1qexamplep2wshlockupaddressplaceholderxxxxxxxxx",
+      "pox_address": {
+        "version": 4,
+        "hashbytes": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "signer_calldata": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "unlock_burn_height": 894950,
+      "unlock_cycle": 108,
+      "still_locked_l1": true,
+      "early_exit_announced": false
+    },
+    {
+      "bond_index": 7,
+      "principal": "SP1HTBVD3JG9C05J7HBJTHGR0GGW7KXW28M5JS8QE.sbtc-pool",
+      "tx_id": "0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "block_height": 867200,
+      "amount_ustx": "200000000000",
+      "amount_sats": "20000000000",
+      "signer": "SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.signer-manager-1",
+      "is_l1_lock": false,
+      "lockup_address": null,
+      "pox_address": {
+        "version": 4,
+        "hashbytes": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "signer_calldata": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "unlock_burn_height": 894950,
+      "unlock_cycle": 108,
+      "still_locked_l1": true,
+      "early_exit_announced": false
+    }
+  ],
+  "next_cursor": null
+}

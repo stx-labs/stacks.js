@@ -1,0 +1,13 @@
+{
+  "results": [
+    {
+      "principal": "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKPVKG2CE",
+      "signer": "SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.signer-manager-1",
+      "shares_ustx": "50000000000",
+      "amount_ustx": "50000000000",
+      "first_reward_cycle": 96,
+      "num_cycles": 12
+    }
+  ],
+  "next_cursor": null
+}
