@@ -3,14 +3,18 @@
 // `<base>-<tag>.<counter>` (or `<base>-pr.<num>.<counter>`). Run between
 // `changeset version` and `changeset publish --tag <tag>`.
 //
-// Usage: node .github/scripts/snapshot-version.mjs <beta|pr> [--pr <number>]
+// Usage: node .github/scripts/snapshot-version.mjs <tag> [--pr <number>]
+//   <tag>      lowercase npm dist-tag (e.g. beta, next). Becomes the suffix
+//              before the counter: `<base>-<tag>.<N>`.
+//   --pr <n>   required only when <tag> is "pr"; produces `<base>-pr.<n>.<N>`.
 
 import { readFile, writeFile, readdir, appendFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 
 const [tag, , prNumber] = process.argv.slice(2);
-if (!['beta', 'pr'].includes(tag) || (tag === 'pr' && !prNumber)) {
-  console.error('Usage: snapshot-version.mjs <beta|pr> [--pr <number>]');
+const isWord = /^[a-z][a-z0-9]*$/.test(tag || '');
+if (!isWord || (tag === 'pr' && !prNumber)) {
+  console.error('Usage: snapshot-version.mjs <tag> [--pr <number>]   (tag must be a lowercase word; --pr is required when tag is "pr")');
   process.exit(1);
 }
 
@@ -33,7 +37,7 @@ if (!rep) {
   process.exit(1);
 }
 
-const prefix = tag === 'beta' ? `${rep.json.version}-beta.` : `${rep.json.version}-pr.${prNumber}.`;
+const prefix = tag === 'pr' ? `${rep.json.version}-pr.${prNumber}.` : `${rep.json.version}-${tag}.`;
 const version = `${prefix}${nextCounter(rep.json.name, prefix)}`;
 console.log(`Snapshot version: ${version} (base from ${rep.json.name})`);
 
