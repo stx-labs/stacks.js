@@ -18,7 +18,7 @@ import type {
   EarnedRewards,
   PoxInfo,
   StakerInfo,
-} from '../src/types';
+} from '@stacks/bitcoin-staking';
 import { currentMockDay } from './days';
 import * as F from './fixtures';
 
