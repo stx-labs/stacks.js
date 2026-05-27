@@ -122,8 +122,7 @@ export const POX5_ERROR_DESCRIPTIONS: Record<Pox5ErrorCode, string> = {
     'The caller is not authorized to register this signer.',
   [Pox5ErrorCode.NotStaking]: 'The principal is not currently staking.',
   [Pox5ErrorCode.UnstakeInPreparePhase]: 'Unstaking is not allowed during the prepare phase.',
-  [Pox5ErrorCode.InvalidBondPeriodOrdering]:
-    'Bond periods were supplied in an invalid order.',
+  [Pox5ErrorCode.InvalidBondPeriodOrdering]: 'Bond periods were supplied in an invalid order.',
   [Pox5ErrorCode.DistributionAlreadyComputed]:
     'The reward distribution has already been computed for this period.',
   [Pox5ErrorCode.BondNotActive]: 'The bond is not currently active.',
@@ -143,7 +142,8 @@ export const POX5_ERROR_DESCRIPTIONS: Record<Pox5ErrorCode, string> = {
   [Pox5ErrorCode.InvalidMerkleProof]:
     'An incorrect merkle proof was provided as part of a lockup proof.',
   [Pox5ErrorCode.InvalidLockupScript]: 'The output script provided is incorrect.',
-  [Pox5ErrorCode.BondAlreadyStarted]: 'A staker tried to register for a bond after it already started.',
+  [Pox5ErrorCode.BondAlreadyStarted]:
+    'A staker tried to register for a bond after it already started.',
   [Pox5ErrorCode.UpdateBondSameSigner]:
     'Cannot call `update-bond-registration` with the same signer.',
   [Pox5ErrorCode.InvalidLockupAmount]:

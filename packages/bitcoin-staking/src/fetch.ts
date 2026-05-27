@@ -54,11 +54,13 @@ export async function fetchPoxInfo(opts: NetworkClientParam = {}): Promise<PoxIn
       stakedUstx: BigInt(data.next_cycle.stacked_ustx),
       isPoxActive: data.next_cycle.is_pox_active,
     },
-    contractVersions: ((data.contract_versions ?? []) as Array<{
-      contract_id: string;
-      activation_burnchain_block_height: number;
-      first_reward_cycle_id: number;
-    }>).map(v => ({
+    contractVersions: (
+      (data.contract_versions ?? []) as Array<{
+        contract_id: string;
+        activation_burnchain_block_height: number;
+        first_reward_cycle_id: number;
+      }>
+    ).map(v => ({
       contractId: v.contract_id,
       activationBurnchainBlockHeight: v.activation_burnchain_block_height,
       firstRewardCycleId: v.first_reward_cycle_id,
@@ -592,9 +594,7 @@ export async function fetchBondAllowance(
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 // @ts-expect-error TS6133: intentionally unused — see JSDoc above
-async function _fetchCurrentDistributionCycle(
-  _opts: NetworkClientParam = {}
-): Promise<number> {
+async function _fetchCurrentDistributionCycle(_opts: NetworkClientParam = {}): Promise<number> {
   // Reference implementation (intentionally unreachable):
   //
   //   const network = networkFrom(_opts.network ?? 'mainnet');
@@ -840,7 +840,9 @@ export async function fetchVerifySignerKeyGrant(
 ): Promise<boolean> {
   const network = networkFrom(opts.network ?? 'mainnet');
   const signerKeyArg =
-    typeof opts.signerKey === 'string' ? Cl.bufferFromHex(opts.signerKey) : Cl.buffer(opts.signerKey);
+    typeof opts.signerKey === 'string'
+      ? Cl.bufferFromHex(opts.signerKey)
+      : Cl.buffer(opts.signerKey);
   const result = await fetchCallReadOnlyFunction({
     contractAddress: network.bootAddress,
     contractName: POX5_CONTRACT_NAME,
@@ -882,10 +884,7 @@ export async function fetchSignerGrantMessageHash(
 }
 
 // Out of scope for `@stacks/bitcoin-staking`. The surfaces below live
-// upstream of the pox-5 contract (off-chain coordinator service, watchdog
-// indexer, and ops multisig) — not planned for this SDK:
-//   - flow 13 (paired-BTC early exit) — `fetchEarlyExitStatus`
-//   - flow 14 (watchdog) — `fetchLockStatus`, `collectSpendProof`
+// upstream of the pox-5 contract (ops multisig) — not planned for this SDK:
 //   - flow 15 (andon cord) — `fetchLastRewardComputeHeight`, `fetchPayoutWindow`
 
 /**

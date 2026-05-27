@@ -219,8 +219,6 @@ export interface BuildDisallowContractCallerArgs {
   contractCaller: string;
 }
 
-// todo: flow 13 (paired-BTC early exit) — `EarlyExitStatus`.
-// todo: flow 14 (watchdog) — `LockStatus`.
 // todo: flow 15 (andon cord) — `PayoutWindow`.
 
 // ---------------------------------------------------------------------------

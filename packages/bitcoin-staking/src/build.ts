@@ -536,5 +536,4 @@ export async function buildRevokeSignerGrant(
   );
 }
 
-// todo: flow 14 (watchdog spent-report) — `buildReportUtxoSpent`.
 // todo: flow 15 (andon cord) — `buildPausePayout`.

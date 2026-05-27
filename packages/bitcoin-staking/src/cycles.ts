@@ -55,9 +55,7 @@ export interface BondPhaseRange {
  * `activation_burnchain_block_height` is set by the node.
  */
 export function firstPox5RewardCycle(poxInfo: PoxInfo): number | undefined {
-  const entry = poxInfo.contractVersions.find(v =>
-    v.contractId.endsWith(`.${POX5_CONTRACT_NAME}`)
-  );
+  const entry = poxInfo.contractVersions.find(v => v.contractId.endsWith(`.${POX5_CONTRACT_NAME}`));
   return entry?.firstRewardCycleId;
 }
 
@@ -88,10 +86,7 @@ function requireFirstBondPeriodCycle(poxInfo: PoxInfo): number {
  * `firstBondPeriodCycle` is derived internally from `poxInfo` via
  * {@link firstPox5RewardCycle}; throws if pox-5 has not yet activated on-chain.
  */
-export function bondPeriodToRewardCycle(opts: {
-  bondIndex: number;
-  poxInfo: PoxInfo;
-}): number {
+export function bondPeriodToRewardCycle(opts: { bondIndex: number; poxInfo: PoxInfo }): number {
   return requireFirstBondPeriodCycle(opts.poxInfo) + opts.bondIndex * BOND_GAP_CYCLES;
 }
 
@@ -101,10 +96,7 @@ export function bondPeriodToRewardCycle(opts: {
  * `firstBondPeriodCycle` is derived internally from `poxInfo` via
  * {@link firstPox5RewardCycle}; throws if pox-5 has not yet activated on-chain.
  */
-export function bondPeriodToBurnHeight(opts: {
-  bondIndex: number;
-  poxInfo: PoxInfo;
-}): number {
+export function bondPeriodToBurnHeight(opts: { bondIndex: number; poxInfo: PoxInfo }): number {
   return rewardCycleToBurnHeight({
     cycle: bondPeriodToRewardCycle(opts),
     poxInfo: opts.poxInfo,
@@ -279,10 +271,7 @@ export function isBondActiveAtHeight(opts: {
  * `endBurnHeight` is exclusive: `startBurnHeight + length === endBurnHeight`,
  * and the next phase, if any, begins at `endBurnHeight`.
  */
-export function bondPhaseRanges(opts: {
-  bondIndex: number;
-  poxInfo: PoxInfo;
-}): BondPhaseRange[] {
+export function bondPhaseRanges(opts: { bondIndex: number; poxInfo: PoxInfo }): BondPhaseRange[] {
   const { rewardCycleLength } = opts.poxInfo;
   const openBurnHeight = bondPeriodToBurnHeight(opts);
   const closeBurnHeight = openBurnHeight + BOND_LENGTH_CYCLES * rewardCycleLength;

@@ -2,12 +2,7 @@ import { bech32, bech32m } from '@scure/base';
 import { hexToBytes } from '@stacks/common';
 import { base58CheckDecode, base58CheckEncode } from '@stacks/encryption';
 import type { StacksNetwork, StacksNetworkName } from '@stacks/network';
-import {
-  type BufferCV,
-  ClarityType,
-  type ClarityValue,
-  type TupleCV,
-} from '@stacks/transactions';
+import { type BufferCV, ClarityType, type ClarityValue, type TupleCV } from '@stacks/transactions';
 import {
   B58_ADDR_PREFIXES,
   BitcoinNetworkVersion,
@@ -190,4 +185,3 @@ export function stringify(
       throw new Error(`Unexpected address version: ${version}`);
   }
 }
-

@@ -97,4 +97,3 @@ export function verifySignerKeyGrant(
     signature: typeof opts.signature === 'string' ? opts.signature : bytesToHex(opts.signature),
   });
 }
-

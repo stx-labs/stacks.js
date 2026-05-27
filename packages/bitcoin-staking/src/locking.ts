@@ -488,10 +488,7 @@ export function computeUnlockHeight(opts: {
  * `firstBondPeriodCycle` is derived internally from `poxInfo` via
  * `firstPox5RewardCycle`; throws if pox-5 has not yet activated on-chain.
  */
-export function computeBondUnlockHeight(opts: {
-  bondIndex: number;
-  poxInfo: PoxInfo;
-}): number {
+export function computeBondUnlockHeight(opts: { bondIndex: number; poxInfo: PoxInfo }): number {
   const endCycle = bondPeriodToRewardCycle({
     bondIndex: opts.bondIndex + BOND_END_OFFSET_PERIODS,
     poxInfo: opts.poxInfo,
@@ -499,4 +496,3 @@ export function computeBondUnlockHeight(opts: {
   const endBurnHeight = rewardCycleToBurnHeight({ cycle: endCycle, poxInfo: opts.poxInfo });
   return endBurnHeight - Math.floor(opts.poxInfo.rewardCycleLength / 2);
 }
-
