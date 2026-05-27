@@ -16,7 +16,8 @@
     "test": "jest",
     "test:watch": "jest --watch --coverage=false",
     "typecheck": "tsc --noEmit",
-    "typecheck:watch": "npm run typecheck -- --watch"
+    "typecheck:watch": "npm run typecheck -- --watch",
+    "generate-mocks": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"commonjs\",\"moduleResolution\":\"node\",\"target\":\"ES2020\",\"esModuleInterop\":true}' ts-node --transpile-only --skip-project mocks/generate.ts"
   },
   "dependencies": {
     "@noble/hashes": "~2.0.0",
@@ -35,9 +36,22 @@
   "typings": "dist/index.d.ts",
   "main": "dist/index.js",
   "module": "dist/esm/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/index.js"
+    },
+    "./mocks": {
+      "types": "./dist/mocks/index.d.ts",
+      "import": "./dist/esm-mocks/index.js",
+      "require": "./dist/mocks/index.js"
+    }
+  },
   "files": [
     "dist",
-    "src"
+    "src",
+    "mocks"
   ],
   "keywords": [
     "Bitcoin",

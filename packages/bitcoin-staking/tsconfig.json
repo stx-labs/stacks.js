@@ -1,6 +1,9 @@
 {
   "extends": "../../tsconfig.json",
-  "include": ["src/**/*", "tests/**/*"],
+  "compilerOptions": {
+    "resolveJsonModule": true
+  },
+  "include": ["src/**/*", "tests/**/*", "mocks/**/*"],
   "typedocOptions": {
     "entryPoints": ["src/index.ts"]
   }
