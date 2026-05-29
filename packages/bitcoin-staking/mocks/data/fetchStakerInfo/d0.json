@@ -1,0 +1,9 @@
+{
+  "staked": true,
+  "details": {
+    "amountUstx": "50000000000",
+    "firstRewardCycle": 96,
+    "numCycles": 12,
+    "signer": "SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.signer-manager-1"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "id": 102,
+  "is_pox_active": true,
+  "staked_ustx": "425000000000000",
+  "total_shares_ustx": "425000000000000",
+  "rewards_per_token_ustx": "850000000000000",
+  "ustx_delegated_total": "425000000000000",
+  "is_in_prepare_phase": false,
+  "prepare_phase_start_burn_height": 882250,
+  "prepare_phase_end_burn_height": 882350,
+  "cycle_start_burn_height": 880250,
+  "cycle_end_burn_height": 882350,
+  "distribution_cycles": [
+    204,
+    205
+  ],
+  "signers_count": 24
+}
