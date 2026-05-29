@@ -274,13 +274,15 @@ import {
   buildCalculateRewards,
   fetchClaimableRewards,
   fetchNewRewards,
-  fetchCurrentDistributionCycle,
+  fetchPoxInfo,
+  currentDistributionCycle,
 } from '@stacks/bitcoin-staking';
 
 async function signerClaimWeekly() {
   const network = 'mainnet';
 
-  const distCycle = await fetchCurrentDistributionCycle({ network });       // [OK]
+  const poxInfo = await fetchPoxInfo({ network });                          // [OK]
+  const distCycle = currentDistributionCycle(poxInfo);                      // [OK]
   const newRewards = await fetchNewRewards({ network });                    // [OK]
 
   // Trigger the per-cycle reward calculation if not yet done.
