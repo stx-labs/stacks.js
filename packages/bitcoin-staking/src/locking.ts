@@ -10,7 +10,7 @@ import {
   rewardCycleToUnlockHeight,
 } from './cycles';
 import { networkNameFrom } from './network';
-import type { PoxInfo } from './types';
+import type { BondL1LockupOutput, PoxInfo } from './types';
 
 const REGTEST_NETWORK = { bech32: 'bcrt', pubKeyHash: 111, scriptHash: 196, wif: 239 };
 
@@ -452,6 +452,120 @@ export function computeBitcoinTxid(rawTx: Uint8Array): Uint8Array {
   const out = new Uint8Array(outer.length);
   for (let i = 0; i < outer.length; i++) out[i] = outer[outer.length - 1 - i];
   return out;
+}
+
+/** @ignore Byte-reverse a 32-byte hash (display ⇄ internal little-endian). */
+function reverse32(bytes: Uint8Array): Uint8Array {
+  const out = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) out[i] = bytes[bytes.length - 1 - i];
+  return out;
+}
+
+/** @ignore Constant-no-frills byte equality. */
+function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+/**
+ * Indexer merkle-proof response, as returned by Esplora-compatible APIs
+ * (`GET /tx/:txid/merkle-proof` on Blockstream / mempool.space). `merkle` holds
+ * the sibling hashes in **display (big-endian)** order — {@link assembleLockupProof}
+ * reverses them to the internal little-endian form the contract expects.
+ */
+export interface EsploraMerkleProof {
+  /** BTC block height containing the tx. */
+  block_height: number;
+  /** Sibling hashes (display/big-endian hex) along the path leaf → root, bottom-up. */
+  merkle: string[];
+  /** 0-indexed position of the tx within the block. */
+  pos: number;
+}
+
+/**
+ * Normalize a set of already-fetched indexer responses into the
+ * {@link BondL1LockupOutput} tuple `register-for-bond` expects for one L1
+ * lockup output. Pure — performs no network I/O; the caller fetches.
+ *
+ * This deliberately stops short of *building* a proof (parsing a raw block,
+ * rebuilding the merkle tree): an Esplora-compatible indexer already does that.
+ * What it does absorb are the two transformations that silently produce
+ * `ERR_INVALID_MERKLE_PROOF` / `ERR_READ_TX_OUT_OF_BOUNDS` when done by hand:
+ *
+ * 1. **Witness stripping.** `txHex` from `GET /tx/:txid/hex` is the segwit
+ *    serialization (it hashes to the `wtxid`, which is *not* in the merkle
+ *    tree). The witness is removed via `@scure/btc-signer` so the stored bytes
+ *    are the legacy serialization that hashes to the txid.
+ * 2. **Endianness.** Indexer sibling hashes are display/big-endian; the
+ *    contract folds over internal little-endian hashes. Each is reversed.
+ *
+ * The lockup output is located by matching `expectedScript` (the P2WSH
+ * `scriptPubKey` from {@link buildLockupP2wshOutputScript}) against the tx's
+ * outputs — the same equality the contract asserts — and its sats `amount` is
+ * read from the decoded output, so a stale caller-supplied amount can't drift.
+ *
+ * @example
+ * ```ts
+ * const expectedScript = buildLockupP2wshOutputScript({ stxAddress, unlockHeight, unlockBytes, earlyUnlockBytes });
+ * const output = assembleLockupProof({
+ *   txHex: await (await fetch(`${esplora}/tx/${txid}/hex`)).text(),
+ *   header: await (await fetch(`${esplora}/block/${blockHash}/header`)).text(),
+ *   merkleProof: await (await fetch(`${esplora}/tx/${txid}/merkle-proof`)).json(),
+ *   txCount: (await (await fetch(`${esplora}/block/${blockHash}`)).json()).tx_count,
+ *   expectedScript,
+ * });
+ * // → buildRegisterForBond({ lockup: { kind: 'btc', outputs: [output], unlockBytes }, ... })
+ * ```
+ */
+export function assembleLockupProof(input: {
+  /** Raw tx hex (`GET /tx/:txid/hex`). May be segwit-serialized; the witness is stripped. */
+  txHex: string;
+  /** 80-byte block header (`GET /block/:hash/header`), hex or bytes. */
+  header: Uint8Array | string;
+  /** Esplora-compatible merkle-proof response (`GET /tx/:txid/merkle-proof`). */
+  merkleProof: EsploraMerkleProof;
+  /** Total tx count in the block (`GET /block/:hash` → `tx_count`). */
+  txCount: number;
+  /** Expected P2WSH `scriptPubKey` (34 bytes) — see {@link buildLockupP2wshOutputScript}. */
+  expectedScript: Uint8Array | string;
+}): BondL1LockupOutput {
+  const tx = btc.Transaction.fromRaw(hexToBytes(input.txHex), {
+    allowUnknownOutputs: true,
+    disableScriptCheck: true,
+  });
+  // (withScriptSig, withWitness=false) → legacy bytes that hash to the txid.
+  const legacy = tx.toBytes(true, false);
+
+  const expectedScript =
+    typeof input.expectedScript === 'string'
+      ? hexToBytes(input.expectedScript)
+      : input.expectedScript;
+
+  let outputIndex = -1;
+  let amount = 0n;
+  for (let i = 0; i < tx.outputsLength; i++) {
+    const output = tx.getOutput(i);
+    if (output.script && bytesEqual(output.script, expectedScript)) {
+      outputIndex = i;
+      amount = output.amount ?? 0n;
+      break;
+    }
+  }
+  if (outputIndex === -1) {
+    throw new Error('assembleLockupProof: no output matches the expected lockup script');
+  }
+
+  return {
+    height: input.merkleProof.block_height,
+    tx: serializeBitcoinTx(legacy),
+    outputIndex,
+    header: serializeBitcoinHeader(input.header),
+    leafHashes: input.merkleProof.merkle.map(h => reverse32(hexToBytes(h))),
+    txCount: input.txCount,
+    txIndex: input.merkleProof.pos,
+    amount,
+  };
 }
 
 // ---------------------------------------------------------------------------
