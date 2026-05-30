@@ -209,9 +209,23 @@ class PartialPcFtWithCode {
    * ### Fungible Token Post Condition
    * ⚠ Amount of fungible tokens is denoted in the smallest unit of the token
    */
-  ft(contractId: ContractIdString, tokenName: string): FungiblePostCondition {
-    // todo: allow taking one arg (`Asset`) as well, overload
+  /**
+   * ### Fungible Token Post Condition
+   * ⚠ Amount of fungible tokens is denoted in the smallest unit of the token
+   * @param asset - The asset identifier of the fungible token. Formatted as `<contract-address>.<contract-name>::<token-name>`.
+   */
+  ft(asset: AssetString): FungiblePostCondition;
+  /**
+   * ### Fungible Token Post Condition
+   * ⚠ Amount of fungible tokens is denoted in the smallest unit of the token
+   * @param contractId - The contract identifier of the fungible token. Formatted as `<contract-address>.<contract-name>`.
+   * @param tokenName - The name of the fungible token asset.
+   */
+  ft(contractId: ContractIdString, tokenName: string): FungiblePostCondition;
+  ft(...args: [AssetString] | [ContractIdString, string]): FungiblePostCondition {
+    const asset: AssetString = args.length === 1 ? args[0] : `${args[0]}::${args[1]}`;
 
+    const [contractId] = asset.split('::') as [ContractIdString, ...string[]];
     const [address, name] = contractId.split('.');
     if (!address || !validateStacksAddress(address) || (typeof name === 'string' && !name)) {
       throw new Error(`Invalid contract id: ${contractId}`);
@@ -222,7 +236,7 @@ class PartialPcFtWithCode {
       address: this.address,
       condition: this.code,
       amount: parsePostConditionAmount(this.amount).toString(),
-      asset: `${contractId}::${tokenName}`,
+      asset,
     };
   }
 }
