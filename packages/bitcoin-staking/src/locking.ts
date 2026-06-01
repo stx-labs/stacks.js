@@ -1,6 +1,6 @@
 import * as btc from '@scure/btc-signer';
 import { sha256 } from '@noble/hashes/sha2.js';
-import { hexToBytes } from '@stacks/common';
+import { bytesToHex, hexToBytes } from '@stacks/common';
 import type { StacksNetwork, StacksNetworkName } from '@stacks/network';
 import { Address } from '@stacks/transactions';
 import {
@@ -446,18 +446,27 @@ export function serializeBitcoinHeader(header: Uint8Array | string): Uint8Array 
  * `get-reversed-txid` value.
  */
 export function computeBitcoinTxid(rawTx: Uint8Array): Uint8Array {
-  const inner = sha256(rawTx);
-  const outer = sha256(inner);
   // Reverse to big-endian display form.
-  const out = new Uint8Array(outer.length);
-  for (let i = 0; i < outer.length; i++) out[i] = outer[outer.length - 1 - i];
-  return out;
+  return reverse32(sha256d(rawTx));
+}
+
+/** @ignore Bitcoin double-SHA256 (`sha256(sha256(x))`), internal byte order. */
+function sha256d(bytes: Uint8Array): Uint8Array {
+  return sha256(sha256(bytes));
 }
 
 /** @ignore Byte-reverse a 32-byte hash (display ⇄ internal little-endian). */
 function reverse32(bytes: Uint8Array): Uint8Array {
   const out = new Uint8Array(bytes.length);
   for (let i = 0; i < bytes.length; i++) out[i] = bytes[bytes.length - 1 - i];
+  return out;
+}
+
+/** @ignore Concatenate two byte arrays. */
+function concatBytes(a: Uint8Array, b: Uint8Array): Uint8Array {
+  const out = new Uint8Array(a.length + b.length);
+  out.set(a);
+  out.set(b, a.length);
   return out;
 }
 
@@ -566,6 +575,98 @@ export function assembleLockupProof(input: {
     txIndex: input.merkleProof.pos,
     amount,
   };
+}
+
+/**
+ * Compute the merkle branch — the sibling hashes from leaf → root, bottom-up —
+ * for the tx at `pos` in a block whose ordered txid list is `txids` (display/
+ * big-endian hex, e.g. bitcoind `getblock` verbosity 1's `tx` array). Returns
+ * the siblings in **display order**, exactly the shape of
+ * {@link EsploraMerkleProof.merkle}, so it's a drop-in replacement for the
+ * `merkle` field when no Esplora `/merkle-proof` endpoint is available.
+ *
+ * Standard Bitcoin merkle construction, folded over internal little-endian
+ * hashes (hence the reversals): odd rows duplicate their last node, and each
+ * parent is `sha256(sha256(left ‖ right))`. The sibling encountered at each
+ * level along the path to the root *is* the proof.
+ */
+export function computeMerkleBranch(txids: string[], pos: number): string[] {
+  if (pos < 0 || pos >= txids.length) {
+    throw new Error(`computeMerkleBranch: pos ${pos} out of range (0..${txids.length - 1})`);
+  }
+  let level = txids.map(id => reverse32(hexToBytes(id))); // display → internal
+  let index = pos;
+  const siblings: Uint8Array[] = [];
+  while (level.length > 1) {
+    if (level.length % 2 === 1) level.push(level[level.length - 1]); // duplicate last
+    siblings.push(level[index ^ 1]);
+    const next: Uint8Array[] = [];
+    for (let i = 0; i < level.length; i += 2) {
+      next.push(sha256d(concatBytes(level[i], level[i + 1])));
+    }
+    level = next;
+    index = Math.floor(index / 2);
+  }
+  return siblings.map(s => bytesToHex(reverse32(s))); // internal → display
+}
+
+/**
+ * {@link assembleLockupProof} for callers WITHOUT an Esplora `/merkle-proof`
+ * endpoint — e.g. driving bitcoind directly. Given the block's ordered txid
+ * list (`getblock` verbosity 1 → `tx`), it derives the tx's position, rebuilds
+ * the merkle branch ({@link computeMerkleBranch}), and reads `txCount` from the
+ * list, then delegates to {@link assembleLockupProof} (so witness-stripping,
+ * output matching, and endianness are all the same single implementation).
+ *
+ * The tx's position is found by hashing `txHex` to its txid (witness stripped,
+ * so it matches the block's txid list) rather than trusting a caller-supplied
+ * index.
+ *
+ * @example
+ * ```ts
+ * const block = await rpc('getblock', [blockHash, 1]); // { height, tx, nTx }
+ * const output = assembleLockupProofFromBlock({
+ *   txHex: (await rpc('gettransaction', [txid, null, true])).hex,
+ *   header: await rpc('getblockheader', [blockHash, false]),
+ *   blockHeight: block.height,
+ *   txids: block.tx,
+ *   expectedScript: buildLockupP2wshOutputScript({ ... }),
+ * });
+ * ```
+ */
+export function assembleLockupProofFromBlock(input: {
+  /** Raw tx hex (segwit serialization is fine; the witness is stripped). */
+  txHex: string;
+  /** 80-byte block header, hex or bytes. */
+  header: Uint8Array | string;
+  /** Height of the block containing the tx. */
+  blockHeight: number;
+  /** Block's ordered txid list (display/big-endian hex), `getblock` v1 `tx`. */
+  txids: string[];
+  /** Expected P2WSH `scriptPubKey` — see {@link buildLockupP2wshOutputScript}. */
+  expectedScript: Uint8Array | string;
+}): BondL1LockupOutput {
+  const tx = btc.Transaction.fromRaw(hexToBytes(input.txHex), {
+    allowUnknownOutputs: true,
+    disableScriptCheck: true,
+  });
+  const txid = bytesToHex(computeBitcoinTxid(tx.toBytes(true, false)));
+  const pos = input.txids.indexOf(txid);
+  if (pos === -1) {
+    throw new Error(`assembleLockupProofFromBlock: txid ${txid} not found in the block's txids`);
+  }
+
+  return assembleLockupProof({
+    txHex: input.txHex,
+    header: input.header,
+    txCount: input.txids.length,
+    expectedScript: input.expectedScript,
+    merkleProof: {
+      block_height: input.blockHeight,
+      merkle: computeMerkleBranch(input.txids, pos),
+      pos,
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 import type { IntegerType } from '@stacks/common';
 import type { StacksNetwork, StacksNetworkName } from '@stacks/network';
+import type { PostCondition, PostConditionModeName } from '@stacks/transactions';
 
 // ---------------------------------------------------------------------------
 // Tx-level params (shared by all build*Tx functions)
@@ -10,6 +11,15 @@ export interface TxParams {
   fee: IntegerType;
   nonce: IntegerType;
   network: StacksNetworkName | StacksNetwork;
+  /**
+   * Post-conditions to attach. Required for calls that move assets *from the
+   * caller* under the default deny mode — notably `register-for-bond` with an
+   * sBTC lockup, whose `lock-sbtc` transfers sBTC from the caller (an
+   * uncovered transfer otherwise aborts with `abort_by_post_condition`).
+   */
+  postConditions?: PostCondition[];
+  /** Post-condition mode. Defaults to the wire default (`deny`). */
+  postConditionMode?: PostConditionModeName;
 }
 
 // ---------------------------------------------------------------------------

@@ -44,6 +44,8 @@ async function callPox5(
     fee: tx.fee,
     nonce: tx.nonce,
     network: tx.network,
+    ...(tx.postConditions ? { postConditions: tx.postConditions } : {}),
+    ...(tx.postConditionMode ? { postConditionMode: tx.postConditionMode } : {}),
   });
 }
 
@@ -144,6 +146,27 @@ export function buildRegisterForBond(
     signerCalldata?: Uint8Array | string;
   } & TxParams
 ): Promise<StacksTransactionWire> {
+  // NOTE: the `kind: 'sbtc'` lockup makes `lock-sbtc` transfer sBTC FROM the
+  // caller, which the default deny mode aborts unless covered — pass an explicit
+  // `postConditions` (sBTC contract is deploy-configured, so it's caller-supplied).
+  //
+  // TODO(sbtc-default-pc): once the sBTC token contract is finalized per network,
+  // attach this post-condition by DEFAULT here (keyed by network) so callers on
+  // mainnet don't have to. Skip when the caller already supplied `postConditions`.
+  // Something like:
+  //
+  //   let postConditions = args.postConditions;
+  //   if (args.lockup.kind === 'sbtc' && postConditions === undefined) {
+  //     const sender = getAddressFromPublicKey(args.publicKey, args.network);
+  //     const sbtcContract = SBTC_TOKEN_CONTRACT[networkName(args.network)]; // hardcoded per network
+  //     postConditions = [
+  //       Pc.principal(sender).willSendEq(args.lockup.sbtcSats).ft(sbtcContract, SBTC_ASSET_NAME),
+  //     ];
+  //   }
+  //   return callPox5('register-for-bond', [...], { ...args, postConditions });
+  //
+  // Not done now: the sBTC token principal still changes (deploy-configured on
+  // testnet/regtest), so hardcoding it would be wrong.
   return callPox5(
     'register-for-bond',
     [
