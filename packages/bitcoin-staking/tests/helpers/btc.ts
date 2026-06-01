@@ -31,15 +31,16 @@ export const getBlockHash = (height: number) => bitcoinRpc<string>('getblockhash
 
 export const getBestBlockHash = () => bitcoinRpc<string>('getbestblockhash');
 
-export const getNewAddress = (wallet: string, label = '') =>
+// Wallet RPCs default to the `main` (mining-funded) wallet — the only one tests use.
+export const getNewAddress = (label = '', wallet = 'main') =>
   bitcoinRpc<string>('getnewaddress', [label], wallet);
 
-export const getBalance = (wallet: string) => bitcoinRpc<number>('getbalance', [], wallet);
+export const getBalance = (wallet = 'main') => bitcoinRpc<number>('getbalance', [], wallet);
 
-export const getReceivedByAddress = (wallet: string, address: string, minconf = 0) =>
+export const getReceivedByAddress = (address: string, minconf = 0, wallet = 'main') =>
   bitcoinRpc<number>('getreceivedbyaddress', [address, minconf], wallet);
 
-export const sendToAddress = (wallet: string, address: string, amountBtc: number) =>
+export const sendToAddress = (address: string, amountBtc: number, wallet = 'main') =>
   bitcoinRpc<string>('sendtoaddress', [address, amountBtc], wallet);
 
 // ---------------------------------------------------------------------------
@@ -65,7 +66,7 @@ interface BlockV1 {
 }
 
 /** Wallet view of a tx (raw hex + which block confirmed it). */
-export const getWalletTransaction = (wallet: string, txid: string) =>
+export const getWalletTransaction = (txid: string, wallet = 'main') =>
   bitcoinRpc<WalletTx>('gettransaction', [txid, null, true], wallet);
 
 /** Raw 80-byte block header hex. */
@@ -83,8 +84,8 @@ export const getBlockV1 = (blockHash: string) => bitcoinRpc<BlockV1>('getblock',
  * `assembleLockupProofFromBlock({ ...inputs, expectedScript })`.
  */
 export async function getBtcTxProofInputs(
-  wallet: string,
-  txid: string
+  txid: string,
+  wallet = 'main'
 ): Promise<{
   txHex: string;
   header: string;
@@ -92,9 +93,9 @@ export async function getBtcTxProofInputs(
   blockHeight: number;
   blockHash: string;
 }> {
-  const walletTx = await getWalletTransaction(wallet, txid);
+  const walletTx = await getWalletTransaction(txid, wallet);
   if (!walletTx.blockhash || walletTx.confirmations < 1) {
-    throw new Error(`tx ${txid} not confirmed yet (confirmations=${walletTx.confirmations})`);
+    throw `tx ${txid} not confirmed yet (confirmations=${walletTx.confirmations})`;
   }
   const blockHash = walletTx.blockhash;
   const [header, block] = await Promise.all([getBlockHeaderHex(blockHash), getBlockV1(blockHash)]);

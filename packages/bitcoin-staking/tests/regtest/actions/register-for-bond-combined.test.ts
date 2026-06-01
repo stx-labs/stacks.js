@@ -1,13 +1,11 @@
 /**
  * Combined single-bond action: ONE bond, two participants — user A locks via L1
- * (real BTC), user B via sBTC. Drives both into the same bond and checks BOTH
- * wallets at each step, plus that the GLOBAL sBTC-staked total rises by exactly
- * user B's sats (an L1 leg adds no sBTC).
+ * (real BTC), user B via sBTC. Checks both wallets at each step, and that the
+ * global sBTC-staked total rises by exactly user B's sats (an L1 leg adds none).
  *
- * The mint + shim deploy live in `beforeAll` (infra). Record→replay via
- * `useFixtures`; memberships + total flip over time, so each post-register
- * snapshot records/replays from its own phase file (`…-a`, `…-b`), layered
- * additively — call-reads are sender-keyed so the two stakers don't collide.
+ * Memberships flip over time, so each post-register snapshot records/replays from
+ * its own phase file (`…-a`, `…-b`); call-reads are sender-keyed so the two
+ * stakers don't collide.
  */
 import {
   assembleLockupProofFromBlock,
@@ -26,7 +24,7 @@ import {
 import { Pc } from '@stacks/transactions';
 import { ACCOUNTS, REGTEST_KEYS, SIGNER_MANAGER, getAccount } from '../regtest';
 import { getNetwork } from '../../helpers/utils';
-import { SBTC_ASSET_NAME, SBTC_TOKEN_CONTRACT } from '../../helpers/constants';
+import { SBTC_ASSET_NAME, SBTC_TOKEN } from '../../helpers/constants';
 import {
   broadcastAndWait,
   ensurePox5,
@@ -35,7 +33,7 @@ import {
   waitForFulfilled,
   waitForSignerManager,
 } from '../../helpers/wait';
-import { chooseBondWithRunway } from '../../helpers/bond';
+import { waitForBondWithRunway } from '../../helpers/bond';
 import { useFixtures } from '../../helpers/mock';
 import { signTransaction } from '../../helpers/sign';
 import { getBtcTxProofInputs, sendToAddress } from '../../helpers/btc';
@@ -44,13 +42,11 @@ import { deploySbtcMinter, mintSbtc } from '../../helpers/sbtc';
 jest.setTimeout(20 * 60_000);
 
 const network = getNetwork();
-const admin = ACCOUNTS.admin; // pox_5_bond_admin (clean)
+const admin = ACCOUNTS.admin;
 const sbtcDeployer = ACCOUNTS.sbtcDeployer; // owns sbtc-token + the staked signer-manager
-const userA = getAccount(REGTEST_KEYS.account5); // L1 (real BTC) staker
+const userA = getAccount(REGTEST_KEYS.account5); // L1 staker
 const userB = getAccount(REGTEST_KEYS.account7); // sBTC staker (disjoint from the sBTC test's account6)
 const signerManager = SIGNER_MANAGER;
-const sbtcToken = SBTC_TOKEN_CONTRACT;
-const BTC_WALLET = 'main';
 
 const MAX_SATS = 10_000n;
 const FEE = 10_000n;
@@ -63,7 +59,6 @@ beforeAll(async () => {
   useFixtures('register-for-bond-combined');
   await ensurePox5();
   await waitForSignerManager(signerManager);
-  // sBTC for user B: deploy the shim from the sBTC deployer, mint from the clean admin.
   await deploySbtcMinter({ deployerKey: sbtcDeployer.key, network });
   await mintSbtc({
     deployer: sbtcDeployer.address,
@@ -77,16 +72,15 @@ beforeAll(async () => {
 }, 20 * 60_000);
 
 test('one bond, two participants: user A (L1) + user B (sBTC)', async () => {
-  // Neither enrolled yet (sender-keyed reads → distinct per staker).
   expect(await fetchBondMembership({ address: userA.address, network })).toBeUndefined();
   expect(await fetchBondMembership({ address: userB.address, network })).toBeUndefined();
 
-  const { bondIndex, bondStartHeight, poxInfo } = await chooseBondWithRunway(15);
+  const { bondIndex, bondStartHeight, poxInfo } = await waitForBondWithRunway(15);
   console.log('chosen bond', { bondIndex, bondStartHeight, burn: poxInfo.currentBurnchainBlockHeight });
 
   let adminNonce = await getNextNonce(admin.address);
 
-  // --- setup-bond: allowlist BOTH participants ------------------------------
+  // SETUP BOND
   const setupUnsigned = await buildSetupBond({
     bondIndex,
     targetRateBps: TARGET_RATE_BPS,
@@ -106,7 +100,7 @@ test('one bond, two participants: user A (L1) + user B (sBTC)', async () => {
   await broadcastAndWait(signTransaction(setupUnsigned, admin.key), admin.address, network);
 
   const bond = await fetchBond({ bondIndex, network });
-  if (!bond) throw new Error('setup-bond aborted: bond not on-chain after confirmation');
+  if (!bond) throw 'setup-bond aborted';
   expect(await fetchBondAllowance({ bondIndex, address: userA.address, network })).toBe(MAX_SATS);
   expect(await fetchBondAllowance({ bondIndex, address: userB.address, network })).toBe(MAX_SATS);
 
@@ -117,13 +111,13 @@ test('one bond, two participants: user A (L1) + user B (sBTC)', async () => {
     minUstxRatioBps: MIN_USTX_RATIO_BPS,
   });
 
-  // --- user A: L1 (real BTC) lockup -----------------------------------------
+  // USER A (L1)
   const unlockHeight = computeBondUnlockHeight({ bondIndex, poxInfo });
   const unlockBytes = buildDefaultUnlockScript(userA.publicKey);
   const lockupArgs = { stxAddress: userA.address, unlockHeight, unlockBytes, earlyUnlockBytes: EARLY_UNLOCK_SIGNERS };
-  const lockupAddress = buildLockingBitcoinAddress({ ...lockupArgs, network: 'devnet' });
-  const btcTxid = await sendToAddress(BTC_WALLET, lockupAddress, Number(MAX_SATS) / 1e8);
-  const proof = await waitForFulfilled(() => getBtcTxProofInputs(BTC_WALLET, btcTxid));
+  const lockupAddress = buildLockingBitcoinAddress({ ...lockupArgs, network: 'devnet' }); // bcrt (regtest)
+  const btcTxid = await sendToAddress(lockupAddress, Number(MAX_SATS) / 1e8);
+  const proof = await waitForFulfilled(() => getBtcTxProofInputs(btcTxid));
   await waitForBurnBlockHeight(proof.blockHeight);
   const output = assembleLockupProofFromBlock({
     txHex: proof.txHex,
@@ -144,13 +138,13 @@ test('one bond, two participants: user A (L1) + user B (sBTC)', async () => {
   });
   await broadcastAndWait(signTransaction(regA, userA.key), userA.address, network);
 
-  // Phase: A enrolled (L1); B still pending.
   useFixtures('register-for-bond-combined-a');
+
   const mA1 = await fetchBondMembership({ address: userA.address, network });
   expect(mA1?.isL1Lock).toBe(true);
   expect(await fetchBondMembership({ address: userB.address, network })).toBeUndefined();
 
-  // --- user B: sBTC lockup ---------------------------------------------------
+  // USER B (sBTC)
   const regB = await buildRegisterForBond({
     bondIndex,
     signerManager,
@@ -160,14 +154,12 @@ test('one bond, two participants: user A (L1) + user B (sBTC)', async () => {
     fee: FEE,
     nonce: await getNextNonce(userB.address),
     network,
-    postConditions: [
-      Pc.principal(userB.address).willSendEq(MAX_SATS).ft(sbtcToken, SBTC_ASSET_NAME),
-    ],
+    postConditions: [Pc.principal(userB.address).willSendEq(MAX_SATS).ft(SBTC_TOKEN, SBTC_ASSET_NAME)],
   });
   await broadcastAndWait(signTransaction(regB, userB.key), userB.address, network);
 
-  // Phase: both enrolled; global sBTC total up by exactly user B's sats.
   useFixtures('register-for-bond-combined-b');
+
   const mA2 = await fetchBondMembership({ address: userA.address, network });
   const mB2 = await fetchBondMembership({ address: userB.address, network });
   expect(mA2?.isL1Lock).toBe(true);
@@ -175,5 +167,5 @@ test('one bond, two participants: user A (L1) + user B (sBTC)', async () => {
   expect(mB2?.bondIndex).toBe(bondIndex);
 
   const totalAfter = await fetchTotalSbtcStaked({ network });
-  expect(totalAfter).toBe(totalBefore + MAX_SATS);
+  expect(totalAfter).toBe(totalBefore + MAX_SATS); // only B's sBTC; A is L1
 });

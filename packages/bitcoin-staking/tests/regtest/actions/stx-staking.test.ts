@@ -7,9 +7,7 @@
  * bond-admin (`fundStx`), demonstrating the pattern that sidesteps the small
  * prefunded-key pool and guarantees a clean (never-staked) account each chain.
  *
- * STX locking is a pox lock, not a token transfer, so no post-conditions are
- * needed under the default deny mode. Record→replay via `useFixtures` with a
- * phase file at each staker-info transition.
+ * STX locking is a pox lock, not a token transfer, so no post-conditions needed.
  */
 import {
   buildStake,
@@ -63,8 +61,8 @@ beforeAll(async () => {
 test('stx staking lifecycle: stake → extend + top-up → unstake', async () => {
   expect((await fetchStakerInfo({ address: staker.address, network })).staked).toBe(false);
 
-  // --- stake ----------------------------------------------------------------
-  // start-burn-ht must fall in the CURRENT cycle (the contract derives
+  // STAKE
+  // start-burn-ht must fall in the current cycle (the contract derives
   // first-reward-cycle = current + 1 from it).
   const poxInfo = await getPoxInfo();
   const stakeUnsigned = await buildStake({
@@ -81,12 +79,12 @@ test('stx staking lifecycle: stake → extend + top-up → unstake', async () =>
 
   useFixtures('stx-staking-staked');
   const staked = await fetchStakerInfo({ address: staker.address, network });
-  if (!staked.staked) throw new Error('stake aborted: not staked after confirmation');
+  if (!staked.staked) throw 'stake aborted';
   expect(staked.details.amountUstx).toBe(STAKE);
   expect(staked.details.numCycles).toBe(NUM_CYCLES);
   expect(staked.details.signer).toBe(signerManager);
 
-  // --- stake-update: extend the lock + top up the amount --------------------
+  // UPDATE (extend + top-up)
   const updateUnsigned = await buildStakeUpdate({
     signerManager,
     oldSignerManager: signerManager,
@@ -101,11 +99,11 @@ test('stx staking lifecycle: stake → extend + top-up → unstake', async () =>
 
   useFixtures('stx-staking-updated');
   const updated = await fetchStakerInfo({ address: staker.address, network });
-  if (!updated.staked) throw new Error('stake-update aborted: not staked after confirmation');
+  if (!updated.staked) throw 'stake-update aborted';
   expect(updated.details.amountUstx).toBe(STAKE + TOPUP);
   expect(updated.details.numCycles).toBe(NUM_CYCLES + EXTEND);
 
-  // --- unstake (schedule unlock next cycle) ---------------------------------
+  // UNSTAKE
   // Reverts in the prepare phase (ERR_UNSTAKE_IN_PREPARE_PHASE), so gate first.
   const poxBefore = await getPoxInfo();
   if (isInPreparePhase({ burnHeight: poxBefore.currentBurnchainBlockHeight, poxInfo: poxBefore })) {

@@ -49,7 +49,7 @@ async function findMultiTxBlock(): Promise<{ hash: string; height: number }> {
     const block = await getBlockV1(hash);
     if (block.tx.length > 1) return { hash, height };
   }
-  throw new Error('no multi-tx block found in the last 50 blocks');
+  throw 'no multi-tx block found in the last 50 blocks';
 }
 
 test('RPC merkle branch folds back to the block merkleroot (every tx)', async () => {

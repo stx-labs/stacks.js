@@ -27,15 +27,16 @@ export function pickBondIndex(poxInfo: PoxInfo): { bondIndex: number; bondStartH
 }
 
 /**
- * Choose a bond with enough runway for a multi-tx sequence to confirm before D0.
- * The chain mines fast and a period's runway shrinks to 0 at the boundary, so if
- * we're too close we wait one boundary for the next period's full window. Returns
- * the chosen bond plus the (possibly re-read) poxInfo it was chosen against.
+ * Wait for (and return) a bond period with enough runway for a multi-tx sequence
+ * to confirm before D0. The chain mines fast and a period's runway shrinks to 0
+ * at the boundary, so if we're too close we wait one boundary for the next
+ * period's full window. Returns the chosen bond plus the (possibly re-read)
+ * poxInfo it was chosen against.
  *
  * `minRunway` defaults to half a cycle; pass more for longer sequences (e.g. the
  * L1 flow, which also waits on a Bitcoin confirmation).
  */
-export async function chooseBondWithRunway(
+export async function waitForBondWithRunway(
   minRunway?: number
 ): Promise<{ bondIndex: number; bondStartHeight: number; poxInfo: PoxInfo }> {
   let poxInfo = await getPoxInfo();
