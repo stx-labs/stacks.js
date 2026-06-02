@@ -198,6 +198,9 @@ jobs:
           npm run build:cjs --workspaces --if-present
           npm run build:esm --workspaces --if-present
           npm run build:umd --workspaces --if-present
+          npm run build:mocks-cjs --workspaces --if-present
+          npm run build:mocks-esm --workspaces --if-present
+          npm run build:mocks-data --workspaces --if-present
 
       # NPM_CONFIG_IGNORE_SCRIPTS skips each package's prepublishOnly hook,
       # avoiding duplicate test/build work during publish.
@@ -245,6 +248,9 @@ jobs:
           npm run build:cjs --workspaces --if-present
           npm run build:esm --workspaces --if-present
           npm run build:umd --workspaces --if-present
+          npm run build:mocks-cjs --workspaces --if-present
+          npm run build:mocks-esm --workspaces --if-present
+          npm run build:mocks-data --workspaces --if-present
 
       - run: npx changeset publish --tag pr --no-git-tag
         env:
