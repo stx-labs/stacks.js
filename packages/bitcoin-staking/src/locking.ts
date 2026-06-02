@@ -1,6 +1,6 @@
 import * as btc from "@scure/btc-signer";
 import { sha256 } from "@noble/hashes/sha2.js";
-import { bytesToHex, hexToBytes } from "@stacks/common";
+import { bytesToHex, concatBytes, equals, hexToBytes } from "@stacks/common";
 import type { StacksNetwork, StacksNetworkName } from "@stacks/network";
 import { Address } from "@stacks/transactions";
 import {
@@ -12,12 +12,8 @@ import {
 import { networkNameFrom } from "./network";
 import type { BondL1LockupOutput, PoxInfo } from "./types";
 
-const REGTEST_NETWORK = {
-  bech32: "bcrt",
-  pubKeyHash: 111,
-  scriptHash: 196,
-  wif: 239,
-};
+// regtest == testnet except for the bech32 HRP (`bcrt` vs `tb`).
+const REGTEST_NETWORK = { ...btc.TEST_NETWORK, bech32: "bcrt" };
 
 const BTC_NETWORKS: Record<StacksNetworkName, typeof btc.NETWORK> = {
   mainnet: btc.NETWORK,
@@ -430,6 +426,7 @@ export function lockingScriptToP2wsh(
 const MAX_TX_BYTES = 100_000;
 
 /**
+ * @internal @ignore
  * Normalize a raw Bitcoin transaction to bytes. Accepts either hex or
  * `Uint8Array`. Enforces the contract's 100,000-byte cap.
  */
@@ -444,6 +441,7 @@ export function serializeBitcoinTx(tx: Uint8Array | string): Uint8Array {
 }
 
 /**
+ * @internal @ignore
  * Normalize an 80-byte Bitcoin block header. Accepts either hex or
  * `Uint8Array`. Throws if the length is not exactly 80.
  */
@@ -460,6 +458,7 @@ export function serializeBitcoinHeader(
 }
 
 /**
+ * @internal @ignore
  * Compute the Bitcoin txid in BIG-ENDIAN (display) order — i.e. the
  * double-sha256 of the raw tx, then byte-reversed.
  *
@@ -471,34 +470,19 @@ export function serializeBitcoinHeader(
  */
 export function computeBitcoinTxid(rawTx: Uint8Array): Uint8Array {
   // Reverse to big-endian display form.
-  return reverse32(sha256d(rawTx));
+  return reverse32(sha256(sha256(rawTx)));
 }
 
-/** @ignore Bitcoin double-SHA256 (`sha256(sha256(x))`), internal byte order. */
-function sha256d(bytes: Uint8Array): Uint8Array {
-  return sha256(sha256(bytes));
-}
-
-/** @ignore Byte-reverse a 32-byte hash (display ⇄ internal little-endian). */
+/** @internal @ignore Byte-reverse a 32-byte hash (display ⇄ internal little-endian). */
 function reverse32(bytes: Uint8Array): Uint8Array {
   const out = new Uint8Array(bytes.length);
   for (let i = 0; i < bytes.length; i++) out[i] = bytes[bytes.length - 1 - i];
   return out;
 }
 
-/** @ignore Concatenate two byte arrays. */
-function concatBytes(a: Uint8Array, b: Uint8Array): Uint8Array {
-  const out = new Uint8Array(a.length + b.length);
-  out.set(a);
-  out.set(b, a.length);
-  return out;
-}
-
-/** @ignore Constant-no-frills byte equality. */
-function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-  return true;
+/** @internal @ignore `[0, 1, …, n-1]` (like Python's `range(n)`). */
+function range(n: number): number[] {
+  return Array.from({ length: n }, (_, i) => i);
 }
 
 /**
@@ -575,16 +559,10 @@ export function assembleLockupProof(input: {
       ? hexToBytes(input.expectedScript)
       : input.expectedScript;
 
-  let outputIndex = -1;
-  let amount = 0n;
-  for (let i = 0; i < tx.outputsLength; i++) {
-    const output = tx.getOutput(i);
-    if (output.script && bytesEqual(output.script, expectedScript)) {
-      outputIndex = i;
-      amount = output.amount ?? 0n;
-      break;
-    }
-  }
+  const outputIndex = range(tx.outputsLength).findIndex((i) => {
+    const out = tx.getOutput(i);
+    return out.script && equals(out.script, expectedScript);
+  });
   if (outputIndex === -1) {
     throw new Error(
       "assembleLockupProof: no output matches the expected lockup script",
@@ -599,7 +577,7 @@ export function assembleLockupProof(input: {
     leafHashes: input.merkleProof.merkle.map((h) => reverse32(hexToBytes(h))),
     txCount: input.txCount,
     txIndex: input.merkleProof.pos,
-    amount,
+    amount: tx.getOutput(outputIndex).amount ?? 0n,
   };
 }
 
@@ -630,7 +608,7 @@ export function computeMerkleBranch(txids: string[], pos: number): string[] {
     siblings.push(level[index ^ 1]);
     const next: Uint8Array[] = [];
     for (let i = 0; i < level.length; i += 2) {
-      next.push(sha256d(concatBytes(level[i], level[i + 1])));
+      next.push(sha256(sha256(concatBytes(level[i], level[i + 1]))));
     }
     level = next;
     index = Math.floor(index / 2);
