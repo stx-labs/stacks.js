@@ -96,7 +96,7 @@ test("l1 register-for-bond happy path: setup-bond → fund BTC → prove → reg
   await broadcastAndWait(setupTransaction, admin.address, network);
 
   const bond = await fetchBond({ bondIndex, network });
-  if (!bond) throw 'setup-bond aborted';
+  if (!bond) throw "setup-bond aborted";
 
   // FUND LOCKUP
   const unlockHeight = computeBondUnlockHeight({ bondIndex, poxInfo });
@@ -116,7 +116,9 @@ test("l1 register-for-bond happy path: setup-bond → fund BTC → prove → reg
   console.log("funded L1 lockup", { lockupAddress, btcTxid, unlockHeight });
 
   // SPV PROOF
-  const proofInputs = await waitForFulfilled(() => getBtcTxProofInputs(btcTxid));
+  const proofInputs = await waitForFulfilled(() =>
+    getBtcTxProofInputs(btcTxid),
+  );
   await waitForBurnBlockHeight(proofInputs.blockHeight);
   const output = assembleLockupProofFromBlock({
     txHex: proofInputs.txHex,
@@ -153,7 +155,7 @@ test("l1 register-for-bond happy path: setup-bond → fund BTC → prove → reg
     address: staker.address,
     network,
   });
-  if (!membershipAfter) throw 'register-for-bond aborted';
+  if (!membershipAfter) throw "register-for-bond aborted";
   expect(membershipAfter.bondIndex).toBe(bondIndex);
   expect(membershipAfter.isL1Lock).toBe(true);
   expect(membershipAfter.amountUstx).toBe(amountUstx);

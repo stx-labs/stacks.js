@@ -80,3 +80,6 @@ export const ACCOUNTS = {
 
 /** The daemon-registered, staked signer-manager any register-for-bond can reference. */
 export const SIGNER_MANAGER = `${ACCOUNTS.sbtcDeployer.address}.signer-manager`;
+
+/** A second daemon-registered signer-manager (STACKING_KEYS[1]) — for rotation tests. */
+export const SIGNER_MANAGER_2 = `${getAccount(STACKING_KEYS[1]).address}.signer-manager`;

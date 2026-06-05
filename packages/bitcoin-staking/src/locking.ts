@@ -1,19 +1,19 @@
-import * as btc from "@scure/btc-signer";
-import { sha256 } from "@noble/hashes/sha2.js";
-import { bytesToHex, concatBytes, equals, hexToBytes } from "@stacks/common";
-import type { StacksNetwork, StacksNetworkName } from "@stacks/network";
-import { Address } from "@stacks/transactions";
+import * as btc from '@scure/btc-signer';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { bytesToHex, concatBytes, equals, hexToBytes } from '@stacks/common';
+import type { StacksNetwork, StacksNetworkName } from '@stacks/network';
+import { Address } from '@stacks/transactions';
 import {
   BOND_END_OFFSET_PERIODS,
   bondPeriodToRewardCycle,
   rewardCycleToBurnHeight,
   rewardCycleToUnlockHeight,
-} from "./cycles";
-import { networkNameFrom } from "./network";
-import type { BondL1LockupOutput, PoxInfo } from "./types";
+} from './cycles';
+import { networkNameFrom } from './network';
+import type { BondL1LockupOutput, PoxInfo } from './types';
 
 // regtest == testnet except for the bech32 HRP (`bcrt` vs `tb`).
-const REGTEST_NETWORK = { ...btc.TEST_NETWORK, bech32: "bcrt" };
+const REGTEST_NETWORK = { ...btc.TEST_NETWORK, bech32: 'bcrt' };
 
 const BTC_NETWORKS: Record<StacksNetworkName, typeof btc.NETWORK> = {
   mainnet: btc.NETWORK,
@@ -35,17 +35,14 @@ const BTC_NETWORKS: Record<StacksNetworkName, typeof btc.NETWORK> = {
  * Users may provide custom `unlockBytes` instead, but validation helpers
  * in this package only support this default format.
  */
-export function buildDefaultUnlockScript(
-  publicKey: Uint8Array | string,
-): Uint8Array {
-  const pubBytes =
-    typeof publicKey === "string" ? hexToBytes(publicKey) : publicKey;
+export function buildDefaultUnlockScript(publicKey: Uint8Array | string): Uint8Array {
+  const pubBytes = typeof publicKey === 'string' ? hexToBytes(publicKey) : publicKey;
 
   if (pubBytes.length !== 33) {
-    throw new Error("Expected a 33-byte compressed public key");
+    throw new Error('Expected a 33-byte compressed public key');
   }
 
-  return btc.Script.encode([pubBytes, "CHECKSIG"]);
+  return btc.Script.encode([pubBytes, 'CHECKSIG']);
 }
 
 /**
@@ -54,11 +51,8 @@ export function buildDefaultUnlockScript(
  * Returns the extracted compressed public key if valid, or `undefined` if the
  * script doesn't match the default shape.
  */
-export function parseDefaultUnlockScript(
-  unlockBytes: Uint8Array | string,
-): Uint8Array | undefined {
-  const bytes =
-    typeof unlockBytes === "string" ? hexToBytes(unlockBytes) : unlockBytes;
+export function parseDefaultUnlockScript(unlockBytes: Uint8Array | string): Uint8Array | undefined {
+  const bytes = typeof unlockBytes === 'string' ? hexToBytes(unlockBytes) : unlockBytes;
 
   try {
     const decoded = btc.Script.decode(bytes);
@@ -67,7 +61,7 @@ export function parseDefaultUnlockScript(
       decoded.length === 2 &&
       decoded[0] instanceof Uint8Array &&
       decoded[0].length === 33 &&
-      decoded[1] === "CHECKSIG"
+      decoded[1] === 'CHECKSIG'
     ) {
       return decoded[0];
     }
@@ -127,9 +121,7 @@ export function pushScriptBytes(bytes: Uint8Array): Uint8Array {
     out.set(bytes, 3);
     return out;
   }
-  throw new Error(
-    `pushScriptBytes: payload too large (${len} bytes; max 65535)`,
-  );
+  throw new Error(`pushScriptBytes: payload too large (${len} bytes; max 65535)`);
 }
 
 /**
@@ -152,9 +144,8 @@ export function pushScriptBytes(bytes: Uint8Array): Uint8Array {
  * @throws if `n` is negative, non-integer, or larger than the 5-byte cap.
  */
 export function serializeCScriptNum(n: number | bigint): Uint8Array {
-  const big = typeof n === "bigint" ? n : BigInt(n);
-  if (big < 0n)
-    throw new Error("serializeCScriptNum: negative values not supported");
+  const big = typeof n === 'bigint' ? n : BigInt(n);
+  if (big < 0n) throw new Error('serializeCScriptNum: negative values not supported');
   if (big === 0n) return new Uint8Array(0);
 
   // Strip to minimal LE byte representation.
@@ -169,7 +160,7 @@ export function serializeCScriptNum(n: number | bigint): Uint8Array {
 
   if (bytes.length > 5) {
     throw new Error(
-      `serializeCScriptNum: encoding exceeds 5-byte ScriptNum cap (got ${bytes.length})`,
+      `serializeCScriptNum: encoding exceeds 5-byte ScriptNum cap (got ${bytes.length})`
     );
   }
   return Uint8Array.from(bytes);
@@ -183,7 +174,7 @@ export function serializeCScriptNum(n: number | bigint): Uint8Array {
  * otherwise.
  */
 export function pushCScriptNum(n: number | bigint): Uint8Array {
-  const big = typeof n === "bigint" ? n : BigInt(n);
+  const big = typeof n === 'bigint' ? n : BigInt(n);
   if (big === 0n) return new Uint8Array([OP_0]);
   if (big <= 16n) return new Uint8Array([0x50 + Number(big)]); // OP_1 = 0x51, ..., OP_16 = 0x60
   return pushScriptBytes(serializeCScriptNum(big));
@@ -206,7 +197,7 @@ export function toConsensusBuffStandardPrincipal(addr: string): Uint8Array {
   };
   if (parsed.contractName) {
     throw new Error(
-      `toConsensusBuffStandardPrincipal: expected a standard principal, got contract principal "${addr}"`,
+      `toConsensusBuffStandardPrincipal: expected a standard principal, got contract principal "${addr}"`
     );
   }
   const out = new Uint8Array(22);
@@ -267,11 +258,9 @@ export function buildLockingScript(opts: {
 }): Uint8Array {
   const staker = toConsensusBuffStandardPrincipal(opts.stxAddress);
   const unlockBytes =
-    typeof opts.unlockBytes === "string"
-      ? hexToBytes(opts.unlockBytes)
-      : opts.unlockBytes;
+    typeof opts.unlockBytes === 'string' ? hexToBytes(opts.unlockBytes) : opts.unlockBytes;
   const earlyUnlockBytes =
-    typeof opts.earlyUnlockBytes === "string"
+    typeof opts.earlyUnlockBytes === 'string'
       ? hexToBytes(opts.earlyUnlockBytes)
       : opts.earlyUnlockBytes;
 
@@ -386,12 +375,9 @@ export function buildLockingBitcoinAddress(opts: {
   network: StacksNetworkName | StacksNetwork;
 }): string {
   const unlockBytes =
-    opts.unlockBytes ??
-    (opts.publicKey ? buildDefaultUnlockScript(opts.publicKey) : undefined);
+    opts.unlockBytes ?? (opts.publicKey ? buildDefaultUnlockScript(opts.publicKey) : undefined);
   if (!unlockBytes) {
-    throw new Error(
-      "buildLockingBitcoinAddress: provide either `unlockBytes` or `publicKey`",
-    );
+    throw new Error('buildLockingBitcoinAddress: provide either `unlockBytes` or `publicKey`');
   }
   const script = buildLockingScript({
     stxAddress: opts.stxAddress,
@@ -410,11 +396,11 @@ export function buildLockingBitcoinAddress(opts: {
  */
 export function lockingScriptToP2wsh(
   script: Uint8Array,
-  network: StacksNetworkName | StacksNetwork,
+  network: StacksNetworkName | StacksNetwork
 ): string {
   const btcNetwork = BTC_NETWORKS[networkNameFrom(network)];
-  const result = btc.p2wsh({ type: "wsh", script }, btcNetwork);
-  if (!result.address) throw new Error("Failed to derive P2WSH address");
+  const result = btc.p2wsh({ type: 'wsh', script }, btcNetwork);
+  if (!result.address) throw new Error('Failed to derive P2WSH address');
   return result.address;
 }
 
@@ -431,10 +417,10 @@ const MAX_TX_BYTES = 100_000;
  * `Uint8Array`. Enforces the contract's 100,000-byte cap.
  */
 export function serializeBitcoinTx(tx: Uint8Array | string): Uint8Array {
-  const bytes = typeof tx === "string" ? hexToBytes(tx) : tx;
+  const bytes = typeof tx === 'string' ? hexToBytes(tx) : tx;
   if (bytes.length > MAX_TX_BYTES) {
     throw new Error(
-      `serializeBitcoinTx: tx is ${bytes.length} bytes; exceeds the ${MAX_TX_BYTES}-byte contract cap`,
+      `serializeBitcoinTx: tx is ${bytes.length} bytes; exceeds the ${MAX_TX_BYTES}-byte contract cap`
     );
   }
   return bytes;
@@ -445,14 +431,10 @@ export function serializeBitcoinTx(tx: Uint8Array | string): Uint8Array {
  * Normalize an 80-byte Bitcoin block header. Accepts either hex or
  * `Uint8Array`. Throws if the length is not exactly 80.
  */
-export function serializeBitcoinHeader(
-  header: Uint8Array | string,
-): Uint8Array {
-  const bytes = typeof header === "string" ? hexToBytes(header) : header;
+export function serializeBitcoinHeader(header: Uint8Array | string): Uint8Array {
+  const bytes = typeof header === 'string' ? hexToBytes(header) : header;
   if (bytes.length !== 80) {
-    throw new Error(
-      `serializeBitcoinHeader: expected 80 bytes, got ${bytes.length}`,
-    );
+    throw new Error(`serializeBitcoinHeader: expected 80 bytes, got ${bytes.length}`);
   }
   return bytes;
 }
@@ -555,18 +537,16 @@ export function assembleLockupProof(input: {
   const legacy = tx.toBytes(true, false);
 
   const expectedScript =
-    typeof input.expectedScript === "string"
+    typeof input.expectedScript === 'string'
       ? hexToBytes(input.expectedScript)
       : input.expectedScript;
 
-  const outputIndex = range(tx.outputsLength).findIndex((i) => {
+  const outputIndex = range(tx.outputsLength).findIndex(i => {
     const out = tx.getOutput(i);
     return out.script && equals(out.script, expectedScript);
   });
   if (outputIndex === -1) {
-    throw new Error(
-      "assembleLockupProof: no output matches the expected lockup script",
-    );
+    throw new Error('assembleLockupProof: no output matches the expected lockup script');
   }
 
   return {
@@ -574,7 +554,7 @@ export function assembleLockupProof(input: {
     tx: serializeBitcoinTx(legacy),
     outputIndex,
     header: serializeBitcoinHeader(input.header),
-    leafHashes: input.merkleProof.merkle.map((h) => reverse32(hexToBytes(h))),
+    leafHashes: input.merkleProof.merkle.map(h => reverse32(hexToBytes(h))),
     txCount: input.txCount,
     txIndex: input.merkleProof.pos,
     amount: tx.getOutput(outputIndex).amount ?? 0n,
@@ -596,11 +576,9 @@ export function assembleLockupProof(input: {
  */
 export function computeMerkleBranch(txids: string[], pos: number): string[] {
   if (pos < 0 || pos >= txids.length) {
-    throw new Error(
-      `computeMerkleBranch: pos ${pos} out of range (0..${txids.length - 1})`,
-    );
+    throw new Error(`computeMerkleBranch: pos ${pos} out of range (0..${txids.length - 1})`);
   }
-  let level = txids.map((id) => reverse32(hexToBytes(id))); // display → internal
+  let level = txids.map(id => reverse32(hexToBytes(id))); // display → internal
   let index = pos;
   const siblings: Uint8Array[] = [];
   while (level.length > 1) {
@@ -613,7 +591,7 @@ export function computeMerkleBranch(txids: string[], pos: number): string[] {
     level = next;
     index = Math.floor(index / 2);
   }
-  return siblings.map((s) => bytesToHex(reverse32(s))); // internal → display
+  return siblings.map(s => bytesToHex(reverse32(s))); // internal → display
 }
 
 /**
@@ -659,9 +637,7 @@ export function assembleLockupProofFromBlock(input: {
   const txid = bytesToHex(computeBitcoinTxid(tx.toBytes(true, false)));
   const pos = input.txids.indexOf(txid);
   if (pos === -1) {
-    throw new Error(
-      `assembleLockupProofFromBlock: txid ${txid} not found in the block's txids`,
-    );
+    throw new Error(`assembleLockupProofFromBlock: txid ${txid} not found in the block's txids`);
   }
 
   return assembleLockupProof({
@@ -711,10 +687,7 @@ export function computeUnlockHeight(opts: {
  * `firstBondPeriodCycle` is derived internally from `poxInfo` via
  * `firstPox5RewardCycle`; throws if pox-5 has not yet activated on-chain.
  */
-export function computeBondUnlockHeight(opts: {
-  bondIndex: number;
-  poxInfo: PoxInfo;
-}): number {
+export function computeBondUnlockHeight(opts: { bondIndex: number; poxInfo: PoxInfo }): number {
   const endCycle = bondPeriodToRewardCycle({
     bondIndex: opts.bondIndex + BOND_END_OFFSET_PERIODS,
     poxInfo: opts.poxInfo,
