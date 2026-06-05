@@ -17,8 +17,9 @@ const TEST_PUBKEY = hexToBytes(TEST_PUBKEY_HEX);
 // A known Stacks testnet address (standard principal)
 const TEST_STX_ADDRESS = 'ST000000000000000000002AMW42H';
 
-// Fixed test buffer for `earlyUnlockBytes` — opaque to the SDK.
-const TEST_EARLY_UNLOCK = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
+// Early-unlock subscript: a pre-pushed, self-contained `<pubkey> OP_CHECKSIGVERIFY`
+// fragment (leaves nothing on the stack), as the contract concatenates it RAW.
+const TEST_EARLY_UNLOCK = btc.Script.encode([new Uint8Array(33).fill(0x02), 'CHECKSIGVERIFY']);
 
 // Opcodes we expect inside the script
 const OP_IF = 0x63;
@@ -161,10 +162,10 @@ describe('buildLockingScript', () => {
     });
 
     const elseIdx = script.indexOf(OP_ELSE);
-    // After OP_ELSE: <len> <earlyUnlockBytes...>
-    expect(script[elseIdx + 1]).toBe(TEST_EARLY_UNLOCK.length);
+    // After OP_ELSE the earlyUnlockBytes follow RAW (no push-length prefix):
+    // the byte immediately after OP_ELSE is the first byte of earlyUnlockBytes.
     for (let i = 0; i < TEST_EARLY_UNLOCK.length; i++) {
-      expect(script[elseIdx + 2 + i]).toBe(TEST_EARLY_UNLOCK[i]);
+      expect(script[elseIdx + 1 + i]).toBe(TEST_EARLY_UNLOCK[i]);
     }
 
     // The unlockBytes must also appear in the script — twice (once in each branch).
@@ -253,7 +254,8 @@ describe('buildLockingBitcoinAddress', () => {
   });
 
   it('changes when earlyUnlockBytes changes', () => {
-    const altOpts = { ...baseOpts, earlyUnlockBytes: new Uint8Array([0x01, 0x02, 0x03]) };
+    const altEarlyUnlock = btc.Script.encode([new Uint8Array(33).fill(0x03), 'CHECKSIGVERIFY']);
+    const altOpts = { ...baseOpts, earlyUnlockBytes: altEarlyUnlock };
     expect(buildLockingBitcoinAddress({ ...baseOpts, network: 'mainnet' })).not.toBe(
       buildLockingBitcoinAddress({ ...altOpts, network: 'mainnet' })
     );
@@ -282,18 +284,16 @@ describe('computeUnlockHeight', () => {
     numCycles: 1,
   };
 
-  it('returns halfway through the last cycle for 1 cycle', () => {
+  it('returns the start of the unlock cycle for 1 cycle', () => {
     const height = computeUnlockHeight(baseOpts);
     // lastCycleStart = 666050 + (50 + 1 - 1) * 2100 = 666050 + 105000 = 771050
-    // halfway = 771050 + 1050 = 772100
-    expect(height).toBe(772_100);
+    expect(height).toBe(771_050);
   });
 
-  it('returns halfway through the last cycle for 24 cycles', () => {
+  it('returns the start of the unlock cycle for 24 cycles', () => {
     const height = computeUnlockHeight({ ...baseOpts, numCycles: 24 });
     // lastCycleStart = 666050 + (50 + 24 - 1) * 2100 = 666050 + 73 * 2100 = 666050 + 153300 = 819350
-    // halfway = 819350 + 1050 = 820400
-    expect(height).toBe(820_400);
+    expect(height).toBe(819_350);
   });
 
   it('increases with more cycles', () => {

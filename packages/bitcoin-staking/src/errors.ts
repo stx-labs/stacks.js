@@ -46,6 +46,9 @@ export enum Pox5ErrorCode {
   BondAlreadyStarted = 43,
   UpdateBondSameSigner = 44,
   InvalidLockupAmount = 45,
+  DuplicateLockupOutpoint = 46,
+  StakeInPreparePhase = 47,
+  RolloverTooEarly = 48,
 }
 
 /** The on-chain Clarity constant name for each error (e.g. `ERR_BOND_NOT_FOUND`). */
@@ -89,6 +92,9 @@ export const POX5_ERROR_NAMES: Record<Pox5ErrorCode, string> = {
   [Pox5ErrorCode.BondAlreadyStarted]: 'ERR_BOND_ALREADY_STARTED',
   [Pox5ErrorCode.UpdateBondSameSigner]: 'ERR_UPDATE_BOND_SAME_SIGNER',
   [Pox5ErrorCode.InvalidLockupAmount]: 'ERR_INVALID_LOCKUP_AMOUNT',
+  [Pox5ErrorCode.DuplicateLockupOutpoint]: 'ERR_DUPLICATE_LOCKUP_OUTPOINT',
+  [Pox5ErrorCode.StakeInPreparePhase]: 'ERR_STAKE_IN_PREPARE_PHASE',
+  [Pox5ErrorCode.RolloverTooEarly]: 'ERR_ROLLOVER_TOO_EARLY',
 };
 
 /** Human-readable descriptions per error code. */
@@ -148,6 +154,11 @@ export const POX5_ERROR_DESCRIPTIONS: Record<Pox5ErrorCode, string> = {
     'Cannot call `update-bond-registration` with the same signer.',
   [Pox5ErrorCode.InvalidLockupAmount]:
     'The lockup output amount does not match the specified amount of sats.',
+  [Pox5ErrorCode.DuplicateLockupOutpoint]:
+    'The same Bitcoin outpoint (txid + output-index) appeared twice in the L1 lockup proof list submitted to register-for-bond.',
+  [Pox5ErrorCode.StakeInPreparePhase]:
+    "A staker tried to modify the next reward cycle's state during the prepare phase.",
+  [Pox5ErrorCode.RolloverTooEarly]: 'A staker tried to rollover a bond too early.',
 };
 
 /**

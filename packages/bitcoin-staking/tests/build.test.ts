@@ -6,6 +6,7 @@ import {
 } from '@stacks/transactions';
 import {
   buildAnnounceL1EarlyExit,
+  buildClaimStakerRewardsForSigner,
   buildGrantSignerKey,
   buildRegisterForBond,
   buildRevokeSignerGrant,
@@ -46,7 +47,7 @@ describe('buildSetupBond', () => {
       targetRateBps: 400,
       stxValueRatio: 1000n,
       minUstxRatioBps: 500,
-      earlyUnlockSigners: new Uint8Array([0x00]),
+      earlyUnlockBytes: new Uint8Array([0x00]),
       earlyUnlockAdmin: STAKER,
       allowlist: [
         { staker: STAKER, maxSats: 100000n },
@@ -253,9 +254,43 @@ describe('buildRevokeSignerGrant', () => {
   });
 });
 
+describe('buildClaimStakerRewardsForSigner', () => {
+  it('emits claim-staker-rewards-for-signer with 3 args (staker, is-bond, index)', async () => {
+    const tx = await buildClaimStakerRewardsForSigner({
+      staker: STAKER,
+      isBond: true,
+      index: 2,
+      ...COMMON_TX,
+    });
+    const payload = payloadOf(tx);
+    expect(payload.functionName.content).toBe('claim-staker-rewards-for-signer');
+    expect(payload.functionArgs).toHaveLength(3);
+    expect(payload.functionArgs[0].type).toBe(ClarityType.PrincipalStandard);
+    expect(payload.functionArgs[1].type).toBe(ClarityType.BoolTrue);
+    expect(payload.functionArgs[2].type).toBe(ClarityType.UInt);
+  });
+
+  it('encodes isBond false as BoolFalse', async () => {
+    const tx = await buildClaimStakerRewardsForSigner({
+      staker: STAKER,
+      isBond: false,
+      index: 0,
+      ...COMMON_TX,
+    });
+    const payload = payloadOf(tx);
+    expect(payload.functionArgs[1].type).toBe(ClarityType.BoolFalse);
+  });
+});
+
 describe('package exports', () => {
   it('re-exports buildGrantSignerKey and buildRevokeSignerGrant', () => {
     expect((pkg as Record<string, unknown>).buildGrantSignerKey).toBe(buildGrantSignerKey);
     expect((pkg as Record<string, unknown>).buildRevokeSignerGrant).toBe(buildRevokeSignerGrant);
+  });
+
+  it('re-exports buildClaimStakerRewardsForSigner', () => {
+    expect((pkg as Record<string, unknown>).buildClaimStakerRewardsForSigner).toBe(
+      buildClaimStakerRewardsForSigner
+    );
   });
 });

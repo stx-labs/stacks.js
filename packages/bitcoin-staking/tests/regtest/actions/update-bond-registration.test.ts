@@ -33,7 +33,7 @@ const FEE = 10_000n;
 const TARGET_RATE_BPS = 1_000n;
 const STX_VALUE_RATIO = 1_000n;
 const MIN_USTX_RATIO_BPS = 500n;
-const EARLY_UNLOCK_SIGNERS = '00'.repeat(683);
+const EARLY_UNLOCK_BYTES = '00'.repeat(683);
 
 beforeAll(async () => {
   useFixtures('update-bond-registration');
@@ -68,7 +68,7 @@ test('update-bond-registration: rotate the membership signer-manager', async () 
     targetRateBps: TARGET_RATE_BPS,
     stxValueRatio: STX_VALUE_RATIO,
     minUstxRatioBps: MIN_USTX_RATIO_BPS,
-    earlyUnlockSigners: EARLY_UNLOCK_SIGNERS,
+    earlyUnlockBytes: EARLY_UNLOCK_BYTES,
     earlyUnlockAdmin: admin.address,
     allowlist: [{ staker: staker.address, maxSats: MAX_SATS }],
     publicKey: admin.publicKey,

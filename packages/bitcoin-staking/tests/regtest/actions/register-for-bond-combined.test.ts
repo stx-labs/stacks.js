@@ -53,7 +53,7 @@ const FEE = 10_000n;
 const TARGET_RATE_BPS = 1_000n;
 const STX_VALUE_RATIO = 1_000n;
 const MIN_USTX_RATIO_BPS = 500n;
-const EARLY_UNLOCK_SIGNERS = '00'.repeat(683);
+const EARLY_UNLOCK_BYTES = '00'.repeat(683);
 
 beforeAll(async () => {
   useFixtures('register-for-bond-combined');
@@ -86,7 +86,7 @@ test('one bond, two participants: user A (L1) + user B (sBTC)', async () => {
     targetRateBps: TARGET_RATE_BPS,
     stxValueRatio: STX_VALUE_RATIO,
     minUstxRatioBps: MIN_USTX_RATIO_BPS,
-    earlyUnlockSigners: EARLY_UNLOCK_SIGNERS,
+    earlyUnlockBytes: EARLY_UNLOCK_BYTES,
     earlyUnlockAdmin: admin.address,
     allowlist: [
       { staker: userA.address, maxSats: MAX_SATS },
@@ -114,7 +114,7 @@ test('one bond, two participants: user A (L1) + user B (sBTC)', async () => {
   // USER A (L1)
   const unlockHeight = computeBondUnlockHeight({ bondIndex, poxInfo });
   const unlockBytes = buildDefaultUnlockScript(userA.publicKey);
-  const lockupArgs = { stxAddress: userA.address, unlockHeight, unlockBytes, earlyUnlockBytes: EARLY_UNLOCK_SIGNERS };
+  const lockupArgs = { stxAddress: userA.address, unlockHeight, unlockBytes, earlyUnlockBytes: EARLY_UNLOCK_BYTES };
   const lockupAddress = buildLockingBitcoinAddress({ ...lockupArgs, network: 'devnet' }); // bcrt (regtest)
   const btcTxid = await sendToAddress(lockupAddress, Number(MAX_SATS) / 1e8);
   const proof = await waitForFulfilled(() => getBtcTxProofInputs(btcTxid));

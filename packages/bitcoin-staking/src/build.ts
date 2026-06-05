@@ -85,7 +85,13 @@ export async function buildSetupBond(
     targetRateBps: IntegerType;
     stxValueRatio: IntegerType;
     minUstxRatioBps: IntegerType;
-    earlyUnlockSigners: Uint8Array | string;
+    /**
+     * Pre-pushed Bitcoin script subscript spliced into the OP_ELSE early-exit
+     * branch of the locking script, validating an early L1 unlock — e.g.
+     * `<pubkey> OP_CHECKSIGVERIFY` or an M-of-N CHECKMULTISIGVERIFY template
+     * (buff 683).
+     */
+    earlyUnlockBytes: Uint8Array | string;
     /** Stacks principal authorized to call `announce-l1-early-exit` for this bond. */
     earlyUnlockAdmin: string;
     allowlist: { staker: string; maxSats: IntegerType }[];
@@ -107,7 +113,7 @@ export async function buildSetupBond(
       Cl.uint(args.targetRateBps),
       Cl.uint(args.stxValueRatio),
       Cl.uint(args.minUstxRatioBps),
-      clBufferFrom(args.earlyUnlockSigners),
+      clBufferFrom(args.earlyUnlockBytes),
       Cl.address(args.earlyUnlockAdmin),
       allowlistCV,
     ],
@@ -212,8 +218,7 @@ function lockupToCV(lockup: BondLockup): ClarityValue {
  * (the contract enforces this — `ERR_INVALID_OLD_SIGNER_MANAGER`). The new
  * signer-manager must be different (`ERR_UPDATE_BOND_SAME_SIGNER`) and must
  * already be registered. The contract calls `validate-stake!` on the new
- * manager and `checkpoint-staker` on the old one (errors from the latter are
- * swallowed). Takes effect from the next reward cycle, or from the bond's
+ * manager. Takes effect from the next reward cycle, or from the bond's
  * start cycle if the bond hasn't begun yet.
  */
 export async function buildUpdateBondRegistration(
@@ -298,11 +303,6 @@ export async function buildUnstakeSbtc(
  *
  * Authorization is delegated to the signer-manager contract via
  * `validate-stake!`. The paired-BTC entry is `register-for-bond`.
- *
- * The signer-manager trait must implement `checkpoint-staker`, which pox-5
- * calls on the *previous* signer-manager during rotation / unstake flows
- * (`stake-update`, `unstake`, `unstake-sbtc`, `update-bond-registration`,
- * `announce-l1-early-exit`); pox-5 ignores its return value.
  */
 export async function buildStake(
   args: {
@@ -336,9 +336,7 @@ export async function buildStake(
  * and rotate the signer-manager. Pass `0` / `0n` to skip a dimension. The
  * caller's *current* signer-manager must be passed as `oldSignerManager`
  * — the contract asserts it matches the recorded signer
- * (`ERR_INVALID_OLD_SIGNER_MANAGER`) and calls `checkpoint-staker` on it
- * before applying the update (errors from `checkpoint-staker` are
- * swallowed).
+ * (`ERR_INVALID_OLD_SIGNER_MANAGER`) before applying the update.
  *
  * unsure: todo: the API takes `cyclesToExtend`/`amountIncrease` with `0` meaning
  * "skip". The contract's own min-num-cycles guard (`check-pox-lock-period`)
@@ -383,8 +381,7 @@ export async function buildStakeUpdate(
  * callers should gate on {@link isInPreparePhase} first.
  *
  * `oldSignerManager` must match the staker's currently recorded signer
- * (`ERR_INVALID_OLD_SIGNER_MANAGER`) — pox-5 calls `checkpoint-staker` on it
- * before zeroing the position.
+ * (`ERR_INVALID_OLD_SIGNER_MANAGER`) before zeroing the position.
  */
 export async function buildUnstake(
   args: {
@@ -497,6 +494,32 @@ export async function buildClaimRewards(
   return callPox5(
     'claim-rewards',
     [Cl.list(args.bondIndices.map(i => Cl.uint(i))), Cl.uint(args.rewardCycle)],
+    args
+  );
+}
+
+/**
+ * Build an unsigned `claim-staker-rewards-for-signer` transaction.
+ *
+ * Marks a specific staker as having claimed rewards for the given leg
+ * (`isBond` selects the paired-BTC bond leg at `index`, otherwise the
+ * STX-only leg). Only callable by the signer-manager contract (the contract
+ * uses `contract-caller` to authorize the claim); a plain wallet call reverts
+ * with `ERR_UNAUTHORIZED`.
+ */
+export async function buildClaimStakerRewardsForSigner(
+  args: {
+    /** Staker principal being marked as claimed. */
+    staker: string;
+    /** Whether the claimed leg is a paired-BTC bond leg (`true`) or STX-only (`false`). */
+    isBond: boolean;
+    /** Index of the leg being claimed. */
+    index: number;
+  } & TxParams
+): Promise<StacksTransactionWire> {
+  return callPox5(
+    'claim-staker-rewards-for-signer',
+    [Cl.address(args.staker), Cl.bool(args.isBond), Cl.uint(args.index)],
     args
   );
 }

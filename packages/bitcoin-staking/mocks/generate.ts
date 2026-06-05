@@ -54,7 +54,7 @@ const SIGNER = 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.signer-manager-1';
 const POOL_CONTRACT = 'SP1HTBVD3JG9C05J7HBJTHGR0GGW7KXW28M5JS8QE.sbtc-pool';
 const BOOT_ADDRESS = 'SP000000000000000000002Q6VF78';
 const SIGNER_KEY_HEX = '03cd2cfdbd2ad9332828a7a13ef62cb999e063421c708e863a7ffed71fb61c88c9';
-const EARLY_UNLOCK_SIGNERS_HEX = '00'.repeat(683); // sentinel "no early-exit" form
+const EARLY_UNLOCK_BYTES_HEX = '00'.repeat(683); // OP_ELSE subscript placeholder "no early-exit" form
 const EARLY_UNLOCK_ADMIN = 'SP000000000000000000002Q6VF78';
 
 // ---------------------------------------------------------------------------
@@ -137,7 +137,7 @@ const BOND_TUPLE = {
   targetRateBps: 800, // 8% APY target
   stxValueRatio: '4000000000', // 4000 uSTX per 100 sats (rough)
   minUstxRatioBps: 11_000,
-  earlyUnlockSigners: EARLY_UNLOCK_SIGNERS_HEX,
+  earlyUnlockBytes: EARLY_UNLOCK_BYTES_HEX,
   earlyUnlockAdmin: EARLY_UNLOCK_ADMIN,
   capacitySats: '50000000000', // 500 BTC capacity
 };
@@ -485,7 +485,7 @@ const bondRowSummary = (overrides: Record<string, unknown> = {}) => ({
 
 const bondRowDetail = (overrides: Record<string, unknown> = {}) => ({
   ...bondRowSummary(),
-  early_unlock_signers: EARLY_UNLOCK_SIGNERS_HEX,
+  early_unlock_bytes: EARLY_UNLOCK_BYTES_HEX,
   early_unlock_admin: EARLY_UNLOCK_ADMIN,
   early_exit_pubkeys: [],
   early_exit_threshold: 0,

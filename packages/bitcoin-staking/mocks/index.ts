@@ -188,7 +188,7 @@ interface BondRaw {
   targetRateBps: number;
   stxValueRatio: string;
   minUstxRatioBps: number;
-  earlyUnlockSigners: string;
+  earlyUnlockBytes: string;
   earlyUnlockAdmin: string;
   capacitySats?: string;
 }
@@ -199,7 +199,7 @@ function parseBondFromMock(raw: BondRaw): Bond {
     targetRateBps: raw.targetRateBps,
     stxValueRatio: BigInt(raw.stxValueRatio),
     minUstxRatioBps: raw.minUstxRatioBps,
-    earlyUnlockSigners: raw.earlyUnlockSigners,
+    earlyUnlockBytes: raw.earlyUnlockBytes,
     earlyUnlockAdmin: raw.earlyUnlockAdmin,
   };
   if (raw.capacitySats !== undefined) bond.capacitySats = BigInt(raw.capacitySats);

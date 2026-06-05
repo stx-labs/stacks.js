@@ -7,7 +7,6 @@ import {
   BOND_END_OFFSET_PERIODS,
   bondPeriodToRewardCycle,
   rewardCycleToBurnHeight,
-  rewardCycleToUnlockHeight,
 } from './cycles';
 import { networkNameFrom } from './network';
 import type { BondL1LockupOutput, PoxInfo } from './types';
@@ -224,18 +223,24 @@ export function toConsensusBuffStandardPrincipal(addr: string): Uint8Array {
  *   <unlock-burn-height push>    // serialized as c-script-num
  *   OP_CHECKLOCKTIMEVERIFY
  *   OP_DROP
- *   <unlock-bytes push>
+ *   <unlock-bytes>
  * OP_ELSE
- *   <early-unlock-bytes push>
- *   <unlock-bytes push>
+ *   <early-unlock-bytes>
+ *   <unlock-bytes>
  * OP_ENDIF
  * ```
  *
- * The `unlock-bytes` (and `early-unlock-bytes`) tail is opaque to the
- * contract — it can be any push-data buffer, e.g. `<pubkey> OP_CHECKSIG` from
- * {@link buildDefaultUnlockScript} or a multisig descriptor.
+ * `unlockBytes` and `earlyUnlockBytes` are pre-pushed, self-contained Bitcoin
+ * script fragments — the contract concatenates them RAW (it does not wrap them
+ * in a push-data prefix), so the caller supplies complete subscripts:
+ * - `unlockBytes`: a subscript validating the staker signature that MUST leave
+ *   a valid result on the stack (e.g. `<pubkey> OP_CHECKSIG` from
+ *   {@link buildDefaultUnlockScript}).
+ * - `earlyUnlockBytes`: a subscript validating the early-unlock-admin signature
+ *   that MUST NOT leave anything on the stack (e.g. `<pubkey> OP_CHECKSIGVERIFY`,
+ *   or an M-of-N CHECKMULTISIGVERIFY template).
  *
- * The `early-unlock-bytes` come from the per-bond `protocol-bonds.early-unlock-signers`
+ * The `early-unlock-bytes` come from the per-bond `protocol-bonds.early-unlock-bytes`
  * configuration on-chain; the SDK does not synthesize them — callers fetch them
  * via `fetchBond(...)` and pass them through.
  *
@@ -250,8 +255,8 @@ export function buildLockingScript(opts: {
   /** Tail pushed in BOTH branches (the actual spend-condition). */
   unlockBytes: Uint8Array | string;
   /**
-   * Per-bond early-unlock descriptor, pushed before `unlockBytes` in the
-   * `OP_ELSE` (early-exit) branch. Sourced from `protocol-bonds.early-unlock-signers`
+   * Per-bond early-unlock descriptor, concatenated before `unlockBytes` in the
+   * `OP_ELSE` (early-exit) branch. Sourced from `protocol-bonds.early-unlock-bytes`
    * — opaque to the SDK.
    */
   earlyUnlockBytes: Uint8Array | string;
@@ -266,8 +271,8 @@ export function buildLockingScript(opts: {
 
   const stakerPush = pushScriptBytes(staker);
   const heightPush = pushCScriptNum(opts.unlockHeight);
-  const unlockPush = pushScriptBytes(unlockBytes);
-  const earlyPush = pushScriptBytes(earlyUnlockBytes);
+  const unlockPush = unlockBytes;
+  const earlyPush = earlyUnlockBytes;
 
   // Total length: stakerPush || OP_DROP OP_IF || heightPush || OP_CLTV OP_DROP
   //             || unlockPush || OP_ELSE || earlyPush || unlockPush || OP_ENDIF
@@ -347,7 +352,7 @@ export function buildLockupP2wshOutputScript(opts: {
  *   stxAddress: 'SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7',
  *   unlockHeight: 850_000,
  *   publicKey: '02a1633cafcc01ebfb6d78e39f687a1f0995c62fc95f51ead10a02ee0be551b5dc',
- *   earlyUnlockBytes: bond.earlyUnlockSigners, // from fetchBond(...)
+ *   earlyUnlockBytes: bond.earlyUnlockBytes, // from fetchBond(...)
  *   network: 'mainnet',
  * });
  * ```
@@ -660,8 +665,8 @@ export function assembleLockupProofFromBlock(input: {
 /**
  * Compute the deterministic L1 unlock height for a STAKER lock.
  *
- * Set to halfway through the staker's last cycle (i.e.
- * {@link rewardCycleToUnlockHeight} of `firstRewardCycle + numCycles - 1`),
+ * Set to the start of the staker's unlock cycle (i.e.
+ * {@link rewardCycleToBurnHeight} of `firstRewardCycle + numCycles - 1`),
  * giving time to re-lock without missing a cycle.
  */
 export function computeUnlockHeight(opts: {
@@ -669,7 +674,7 @@ export function computeUnlockHeight(opts: {
   numCycles: number;
   poxInfo: PoxInfo;
 }): number {
-  return rewardCycleToUnlockHeight({
+  return rewardCycleToBurnHeight({
     cycle: opts.firstRewardCycle + opts.numCycles - 1,
     poxInfo: opts.poxInfo,
   });

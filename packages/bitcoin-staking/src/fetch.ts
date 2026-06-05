@@ -396,7 +396,7 @@ function decodeBondTuple(bondIndex: number, tuple: TupleCV): Bond {
   const targetRate = (tuple.value['target-rate'] as UIntCV).value;
   const stxValueRatio = (tuple.value['stx-value-ratio'] as UIntCV).value;
   const minUstxRatio = (tuple.value['min-ustx-ratio'] as UIntCV).value;
-  const earlyUnlockSigners = (tuple.value['early-unlock-signers'] as BufferCV).value as string;
+  const earlyUnlockBytes = (tuple.value['early-unlock-bytes'] as BufferCV).value as string;
   const earlyUnlockAdmin = cvToValue(tuple.value['early-unlock-admin'] as PrincipalCV) as string;
 
   return {
@@ -404,7 +404,7 @@ function decodeBondTuple(bondIndex: number, tuple: TupleCV): Bond {
     targetRateBps: Number(targetRate),
     stxValueRatio: BigInt(stxValueRatio),
     minUstxRatioBps: Number(minUstxRatio),
-    earlyUnlockSigners,
+    earlyUnlockBytes,
     earlyUnlockAdmin,
   };
 }
@@ -790,6 +790,281 @@ export async function fetchSignerRewardsPerTokenSettledByCycle(
   opts: { signerManager: string; rewardCycle: number } & NetworkClientParam
 ): Promise<bigint> {
   return fetchSignerRewardsPerTokenSettled({ ...opts, index: opts.rewardCycle, isBond: false });
+}
+
+/**
+ * Wraps the contract's `get-signer-rewards-per-token-for-cycle` read-only.
+ *
+ * Returns the live rewards-per-token value for this signer's leg (the running
+ * accumulator before settlement). Prefer the sugar variants
+ * {@link fetchSignerRewardsPerTokenForCycleByBond} /
+ * {@link fetchSignerRewardsPerTokenForCycleByCycle} at call sites.
+ */
+export async function fetchSignerRewardsPerTokenForCycle(
+  opts: {
+    signerManager: string;
+    index: number;
+    isBond: boolean;
+  } & NetworkClientParam
+): Promise<bigint> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName: 'get-signer-rewards-per-token-for-cycle',
+    functionArgs: [Cl.address(opts.signerManager), Cl.bool(opts.isBond), Cl.uint(opts.index)],
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+  return BigInt((result as UIntCV).value);
+}
+
+/**
+ * Wraps `get-signer-rewards-per-token-for-cycle` for a paired-BTC bond leg.
+ * Sugar over {@link fetchSignerRewardsPerTokenForCycle} with `isBond: true`.
+ */
+export async function fetchSignerRewardsPerTokenForCycleByBond(
+  opts: { signerManager: string; bondIndex: number } & NetworkClientParam
+): Promise<bigint> {
+  return fetchSignerRewardsPerTokenForCycle({ ...opts, index: opts.bondIndex, isBond: true });
+}
+
+/**
+ * Wraps `get-signer-rewards-per-token-for-cycle` for an STX-only cycle leg.
+ * Sugar over {@link fetchSignerRewardsPerTokenForCycle} with `isBond: false`.
+ */
+export async function fetchSignerRewardsPerTokenForCycleByCycle(
+  opts: { signerManager: string; rewardCycle: number } & NetworkClientParam
+): Promise<bigint> {
+  return fetchSignerRewardsPerTokenForCycle({ ...opts, index: opts.rewardCycle, isBond: false });
+}
+
+// ---------------------------------------------------------------------------
+// Staker-level earned-rewards reads
+// ---------------------------------------------------------------------------
+
+/**
+ * Wraps the contract's `get-earned-staker-rewards` read-only.
+ *
+ * Returns the rewards earned by `staker` within this signer's leg. Prefer the
+ * sugar variants {@link fetchEarnedStakerRewardsByBond} /
+ * {@link fetchEarnedStakerRewardsByCycle} at call sites.
+ */
+export async function fetchEarnedStakerRewards(
+  opts: {
+    signerManager: string;
+    index: number;
+    isBond: boolean;
+    staker: string;
+  } & NetworkClientParam
+): Promise<bigint> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName: 'get-earned-staker-rewards',
+    functionArgs: [
+      Cl.address(opts.signerManager),
+      Cl.bool(opts.isBond),
+      Cl.uint(opts.index),
+      Cl.address(opts.staker),
+    ],
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+  return BigInt((result as UIntCV).value);
+}
+
+/**
+ * Wraps `get-earned-staker-rewards` for a paired-BTC bond leg. Sugar over
+ * {@link fetchEarnedStakerRewards} with `isBond: true`.
+ */
+export async function fetchEarnedStakerRewardsByBond(
+  opts: { signerManager: string; bondIndex: number; staker: string } & NetworkClientParam
+): Promise<bigint> {
+  return fetchEarnedStakerRewards({ ...opts, index: opts.bondIndex, isBond: true });
+}
+
+/**
+ * Wraps `get-earned-staker-rewards` for an STX-only cycle leg. Sugar over
+ * {@link fetchEarnedStakerRewards} with `isBond: false`.
+ */
+export async function fetchEarnedStakerRewardsByCycle(
+  opts: { signerManager: string; rewardCycle: number; staker: string } & NetworkClientParam
+): Promise<bigint> {
+  return fetchEarnedStakerRewards({ ...opts, index: opts.rewardCycle, isBond: false });
+}
+
+/**
+ * Wraps the contract's `get-staker-rewards-per-token-settled-for-cycle`
+ * read-only.
+ *
+ * Returns the rewards-per-token value at which this staker's leg was last
+ * settled. Prefer the sugar variants
+ * {@link fetchStakerRewardsPerTokenSettledByBond} /
+ * {@link fetchStakerRewardsPerTokenSettledByCycle} at call sites.
+ */
+export async function fetchStakerRewardsPerTokenSettled(
+  opts: {
+    signerManager: string;
+    index: number;
+    isBond: boolean;
+    staker: string;
+  } & NetworkClientParam
+): Promise<bigint> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName: 'get-staker-rewards-per-token-settled-for-cycle',
+    functionArgs: [
+      Cl.address(opts.signerManager),
+      Cl.bool(opts.isBond),
+      Cl.uint(opts.index),
+      Cl.address(opts.staker),
+    ],
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+  return BigInt((result as UIntCV).value);
+}
+
+/**
+ * Wraps `get-staker-rewards-per-token-settled-for-cycle` for a paired-BTC bond
+ * leg. Sugar over {@link fetchStakerRewardsPerTokenSettled} with `isBond: true`.
+ */
+export async function fetchStakerRewardsPerTokenSettledByBond(
+  opts: { signerManager: string; bondIndex: number; staker: string } & NetworkClientParam
+): Promise<bigint> {
+  return fetchStakerRewardsPerTokenSettled({ ...opts, index: opts.bondIndex, isBond: true });
+}
+
+/**
+ * Wraps `get-staker-rewards-per-token-settled-for-cycle` for an STX-only cycle
+ * leg. Sugar over {@link fetchStakerRewardsPerTokenSettled} with `isBond: false`.
+ */
+export async function fetchStakerRewardsPerTokenSettledByCycle(
+  opts: { signerManager: string; rewardCycle: number; staker: string } & NetworkClientParam
+): Promise<bigint> {
+  return fetchStakerRewardsPerTokenSettled({ ...opts, index: opts.rewardCycle, isBond: false });
+}
+
+/**
+ * Wraps the contract's `get-staker-unclaimed-rewards-for-cycle` read-only.
+ *
+ * The per-staker unclaimed-rewards counter rolled forward by the last
+ * settlement. Prefer the sugar variants
+ * {@link fetchStakerUnclaimedRewardsByBond} /
+ * {@link fetchStakerUnclaimedRewardsByCycle} at call sites.
+ */
+export async function fetchStakerUnclaimedRewards(
+  opts: {
+    signerManager: string;
+    index: number;
+    isBond: boolean;
+    staker: string;
+  } & NetworkClientParam
+): Promise<bigint> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName: 'get-staker-unclaimed-rewards-for-cycle',
+    functionArgs: [
+      Cl.address(opts.signerManager),
+      Cl.bool(opts.isBond),
+      Cl.uint(opts.index),
+      Cl.address(opts.staker),
+    ],
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+  return BigInt((result as UIntCV).value);
+}
+
+/**
+ * Wraps `get-staker-unclaimed-rewards-for-cycle` for a paired-BTC bond leg.
+ * Sugar over {@link fetchStakerUnclaimedRewards} with `isBond: true`.
+ */
+export async function fetchStakerUnclaimedRewardsByBond(
+  opts: { signerManager: string; bondIndex: number; staker: string } & NetworkClientParam
+): Promise<bigint> {
+  return fetchStakerUnclaimedRewards({ ...opts, index: opts.bondIndex, isBond: true });
+}
+
+/**
+ * Wraps `get-staker-unclaimed-rewards-for-cycle` for an STX-only cycle leg.
+ * Sugar over {@link fetchStakerUnclaimedRewards} with `isBond: false`.
+ */
+export async function fetchStakerUnclaimedRewardsByCycle(
+  opts: { signerManager: string; rewardCycle: number; staker: string } & NetworkClientParam
+): Promise<bigint> {
+  return fetchStakerUnclaimedRewards({ ...opts, index: opts.rewardCycle, isBond: false });
+}
+
+// ---------------------------------------------------------------------------
+// Rollover preflight reads
+// ---------------------------------------------------------------------------
+
+/**
+ * Wraps the contract's `get-staker-custodied-sbtc` read-only.
+ *
+ * Returns the sBTC sats pox-5 currently custodies for the staker (`0` for an
+ * L1-lock bond or no bond).
+ */
+export async function fetchStakerCustodiedSbtc(
+  opts: { staker: string } & NetworkClientParam
+): Promise<bigint> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName: 'get-staker-custodied-sbtc',
+    functionArgs: [Cl.address(opts.staker)],
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+  return BigInt((result as UIntCV).value);
+}
+
+/**
+ * Wraps the contract's `bond-overlaps-new-position?` read-only.
+ *
+ * Returns `true` if the existing bond membership overlaps a new staking term
+ * starting at `newFirstRewardCycle`.
+ */
+export async function fetchBondOverlapsNewPosition(
+  opts: {
+    membership: BondMembership | undefined;
+    newFirstRewardCycle: number;
+  } & NetworkClientParam
+): Promise<boolean> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const membershipArg = opts.membership
+    ? Cl.some(
+        Cl.tuple({
+          'bond-index': Cl.uint(opts.membership.bondIndex),
+          'amount-ustx': Cl.uint(opts.membership.amountUstx),
+          signer: Cl.address(opts.membership.signer),
+          'is-l1-lock': Cl.bool(opts.membership.isL1Lock),
+        })
+      )
+    : Cl.none();
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName: 'bond-overlaps-new-position?',
+    functionArgs: [membershipArg, Cl.uint(opts.newFirstRewardCycle)],
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+  return (result as BooleanCV).type === ClarityType.BoolTrue;
 }
 
 // ---------------------------------------------------------------------------

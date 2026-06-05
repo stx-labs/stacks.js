@@ -47,11 +47,39 @@ describe('describePox5Error', () => {
     expect(describePox5Error(1)?.name).toBe('ERR_UNAUTHORIZED');
     expect(describePox5Error(2)?.name).toBe('ERR_CANNOT_SETUP_BOND_TOO_SOON');
   });
+
+  it('describes ERR_DUPLICATE_LOCKUP_OUTPOINT (46)', () => {
+    const info = describePox5Error(46);
+    expect(info).toBeDefined();
+    expect(info!.code).toBe(46);
+    expect(info!.name).toBe('ERR_DUPLICATE_LOCKUP_OUTPOINT');
+    expect(info!.description.length).toBeGreaterThan(0);
+  });
+
+  it('describes ERR_STAKE_IN_PREPARE_PHASE (47)', () => {
+    const info = describePox5Error(47);
+    expect(info).toBeDefined();
+    expect(info!.code).toBe(47);
+    expect(info!.name).toBe('ERR_STAKE_IN_PREPARE_PHASE');
+    expect(info!.description.length).toBeGreaterThan(0);
+  });
+
+  it('describes ERR_ROLLOVER_TOO_EARLY (48)', () => {
+    const info = describePox5Error(48);
+    expect(info).toBeDefined();
+    expect(info!.code).toBe(48);
+    expect(info!.name).toBe('ERR_ROLLOVER_TOO_EARLY');
+    expect(info!.description.length).toBeGreaterThan(0);
+  });
 });
 
 describe('Pox5ErrorCode enum', () => {
   it('has InvalidLockupAmount = 45', () => {
     expect(Pox5ErrorCode.InvalidLockupAmount).toBe(45);
+  });
+
+  it('has RolloverTooEarly = 48', () => {
+    expect(Pox5ErrorCode.RolloverTooEarly).toBe(48);
   });
 
   it('every enum value has a corresponding name and description', () => {

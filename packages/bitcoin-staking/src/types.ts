@@ -132,8 +132,11 @@ export interface Bond {
   stxValueRatio: bigint;
   /** Minimum amount of STX (in basis points) that must be paired per BTC. */
   minUstxRatioBps: number;
-  /** Hex describing the early-unlock signer set (683 bytes). */
-  earlyUnlockSigners: string;
+  /**
+   * Hex-encoded OP_ELSE early-exit subscript of the L1 lockup witness script
+   * (buff 683) — e.g. `<pubkey> OP_CHECKSIGVERIFY`.
+   */
+  earlyUnlockBytes: string;
   /** Stacks principal authorized to trigger early-unlock for this bond. */
   earlyUnlockAdmin: string;
   /** Sum of allowlist `max-sats` (capacity). Optional; see note above. */

@@ -122,11 +122,6 @@ export function rewardCycleToBurnHeight(opts: { cycle: number; poxInfo: PoxInfo 
   return opts.poxInfo.firstBurnchainBlockHeight + opts.cycle * opts.poxInfo.rewardCycleLength;
 }
 
-/** Mirrors the pox-5.clar `reward-cycle-to-unlock-height` read-only function. */
-export function rewardCycleToUnlockHeight(opts: { cycle: number; poxInfo: PoxInfo }): number {
-  return rewardCycleToBurnHeight(opts) + Math.floor(opts.poxInfo.rewardCycleLength / 2);
-}
-
 /**
  * Mirrors the pox-5.clar `burn-height-to-distribution-index` read-only
  * function (see `references/pox-5.clar:2086`).
