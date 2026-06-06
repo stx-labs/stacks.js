@@ -1,40 +1,63 @@
+/**
+ * STX transfer smoke test — doubles as a "fund a wallet" utility.
+ *
+ * Defaults: account4 → account5 (both daemon-free, funded on all nets).
+ * Override the recipient with STACKS_ADDRESS (this action only — not in the
+ * shared ENV global), e.g. to top up an external wallet:
+ *
+ *   STACKS_ADDRESS=ST… RECORD=1 \
+ *     npx jest tests/regtest/actions/transfer-stx.test.ts --runInBand --collectCoverage=false
+ *
+ * Must be a testnet (ST…) address — the node rejects SP… with BadAddressVersionByte.
+ */
 import { makeSTXTokenTransfer } from "@stacks/transactions";
+import { useFixtures } from "../../helpers/mock";
 import { REGTEST_KEYS, getAccount } from "../regtest";
 import { getNetwork } from "../../helpers/utils";
 import {
-  broadcastAndWaitForTransaction,
+  broadcastAndWait,
+  getNextNonce,
   getStxBalance,
 } from "../../helpers/wait";
 
-jest.setTimeout(180_000);
+jest.setTimeout(300_000);
+
+const RECIPIENT_ADDRESS =
+  process.env.STACKS_ADDRESS ??
+  getAccount(REGTEST_KEYS.account5).address;
+
+if (!RECIPIENT_ADDRESS.startsWith("ST")) {
+  throw new Error(`expected a testnet (ST…) address, got ${RECIPIENT_ADDRESS}`);
+}
 
 const AMOUNT = 1_000_000n; // 1 STX
 const FEE = 1_000n;
 
 const network = getNetwork();
-const account1 = getAccount(REGTEST_KEYS.account1);
-const account2 = getAccount(REGTEST_KEYS.account2);
+const sender = getAccount(REGTEST_KEYS.account4);
 
-test("transfer 1 STX from account1 to account2", async () => {
-  const account1Before = await getStxBalance(account1.address);
-  const account2Before = await getStxBalance(account2.address);
-  console.log("before", { account1Before, account2Before });
-  expect(account1Before).toBeGreaterThan(AMOUNT + FEE);
+beforeAll(() => { useFixtures("transfer-stx"); });
 
+test(`transfer ${AMOUNT} ustx: account4 → ${RECIPIENT_ADDRESS}`, async () => {
+  const senderBefore = await getStxBalance(sender.address);
+  const recipientBefore = await getStxBalance(RECIPIENT_ADDRESS);
+  console.log("before", { senderBefore, recipientBefore });
+  expect(senderBefore).toBeGreaterThan(AMOUNT + FEE);
+
+  const nonce = await getNextNonce(sender.address);
   const tx = await makeSTXTokenTransfer({
-    recipient: account2.address,
+    recipient: RECIPIENT_ADDRESS,
     amount: AMOUNT,
-    senderKey: account1.key,
+    senderKey: sender.key,
     network,
     fee: FEE,
+    nonce,
   });
-  const confirmed = await broadcastAndWaitForTransaction(tx, network);
-  expect(confirmed.tx_status).toBe("success");
+  await broadcastAndWait(tx, sender.address, network);
 
-  const account1After = await getStxBalance(account1.address);
-  const account2After = await getStxBalance(account2.address);
-  console.log("after", { account1After, account2After });
-
-  expect(account2After).toBe(account2Before + AMOUNT);
-  expect(account1After).toBe(account1Before - AMOUNT - FEE);
+  const senderAfter = await getStxBalance(sender.address);
+  const recipientAfter = await getStxBalance(RECIPIENT_ADDRESS);
+  console.log("after", { senderAfter, recipientAfter });
+  expect(recipientAfter).toBe(recipientBefore + AMOUNT);
+  expect(senderAfter).toBe(senderBefore - AMOUNT - FEE);
 });

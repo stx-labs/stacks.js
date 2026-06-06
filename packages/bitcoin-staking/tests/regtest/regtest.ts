@@ -31,7 +31,7 @@ export const REGTEST_KEYS = {
   // STEH2J3… — clean (was the old keep-alive default, now free). sBTC staker.
   account6:
     "5b8303150239eceaba43892af7cdd1fa7fc26eda5182ebaaa568e3341d54a4d001",
-  // STT8DSJ… — clean (was the old keep-alive default, now free). Extra staker
+  // STT8DSJTWAW9TVJ1B17SD3S6F7SYH4TXG7TWS7Q9 — clean (was the old keep-alive default, now free). Extra staker
   // (e.g. unstake-sbtc) so register tests don't collide on one chain.
   account7:
     "16226f674796712dfbd53bf402304579b8b6d04d4bed4d466bf84ce6db973d4401",
