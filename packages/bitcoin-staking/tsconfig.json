@@ -3,7 +3,7 @@
   "compilerOptions": {
     "resolveJsonModule": true
   },
-  "include": ["src/**/*", "tests/**/*", "mocks/**/*"],
+  "include": ["src/**/*", "tests/**/*"],
   "typedocOptions": {
     "entryPoints": ["src/index.ts"]
   }
