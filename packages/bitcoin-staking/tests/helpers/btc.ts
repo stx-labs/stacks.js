@@ -47,7 +47,7 @@ export const sendToAddress = (address: string, amountBtc: number, wallet = 'main
 // SPV proof inputs via RPC (no Esplora)
 // ---------------------------------------------------------------------------
 //
-// The SDK's `assembleLockupProofFromBlock` does all the merkle math; it just
+// The SDK's `buildLockProofFromBlock` does all the merkle math; it just
 // needs the block's ordered txid list + the raw tx + header, which we pull from
 // bitcoind: `gettransaction` (wallet, no -txindex needed) for the raw tx +
 // blockhash, `getblockheader` for the 80-byte header, and `getblock` verbosity-1
@@ -77,11 +77,11 @@ export const getBlockHeaderHex = (blockHash: string) =>
 export const getBlockV1 = (blockHash: string) => bitcoinRpc<BlockV1>('getblock', [blockHash, 1]);
 
 /**
- * Fetch the RPC pieces the SDK's `assembleLockupProofFromBlock` needs for a
+ * Fetch the RPC pieces the SDK's `buildLockProofFromBlock` needs for a
  * confirmed wallet tx: the raw `txHex` (segwit serialization — the SDK strips
  * the witness), the 80-byte `header`, the block's ordered `txids`, and its
  * `blockHeight`. Throws if the tx isn't mined yet. Feed the result straight in:
- * `assembleLockupProofFromBlock({ ...inputs, expectedScript })`.
+ * `buildLockProofFromBlock({ ...inputs, expectedScript })`.
  */
 export async function getBtcTxProofInputs(
   txid: string,

@@ -12,10 +12,10 @@
  * the `main` bitcoind (miner) wallet funded.
  */
 import {
-  assembleLockupProofFromBlock,
-  buildDefaultUnlockScript,
-  buildLockingBitcoinAddress,
-  buildLockupP2wshOutputScript,
+  buildLockProofFromBlock,
+  buildUnlockScript,
+  buildLockAddress,
+  buildLockOutputScript,
   buildRegisterForBond,
   buildSetupBond,
   computeBondUnlockHeight,
@@ -85,7 +85,6 @@ test("l1 register-for-bond happy path: setup-bond → fund BTC → prove → reg
     stxValueRatio: STX_VALUE_RATIO,
     minUstxRatioBps: MIN_USTX_RATIO_BPS,
     earlyUnlockBytes: EARLY_UNLOCK_BYTES,
-    earlyUnlockAdmin: admin.address,
     allowlist: [{ staker: staker.address, maxSats: MAX_SATS }],
     publicKey: admin.publicKey,
     fee: FEE,
@@ -100,7 +99,7 @@ test("l1 register-for-bond happy path: setup-bond → fund BTC → prove → reg
 
   // FUND LOCKUP
   const unlockHeight = computeBondUnlockHeight({ bondIndex, poxInfo });
-  const unlockBytes = buildDefaultUnlockScript(staker.publicKey);
+  const unlockBytes = buildUnlockScript(staker.publicKey);
   const lockupArgs = {
     stxAddress: staker.address,
     unlockHeight,
@@ -108,7 +107,7 @@ test("l1 register-for-bond happy path: setup-bond → fund BTC → prove → reg
     earlyUnlockBytes: EARLY_UNLOCK_BYTES,
   };
   // regtest BTC addresses are bcrt (devnet), not the stacks-testnet network.
-  const lockupAddress = buildLockingBitcoinAddress({
+  const lockupAddress = buildLockAddress({
     ...lockupArgs,
     network: "devnet",
   });
@@ -120,12 +119,12 @@ test("l1 register-for-bond happy path: setup-bond → fund BTC → prove → reg
     getBtcTxProofInputs(btcTxid),
   );
   await waitForBurnBlockHeight(proofInputs.blockHeight);
-  const output = assembleLockupProofFromBlock({
+  const output = buildLockProofFromBlock({
     txHex: proofInputs.txHex,
     header: proofInputs.header,
     blockHeight: proofInputs.blockHeight,
     txids: proofInputs.txids,
-    expectedScript: buildLockupP2wshOutputScript(lockupArgs),
+    expectedScript: buildLockOutputScript(lockupArgs),
   });
   expect(output.amount).toBe(MAX_SATS);
 

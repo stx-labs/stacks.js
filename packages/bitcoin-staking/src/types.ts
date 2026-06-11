@@ -127,7 +127,7 @@ export interface AccountStatus {
  * unlock cycle has been reached).
  *
  * Mirrors the `protocol-bond-memberships` map value
- * `{ bond-index, amount-ustx, signer, is-l1-lock }`.
+ * `{ bond-index, amount-ustx, signer, is-l1-lock, amount-sats }`.
  */
 export interface BondMembership {
   bondIndex: number;
@@ -136,6 +136,8 @@ export interface BondMembership {
   signer: string;
   /** True if the BTC side is an L1 lockup; false if backed by sBTC. */
   isL1Lock: boolean;
+  /** BTC shares (sats) currently attributed to this membership. */
+  amountSats: bigint;
 }
 
 /**
@@ -161,12 +163,11 @@ export interface Bond {
   /** Minimum amount of STX (in basis points) that must be paired per BTC. */
   minUstxRatioBps: number;
   /**
-   * Hex-encoded OP_ELSE early-exit subscript of the L1 lockup witness script
-   * (buff 683) — e.g. `<pubkey> OP_CHECKSIGVERIFY`.
+   * Hex-encoded early-exit subscript that guards the OP_ELSE branch of the L1
+   * lockup witness script (buff 683) — e.g. `<pubkey> OP_CHECKSIG`. Its result
+   * is consumed by the script's shared OP_VERIFY.
    */
   earlyUnlockBytes: string;
-  /** Stacks principal authorized to trigger early-unlock for this bond. */
-  earlyUnlockAdmin: string;
   /** Sum of allowlist `max-sats` (capacity). Optional; see note above. */
   capacitySats?: bigint;
 }

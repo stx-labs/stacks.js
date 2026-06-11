@@ -1,14 +1,17 @@
 import * as btc from '@scure/btc-signer';
-import { bytesToHex, hexToBytes } from '@stacks/common';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { bytesToHex, concatBytes, hexToBytes } from '@stacks/common';
 import {
-  buildDefaultUnlockScript,
-  buildLockingBitcoinAddress,
-  buildLockingScript,
+  buildUnlockScript,
+  buildLockAddress,
+  buildLockScript,
+  computeRegisterPreimage,
   computeUnlockHeight,
-  lockingScriptToP2wsh,
-  parseDefaultUnlockScript,
+  lockScriptToAddress,
+  parseUnlockScript,
   serializeCScriptNum,
-} from '../src/locking';
+  toConsensusBuffStandardPrincipal,
+} from '../src/script';
 
 // A known compressed public key (33 bytes)
 const TEST_PUBKEY_HEX = '0316e35d38b52d4886e40065e4952a49535ce914e02294be58e252d1998f129b19';
@@ -17,16 +20,16 @@ const TEST_PUBKEY = hexToBytes(TEST_PUBKEY_HEX);
 // A known Stacks testnet address (standard principal)
 const TEST_STX_ADDRESS = 'ST000000000000000000002AMW42H';
 
-// Early-unlock subscript: a pre-pushed, self-contained `<pubkey> OP_CHECKSIGVERIFY`
-// fragment (leaves nothing on the stack), as the contract concatenates it RAW.
-const TEST_EARLY_UNLOCK = btc.Script.encode([new Uint8Array(33).fill(0x02), 'CHECKSIGVERIFY']);
+// Early-unlock subscript: a pre-pushed, self-contained `<pubkey> OP_CHECKSIG`
+// fragment (leaves a bool on the stack for the shared OP_VERIFY), as the
+// contract concatenates it RAW.
+const TEST_EARLY_UNLOCK = btc.Script.encode([new Uint8Array(33).fill(0x02), 'CHECKSIG']);
 
-// Opcodes we expect inside the script
-const OP_IF = 0x63;
-const OP_ELSE = 0x67;
-const OP_ENDIF = 0x68;
-const OP_DROP = 0x75;
-const OP_CLTV = 0xb1;
+// Opcodes we assert inside the script — sourced from the library, not hardcoded.
+const { OP } = btc;
+
+// The fixed OP_ELSE-branch preamble: OP_SIZE <32> OP_EQUALVERIFY OP_SHA256 OP_PUSHBYTES_32.
+const STAKER_COMMITMENT_PREFIX = hexToBytes('82012088a820');
 
 /** Find the first index of `needle` in `hay` (or -1). */
 function findSubarray(hay: Uint8Array, needle: Uint8Array): number {
@@ -39,9 +42,9 @@ function findSubarray(hay: Uint8Array, needle: Uint8Array): number {
   return -1;
 }
 
-describe('buildDefaultUnlockScript', () => {
+describe('buildUnlockScript', () => {
   it('builds a valid <pubkey> CHECKSIG script', () => {
-    const script = buildDefaultUnlockScript(TEST_PUBKEY);
+    const script = buildUnlockScript(TEST_PUBKEY);
     const decoded = btc.Script.decode(script);
 
     expect(decoded).toHaveLength(2);
@@ -51,21 +54,21 @@ describe('buildDefaultUnlockScript', () => {
   });
 
   it('accepts hex string input', () => {
-    const fromBytes = buildDefaultUnlockScript(TEST_PUBKEY);
-    const fromHex = buildDefaultUnlockScript(TEST_PUBKEY_HEX);
+    const fromBytes = buildUnlockScript(TEST_PUBKEY);
+    const fromHex = buildUnlockScript(TEST_PUBKEY_HEX);
     expect(bytesToHex(fromBytes)).toBe(bytesToHex(fromHex));
   });
 
   it('rejects non-33-byte keys', () => {
-    expect(() => buildDefaultUnlockScript(new Uint8Array(32))).toThrow('33-byte');
-    expect(() => buildDefaultUnlockScript(new Uint8Array(65))).toThrow('33-byte');
+    expect(() => buildUnlockScript(new Uint8Array(32))).toThrow('33-byte');
+    expect(() => buildUnlockScript(new Uint8Array(65))).toThrow('33-byte');
   });
 });
 
-describe('parseDefaultUnlockScript', () => {
-  it('round-trips with buildDefaultUnlockScript', () => {
-    const script = buildDefaultUnlockScript(TEST_PUBKEY);
-    const parsed = parseDefaultUnlockScript(script);
+describe('parseUnlockScript', () => {
+  it('round-trips with buildUnlockScript', () => {
+    const script = buildUnlockScript(TEST_PUBKEY);
+    const parsed = parseUnlockScript(script);
 
     expect(parsed).toBeDefined();
     expect(bytesToHex(parsed!)).toBe(bytesToHex(TEST_PUBKEY));
@@ -78,45 +81,52 @@ describe('parseDefaultUnlockScript', () => {
       new Uint8Array(33).fill(0x03),
       'CHECKMULTISIG',
     ]);
-    expect(parseDefaultUnlockScript(customScript)).toBeUndefined();
+    expect(parseUnlockScript(customScript)).toBeUndefined();
   });
 
   it('returns undefined for empty/malformed input', () => {
-    expect(parseDefaultUnlockScript(new Uint8Array(0))).toBeUndefined();
-    expect(parseDefaultUnlockScript(new Uint8Array([0xff, 0xff]))).toBeUndefined();
+    expect(parseUnlockScript(new Uint8Array(0))).toBeUndefined();
+    expect(parseUnlockScript(new Uint8Array([0xff, 0xff]))).toBeUndefined();
   });
 });
 
-describe('buildLockingScript', () => {
-  const unlockBytes = buildDefaultUnlockScript(TEST_PUBKEY);
+describe('buildLockScript', () => {
+  const unlockBytes = buildUnlockScript(TEST_PUBKEY);
 
-  it('contains OP_IF / OP_CLTV / OP_ELSE / OP_ENDIF opcodes in the right order', () => {
-    const script = buildLockingScript({
+  it('lays out OP.IF <h> OP.CHECKLOCKTIMEVERIFY OP.ELSE <commitment> <early> OP.ENDIF OP.VERIFY <unlock>', () => {
+    const script = buildLockScript({
       stxAddress: TEST_STX_ADDRESS,
       unlockHeight: 850_000,
       unlockBytes,
       earlyUnlockBytes: TEST_EARLY_UNLOCK,
     });
 
-    // The opcodes are constants — find their positions and check ordering.
-    const ifIdx = script.indexOf(OP_IF);
-    const cltvIdx = script.indexOf(OP_CLTV);
-    const elseIdx = script.indexOf(OP_ELSE);
-    const endifIdx = script.indexOf(OP_ENDIF);
+    // The script is a flat, deterministic concatenation — reconstruct it.
+    const heightPush = concatBytes(
+      Uint8Array.of(serializeCScriptNum(850_000n).length),
+      serializeCScriptNum(850_000n)
+    );
+    const stakerHash = sha256(computeRegisterPreimage(TEST_STX_ADDRESS));
+    const expected = concatBytes(
+      Uint8Array.of(OP.IF),
+      heightPush,
+      Uint8Array.of(OP.CHECKLOCKTIMEVERIFY, OP.ELSE),
+      STAKER_COMMITMENT_PREFIX,
+      stakerHash,
+      Uint8Array.of(OP.EQUALVERIFY),
+      TEST_EARLY_UNLOCK,
+      Uint8Array.of(OP.ENDIF, OP.VERIFY),
+      unlockBytes
+    );
+    expect(bytesToHex(script)).toBe(bytesToHex(expected));
 
-    expect(ifIdx).toBeGreaterThanOrEqual(0);
-    expect(cltvIdx).toBeGreaterThan(ifIdx);
-    expect(elseIdx).toBeGreaterThan(cltvIdx);
-    expect(endifIdx).toBeGreaterThan(elseIdx);
-
-    // OP_DROP must immediately precede OP_IF (the staker-buff drop) and
-    // immediately follow OP_CLTV (the height drop).
-    expect(script[ifIdx - 1]).toBe(OP_DROP);
-    expect(script[cltvIdx + 1]).toBe(OP_DROP);
+    // The staker is committed as a hash — its 22-byte consensus buff never
+    // appears in the script in cleartext.
+    expect(findSubarray(script, toConsensusBuffStandardPrincipal(TEST_STX_ADDRESS))).toBe(-1);
   });
 
   it('embeds the serialized ScriptNum for unlockHeight=850000 (3 bytes: 50 f8 0c)', () => {
-    const script = buildLockingScript({
+    const script = buildLockScript({
       stxAddress: TEST_STX_ADDRESS,
       unlockHeight: 850_000,
       unlockBytes,
@@ -127,8 +137,8 @@ describe('buildLockingScript', () => {
     expect(bytesToHex(expected)).toBe('50f80c');
 
     // The height push has a length prefix (0x03) followed by the bytes. Look
-    // for `<len><bytes>` immediately after OP_IF.
-    const ifIdx = script.indexOf(OP_IF);
+    // for `<len><bytes>` immediately after OP.IF.
+    const ifIdx = script.indexOf(OP.IF);
     expect(script[ifIdx + 1]).toBe(expected.length);
     for (let i = 0; i < expected.length; i++) {
       expect(script[ifIdx + 2 + i]).toBe(expected[i]);
@@ -136,7 +146,7 @@ describe('buildLockingScript', () => {
   });
 
   it('embeds the serialized ScriptNum for unlockHeight=100 (single byte: 64)', () => {
-    const script = buildLockingScript({
+    const script = buildLockScript({
       stxAddress: TEST_STX_ADDRESS,
       unlockHeight: 100,
       unlockBytes,
@@ -148,27 +158,28 @@ describe('buildLockingScript', () => {
 
     // For values 1..=16 the contract uses OP_<N> (single-opcode). 100 is
     // larger than 16, so it's pushed via <len=1><0x64>.
-    const ifIdx = script.indexOf(OP_IF);
+    const ifIdx = script.indexOf(OP.IF);
     expect(script[ifIdx + 1]).toBe(1);
     expect(script[ifIdx + 2]).toBe(0x64);
   });
 
-  it('places earlyUnlockBytes followed by unlockBytes between OP_ELSE and OP_ENDIF', () => {
-    const script = buildLockingScript({
+  it('splices earlyUnlockBytes after the staker commitment, and unlockBytes once at the tail', () => {
+    const script = buildLockScript({
       stxAddress: TEST_STX_ADDRESS,
       unlockHeight: 850_000,
       unlockBytes,
       earlyUnlockBytes: TEST_EARLY_UNLOCK,
     });
 
-    const elseIdx = script.indexOf(OP_ELSE);
-    // After OP_ELSE the earlyUnlockBytes follow RAW (no push-length prefix):
-    // the byte immediately after OP_ELSE is the first byte of earlyUnlockBytes.
+    // earlyUnlockBytes follow RAW after OP_ELSE, the 6-byte commitment preamble,
+    // the 32-byte staker hash, and the OP_EQUALVERIFY that consumes it.
+    const elseIdx = script.indexOf(OP.ELSE);
+    const earlyIdx = elseIdx + 1 + STAKER_COMMITMENT_PREFIX.length + 32 + 1;
     for (let i = 0; i < TEST_EARLY_UNLOCK.length; i++) {
-      expect(script[elseIdx + 1 + i]).toBe(TEST_EARLY_UNLOCK[i]);
+      expect(script[earlyIdx + i]).toBe(TEST_EARLY_UNLOCK[i]);
     }
 
-    // The unlockBytes must also appear in the script — twice (once in each branch).
+    // unlockBytes appears exactly once — the script tail, after OP_ENDIF OP_VERIFY.
     const unlockHits: number[] = [];
     let from = 0;
     while (from < script.length) {
@@ -177,17 +188,18 @@ describe('buildLockingScript', () => {
       unlockHits.push(from + idx);
       from = from + idx + 1;
     }
-    expect(unlockHits.length).toBeGreaterThanOrEqual(2);
+    expect(unlockHits).toHaveLength(1);
+    expect(unlockHits[0] + unlockBytes.length).toBe(script.length);
   });
 
   it('accepts unlockBytes and earlyUnlockBytes as hex strings', () => {
-    const fromBytes = buildLockingScript({
+    const fromBytes = buildLockScript({
       stxAddress: TEST_STX_ADDRESS,
       unlockHeight: 850_000,
       unlockBytes,
       earlyUnlockBytes: TEST_EARLY_UNLOCK,
     });
-    const fromHex = buildLockingScript({
+    const fromHex = buildLockScript({
       stxAddress: TEST_STX_ADDRESS,
       unlockHeight: 850_000,
       unlockBytes: bytesToHex(unlockBytes),
@@ -198,7 +210,7 @@ describe('buildLockingScript', () => {
 
   it('rejects contract principals as stxAddress', () => {
     expect(() =>
-      buildLockingScript({
+      buildLockScript({
         stxAddress: `${TEST_STX_ADDRESS}.some-contract`,
         unlockHeight: 100,
         unlockBytes,
@@ -208,8 +220,8 @@ describe('buildLockingScript', () => {
   });
 });
 
-describe('buildLockingBitcoinAddress', () => {
-  const unlockBytes = buildDefaultUnlockScript(TEST_PUBKEY);
+describe('buildLockAddress', () => {
+  const unlockBytes = buildUnlockScript(TEST_PUBKEY);
   const baseOpts = {
     stxAddress: TEST_STX_ADDRESS,
     unlockHeight: 850_000,
@@ -218,58 +230,58 @@ describe('buildLockingBitcoinAddress', () => {
   };
 
   it('produces a mainnet bc1q address', () => {
-    const address = buildLockingBitcoinAddress({ ...baseOpts, network: 'mainnet' });
+    const address = buildLockAddress({ ...baseOpts, network: 'mainnet' });
     expect(address).toMatch(/^bc1q/);
   });
 
   it('produces a testnet tb1q address', () => {
-    const address = buildLockingBitcoinAddress({ ...baseOpts, network: 'testnet' });
+    const address = buildLockAddress({ ...baseOpts, network: 'testnet' });
     expect(address).toMatch(/^tb1q/);
   });
 
   it('produces a devnet bcrt1q address', () => {
-    const address = buildLockingBitcoinAddress({ ...baseOpts, network: 'devnet' });
+    const address = buildLockAddress({ ...baseOpts, network: 'devnet' });
     expect(address).toMatch(/^bcrt1q/);
   });
 
   it('matches the address derived from the raw locking script', () => {
     // Compute the expected address fresh from the new script — no hardcoding.
-    const script = buildLockingScript(baseOpts);
-    const expectedMainnet = lockingScriptToP2wsh(script, 'mainnet');
-    expect(buildLockingBitcoinAddress({ ...baseOpts, network: 'mainnet' })).toBe(expectedMainnet);
+    const script = buildLockScript(baseOpts);
+    const expectedMainnet = lockScriptToAddress(script, 'mainnet');
+    expect(buildLockAddress({ ...baseOpts, network: 'mainnet' })).toBe(expectedMainnet);
   });
 
   it('is deterministic', () => {
-    const a = buildLockingBitcoinAddress({ ...baseOpts, network: 'mainnet' });
-    const b = buildLockingBitcoinAddress({ ...baseOpts, network: 'mainnet' });
+    const a = buildLockAddress({ ...baseOpts, network: 'mainnet' });
+    const b = buildLockAddress({ ...baseOpts, network: 'mainnet' });
     expect(a).toBe(b);
   });
 
   it('changes with different scripts', () => {
-    const otherUnlock = buildDefaultUnlockScript(new Uint8Array(33).fill(0x03));
+    const otherUnlock = buildUnlockScript(new Uint8Array(33).fill(0x03));
     const otherOpts = { ...baseOpts, unlockBytes: otherUnlock };
-    expect(buildLockingBitcoinAddress({ ...baseOpts, network: 'mainnet' })).not.toBe(
-      buildLockingBitcoinAddress({ ...otherOpts, network: 'mainnet' })
+    expect(buildLockAddress({ ...baseOpts, network: 'mainnet' })).not.toBe(
+      buildLockAddress({ ...otherOpts, network: 'mainnet' })
     );
   });
 
   it('changes when earlyUnlockBytes changes', () => {
     const altEarlyUnlock = btc.Script.encode([new Uint8Array(33).fill(0x03), 'CHECKSIGVERIFY']);
     const altOpts = { ...baseOpts, earlyUnlockBytes: altEarlyUnlock };
-    expect(buildLockingBitcoinAddress({ ...baseOpts, network: 'mainnet' })).not.toBe(
-      buildLockingBitcoinAddress({ ...altOpts, network: 'mainnet' })
+    expect(buildLockAddress({ ...baseOpts, network: 'mainnet' })).not.toBe(
+      buildLockAddress({ ...altOpts, network: 'mainnet' })
     );
   });
 
   it('accepts publicKey as an alternative to unlockBytes', () => {
-    const fromPubkey = buildLockingBitcoinAddress({
+    const fromPubkey = buildLockAddress({
       stxAddress: TEST_STX_ADDRESS,
       unlockHeight: 850_000,
       publicKey: TEST_PUBKEY,
       earlyUnlockBytes: TEST_EARLY_UNLOCK,
       network: 'mainnet',
     });
-    const fromUnlock = buildLockingBitcoinAddress({ ...baseOpts, network: 'mainnet' });
+    const fromUnlock = buildLockAddress({ ...baseOpts, network: 'mainnet' });
     expect(fromPubkey).toBe(fromUnlock);
   });
 });

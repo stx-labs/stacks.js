@@ -27,7 +27,7 @@ import type { SignerKeyGrantOptions } from './types';
  * The returned `{ message, domain }` can be fed directly into
  * {@link signStructuredData} / {@link encodeStructuredDataBytes}.
  */
-export function signerKeyGrantMessage(opts: SignerKeyGrantOptions): {
+export function buildSignerGrantMessage(opts: SignerKeyGrantOptions): {
   message: ClarityValue;
   domain: ClarityValue;
 } {
@@ -55,8 +55,8 @@ export function signerKeyGrantMessage(opts: SignerKeyGrantOptions): {
  * message-hash`. Equivalent to `pox-5.get-signer-grant-message-hash` —
  * useful as an off-chain check against the read-only.
  */
-export function getSignerKeyGrantMessageHash(opts: SignerKeyGrantOptions): Uint8Array {
-  return sha256(encodeStructuredDataBytes(signerKeyGrantMessage(opts)));
+export function computeSignerGrantHash(opts: SignerKeyGrantOptions): Uint8Array {
+  return sha256(encodeStructuredDataBytes(buildSignerGrantMessage(opts)));
 }
 
 // ---------------------------------------------------------------------------
@@ -67,11 +67,11 @@ export function getSignerKeyGrantMessageHash(opts: SignerKeyGrantOptions): Uint8
  * Sign a signer-key grant. Returns a 65-byte recoverable signature in RSV
  * order, hex-encoded.
  */
-export function signSignerKeyGrant(
+export function signSignerGrant(
   opts: SignerKeyGrantOptions & { privateKey: PrivateKey }
 ): string {
   return signStructuredData({
-    ...signerKeyGrantMessage(opts),
+    ...buildSignerGrantMessage(opts),
     privateKey: opts.privateKey,
   });
 }
@@ -85,14 +85,14 @@ export function signSignerKeyGrant(
  * the RSV signature against the SIP-018 message hash and compares it to the
  * supplied `publicKey`.
  */
-export function verifySignerKeyGrant(
+export function verifySignerGrant(
   opts: SignerKeyGrantOptions & {
     publicKey: string | Uint8Array;
     signature: string | Uint8Array;
   }
 ): boolean {
   return verifyMessageSignatureRsv({
-    message: getSignerKeyGrantMessageHash(opts),
+    message: computeSignerGrantHash(opts),
     publicKey: typeof opts.publicKey === 'string' ? opts.publicKey : bytesToHex(opts.publicKey),
     signature: typeof opts.signature === 'string' ? opts.signature : bytesToHex(opts.signature),
   });

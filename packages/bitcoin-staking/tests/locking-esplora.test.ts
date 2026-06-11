@@ -1,10 +1,10 @@
 /**
- * Live-Esplora test for `assembleLockupProof` (the Esplora-shaped proof path,
- * the counterpart to `assembleLockupProofFromBlock` which the regtest L1 action
+ * Live-Esplora test for `buildLockProof` (the Esplora-shaped proof path,
+ * the counterpart to `buildLockProofFromBlock` which the regtest L1 action
  * exercises via bitcoind RPC).
  *
  * It hits the public Blockstream Esplora API with a stable, deeply-confirmed
- * mainnet tx and feeds the responses straight into `assembleLockupProof`, then
+ * mainnet tx and feeds the responses straight into `buildLockProof`, then
  * VALIDATES the result by folding the assembled merkle branch back to a root and
  * comparing it to the block's `merkle_root`. If they match, the Esplora →
  * `BondL1LockupOutput` normalization (witness stripping, endianness, output
@@ -18,7 +18,7 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, hexToBytes } from '@stacks/common';
 import fetchMock from 'jest-fetch-mock';
-import { assembleLockupProof, type EsploraMerkleProof } from '../src';
+import { buildLockProof, type EsploraMerkleProof } from '../src';
 
 const LIVE = process.env.LIVE_ESPLORA === '1';
 const runIf = LIVE ? test : test.skip;
@@ -61,7 +61,7 @@ afterAll(() => {
   if (LIVE) fetchMock.enableMocks();
 });
 
-runIf('assembleLockupProof (Esplora): folds back to the block merkle root', async () => {
+runIf('buildLockProof (Esplora): folds back to the block merkle root', async () => {
   const txHex = await getText(`/tx/${TXID}/hex`);
   const merkleProof = await getJson<EsploraMerkleProof>(`/tx/${TXID}/merkle-proof`);
   const tx = await getJson<{ status: { block_hash: string }; vout: { scriptpubkey: string; value: number }[] }>(
@@ -72,10 +72,10 @@ runIf('assembleLockupProof (Esplora): folds back to the block merkle root', asyn
   const block = await getJson<{ merkle_root: string; tx_count: number }>(`/block/${blockHash}`);
 
   // Use the tx's first output's real scriptPubKey as the "expected" lockup
-  // script so assembleLockupProof locates it (the value/script come back out).
+  // script so buildLockProof locates it (the value/script come back out).
   const expectedScript = tx.vout[0].scriptpubkey;
 
-  const output = assembleLockupProof({
+  const output = buildLockProof({
     txHex,
     header,
     merkleProof,

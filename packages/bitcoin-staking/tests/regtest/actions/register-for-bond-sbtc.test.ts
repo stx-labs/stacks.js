@@ -76,7 +76,6 @@ test('sbtc register-for-bond happy path: setup-bond → mint → register → en
     stxValueRatio: STX_VALUE_RATIO,
     minUstxRatioBps: MIN_USTX_RATIO_BPS,
     earlyUnlockBytes: EARLY_UNLOCK_BYTES,
-    earlyUnlockAdmin: admin.address,
     allowlist: [{ staker: staker.address, maxSats: MAX_SATS }],
     publicKey: admin.publicKey,
     fee: FEE,

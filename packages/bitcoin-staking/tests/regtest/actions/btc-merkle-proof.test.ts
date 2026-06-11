@@ -1,7 +1,7 @@
 /**
  * Validates the RPC-only SPV merkle-proof assembly (`computeMerkleBranch` /
  * `getRpcMerkleProof` in `tests/helpers/btc.ts`) — the substitute for a local
- * Esplora that feeds the SDK's `assembleLockupProof` on the L1 register-for-bond
+ * Esplora that feeds the SDK's `buildLockProof` on the L1 register-for-bond
  * path.
  *
  * The check is self-contained and contract-independent: for a real regtest

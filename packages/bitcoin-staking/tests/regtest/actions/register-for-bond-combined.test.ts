@@ -8,10 +8,10 @@
  * stakers don't collide.
  */
 import {
-  assembleLockupProofFromBlock,
-  buildDefaultUnlockScript,
-  buildLockingBitcoinAddress,
-  buildLockupP2wshOutputScript,
+  buildLockProofFromBlock,
+  buildUnlockScript,
+  buildLockAddress,
+  buildLockOutputScript,
   buildRegisterForBond,
   buildSetupBond,
   computeBondUnlockHeight,
@@ -87,7 +87,6 @@ test('one bond, two participants: user A (L1) + user B (sBTC)', async () => {
     stxValueRatio: STX_VALUE_RATIO,
     minUstxRatioBps: MIN_USTX_RATIO_BPS,
     earlyUnlockBytes: EARLY_UNLOCK_BYTES,
-    earlyUnlockAdmin: admin.address,
     allowlist: [
       { staker: userA.address, maxSats: MAX_SATS },
       { staker: userB.address, maxSats: MAX_SATS },
@@ -113,18 +112,18 @@ test('one bond, two participants: user A (L1) + user B (sBTC)', async () => {
 
   // USER A (L1)
   const unlockHeight = computeBondUnlockHeight({ bondIndex, poxInfo });
-  const unlockBytes = buildDefaultUnlockScript(userA.publicKey);
+  const unlockBytes = buildUnlockScript(userA.publicKey);
   const lockupArgs = { stxAddress: userA.address, unlockHeight, unlockBytes, earlyUnlockBytes: EARLY_UNLOCK_BYTES };
-  const lockupAddress = buildLockingBitcoinAddress({ ...lockupArgs, network: 'devnet' }); // bcrt (regtest)
+  const lockupAddress = buildLockAddress({ ...lockupArgs, network: 'devnet' }); // bcrt (regtest)
   const btcTxid = await sendToAddress(lockupAddress, Number(MAX_SATS) / 1e8);
   const proof = await waitForFulfilled(() => getBtcTxProofInputs(btcTxid));
   await waitForBurnBlockHeight(proof.blockHeight);
-  const output = assembleLockupProofFromBlock({
+  const output = buildLockProofFromBlock({
     txHex: proof.txHex,
     header: proof.header,
     blockHeight: proof.blockHeight,
     txids: proof.txids,
-    expectedScript: buildLockupP2wshOutputScript(lockupArgs),
+    expectedScript: buildLockOutputScript(lockupArgs),
   });
   const regA = await buildRegisterForBond({
     bondIndex,

@@ -1,14 +1,14 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, hexToBytes } from '@stacks/common';
 import {
-  assembleLockupProof,
+  buildLockProof,
   computeBitcoinTxid,
   computeP2wshOutputScript,
   pushScriptBytes,
   serializeBitcoinHeader,
   serializeBitcoinTx,
   serializeCScriptNum,
-} from '../src/locking';
+} from '../src';
 
 describe('serializeCScriptNum', () => {
   it('encodes 100 as a single byte 0x64', () => {
@@ -106,7 +106,7 @@ describe('serializeBitcoinTx', () => {
   });
 });
 
-describe('assembleLockupProof', () => {
+describe('buildLockProof', () => {
   // Real mainnet fixture: tx c2f59c…ea17, output 0, block 800000 (tx #2 of 3721).
   // Indexer responses captured from an Esplora-compatible API (mempool.space).
   const TXID = 'c2f59c6fc8e812f5f1f00c8a0a9ab1929c1e796788c57f49001b8006a824ea17';
@@ -141,7 +141,7 @@ describe('assembleLockupProof', () => {
   const OUTPUT_0_SATS = 197000n;
 
   const proof = () =>
-    assembleLockupProof({
+    buildLockProof({
       txHex: TX_HEX,
       header: HEADER_HEX,
       merkleProof: MERKLE_PROOF,
@@ -201,7 +201,7 @@ describe('assembleLockupProof', () => {
 
   it('throws when no output matches the expected script', () => {
     expect(() =>
-      assembleLockupProof({
+      buildLockProof({
         txHex: TX_HEX,
         header: HEADER_HEX,
         merkleProof: MERKLE_PROOF,

@@ -71,6 +71,30 @@ describe('describePox5Error', () => {
     expect(info!.name).toBe('ERR_ROLLOVER_TOO_EARLY');
     expect(info!.description.length).toBeGreaterThan(0);
   });
+
+  it('describes ERR_REENTRANT_CALL (49)', () => {
+    const info = describePox5Error(49);
+    expect(info).toBeDefined();
+    expect(info!.code).toBe(49);
+    expect(info!.name).toBe('ERR_REENTRANT_CALL');
+    expect(info!.description.length).toBeGreaterThan(0);
+  });
+
+  it('describes ERR_L1_EARLY_EXIT_ALREADY_ANNOUNCED (50)', () => {
+    const info = describePox5Error(50);
+    expect(info).toBeDefined();
+    expect(info!.code).toBe(50);
+    expect(info!.name).toBe('ERR_L1_EARLY_EXIT_ALREADY_ANNOUNCED');
+    expect(info!.description.length).toBeGreaterThan(0);
+  });
+
+  it('describes ERR_INSUFFICIENT_RESERVE_BALANCE (51)', () => {
+    const info = describePox5Error(51);
+    expect(info).toBeDefined();
+    expect(info!.code).toBe(51);
+    expect(info!.name).toBe('ERR_INSUFFICIENT_RESERVE_BALANCE');
+    expect(info!.description.length).toBeGreaterThan(0);
+  });
 });
 
 describe('Pox5ErrorCode enum', () => {
@@ -80,6 +104,10 @@ describe('Pox5ErrorCode enum', () => {
 
   it('has RolloverTooEarly = 48', () => {
     expect(Pox5ErrorCode.RolloverTooEarly).toBe(48);
+  });
+
+  it('has InsufficientReserveBalance = 51', () => {
+    expect(Pox5ErrorCode.InsufficientReserveBalance).toBe(51);
   });
 
   it('every enum value has a corresponding name and description', () => {

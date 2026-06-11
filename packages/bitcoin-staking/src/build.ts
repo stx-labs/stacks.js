@@ -103,12 +103,10 @@ export async function buildSetupBond(
     /**
      * Pre-pushed Bitcoin script subscript spliced into the OP_ELSE early-exit
      * branch of the locking script, validating an early L1 unlock — e.g.
-     * `<pubkey> OP_CHECKSIGVERIFY` or an M-of-N CHECKMULTISIGVERIFY template
-     * (buff 683).
+     * `<pubkey> OP_CHECKSIG` or an M-of-N CHECKMULTISIG template (buff 683). Its
+     * result is consumed by the locking script's shared OP_VERIFY.
      */
     earlyUnlockBytes: Uint8Array | string;
-    /** Stacks principal authorized to call `announce-l1-early-exit` for this bond. */
-    earlyUnlockAdmin: string;
     allowlist: { staker: string; maxSats: IntegerType }[];
   } & TxParams
 ): Promise<StacksTransactionWire> {
@@ -129,7 +127,6 @@ export async function buildSetupBond(
       Cl.uint(args.stxValueRatio),
       Cl.uint(args.minUstxRatioBps),
       clBufferFrom(args.earlyUnlockBytes),
-      Cl.address(args.earlyUnlockAdmin),
       allowlistCV,
     ],
     args
@@ -145,7 +142,7 @@ export async function buildSetupBond(
  *
  * Two `lockup` shapes:
  * - `kind: 'btc'`  — caller has funded one or more L1 (BTC) timelocked outputs whose
- *   redeem script is the locking script returned by {@link buildLockingScript}.
+ *   redeem script is the locking script returned by {@link buildLockScript}.
  *   Each output is accompanied by a full SPV proof (block header, merkle path,
  *   tx-index/tx-count, raw tx bytes); the contract reconstructs and verifies
  *   each P2WSH output against the bitcoin chainstate.
@@ -155,8 +152,10 @@ export async function buildSetupBond(
  *
  * On success the contract returns an enrollment receipt tuple
  * `{ signer, staker, amount-ustx, bond-index, first-reward-cycle,
- * unlock-burn-height, unlock-cycle }` — useful for surfacing the unlock
- * schedule client-side without re-deriving it.
+ * unlock-burn-height, unlock-cycle, is-l1-lock, btc-lockup }` — useful for
+ * surfacing the unlock schedule client-side without re-deriving it. `btc-lockup`
+ * is `{ type: "l1", txs: (some (list { txid, output-index })) }` for an L1
+ * lockup, or `{ type: "l2", txs: none }` for an sBTC lockup.
  */
 export function buildRegisterForBond(
   args: {
@@ -220,7 +219,7 @@ function lockupToCV(lockup: BondLockup): ClarityValue {
           })
         )
       ),
-      'unlock-bytes': clBufferFrom(lockup.unlockBytes),
+      'staker-unlock-bytes': clBufferFrom(lockup.unlockBytes),
     })
   );
 }
@@ -260,13 +259,16 @@ export async function buildUpdateBondRegistration(
 /**
  * Build an unsigned `announce-l1-early-exit` transaction.
  *
- * Triggers the L1 early-unlock path for a bond participant. Only callable by
- * the bond's `early-unlock-admin` (`ERR_UNAUTHORIZED` otherwise), and only
- * when the membership has `is-l1-lock = true`
+ * Notifies pox-5 to stop counting the staker's BTC shares for this bond period.
+ * Callable only by the staker themselves (`contract-caller == tx-sender ==
+ * staker`; `ERR_UNAUTHORIZED` otherwise — forwarding via another contract is
+ * not allowed), and only when the membership has `is-l1-lock = true`
  * (`ERR_CANNOT_ANNOUNCE_L1_EARLY_UNLOCK`). `oldSignerManager` must match the
- * staker's currently bound signer (`ERR_INVALID_OLD_SIGNER_MANAGER`). On
- * success the staker's bond shares are zeroed and the signer's totals
- * decremented.
+ * staker's currently bound signer (`ERR_INVALID_OLD_SIGNER_MANAGER`). A second
+ * announce for the same bond reverts with `ERR_L1_EARLY_EXIT_ALREADY_ANNOUNCED`
+ * — gate on {@link fetchHasAnnouncedL1EarlyExit} first. On success the staker's
+ * bond shares are zeroed and the share totals decremented; the locked STX is
+ * untouched and unlocks on the bond's normal schedule.
  */
 export async function buildAnnounceL1EarlyExit(
   args: {
@@ -516,9 +518,9 @@ export async function buildClaimRewards(
 /**
  * Build an unsigned `claim-staker-rewards-for-signer` transaction.
  *
- * Marks a specific staker as having claimed rewards for the given leg
- * (`isBond` selects the paired-BTC bond leg at `index`, otherwise the
- * STX-only leg). Only callable by the signer-manager contract (the contract
+ * Marks a specific staker as having claimed rewards for the leg at
+ * `rewardCycle` — pass `bondIndex` to target a paired-BTC bond leg, omit it for
+ * the STX-only leg. Only callable by the signer-manager contract (the contract
  * uses `contract-caller` to authorize the claim); a plain wallet call reverts
  * with `ERR_UNAUTHORIZED`.
  */
@@ -526,15 +528,19 @@ export async function buildClaimStakerRewardsForSigner(
   args: {
     /** Staker principal being marked as claimed. */
     staker: string;
-    /** Whether the claimed leg is a paired-BTC bond leg (`true`) or STX-only (`false`). */
-    isBond: boolean;
-    /** Index of the leg being claimed. */
-    index: number;
+    /** Reward cycle of the leg being claimed. */
+    rewardCycle: number;
+    /** Bond index to target the paired-BTC bond leg; omit for the STX-only leg. */
+    bondIndex?: number;
   } & TxParams
 ): Promise<StacksTransactionWire> {
   return callPox5(
     'claim-staker-rewards-for-signer',
-    [Cl.address(args.staker), Cl.bool(args.isBond), Cl.uint(args.index)],
+    [
+      Cl.address(args.staker),
+      Cl.uint(args.rewardCycle),
+      args.bondIndex === undefined ? Cl.none() : Cl.some(Cl.uint(args.bondIndex)),
+    ],
     args
   );
 }
@@ -552,13 +558,13 @@ export async function buildClaimStakerRewardsForSigner(
  *  1. Asserts the `(signer-key, signer-manager, auth-id)` triple has not
  *     previously been consumed (`used-signer-key-grants`) — replay guard.
  *  2. Recovers the public key from `signerSignature` over the SIP-018
- *     message hash built by {@link signerKeyGrantMessage}, and asserts it
+ *     message hash built by {@link buildSignerGrantMessage}, and asserts it
  *     equals `signerKey`.
  *  3. Marks the auth-id used and writes `signer-key-grants[signer-key,
  *     signer-manager] = true`.
  *
  * The signature is generated off-chain by the signer-key holder via
- * {@link signSignerKeyGrant}.
+ * {@link signSignerGrant}.
  *
  * On-chain arg order: `(signer-key, signer-manager, auth-id, signer-sig)`.
  */

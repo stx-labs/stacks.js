@@ -49,6 +49,9 @@ export enum Pox5ErrorCode {
   DuplicateLockupOutpoint = 46,
   StakeInPreparePhase = 47,
   RolloverTooEarly = 48,
+  ReentrantCall = 49,
+  L1EarlyExitAlreadyAnnounced = 50,
+  InsufficientReserveBalance = 51,
 }
 
 /** The on-chain Clarity constant name for each error (e.g. `ERR_BOND_NOT_FOUND`). */
@@ -95,6 +98,9 @@ export const POX5_ERROR_NAMES: Record<Pox5ErrorCode, string> = {
   [Pox5ErrorCode.DuplicateLockupOutpoint]: 'ERR_DUPLICATE_LOCKUP_OUTPOINT',
   [Pox5ErrorCode.StakeInPreparePhase]: 'ERR_STAKE_IN_PREPARE_PHASE',
   [Pox5ErrorCode.RolloverTooEarly]: 'ERR_ROLLOVER_TOO_EARLY',
+  [Pox5ErrorCode.ReentrantCall]: 'ERR_REENTRANT_CALL',
+  [Pox5ErrorCode.L1EarlyExitAlreadyAnnounced]: 'ERR_L1_EARLY_EXIT_ALREADY_ANNOUNCED',
+  [Pox5ErrorCode.InsufficientReserveBalance]: 'ERR_INSUFFICIENT_RESERVE_BALANCE',
 };
 
 /** Human-readable descriptions per error code. */
@@ -159,6 +165,12 @@ export const POX5_ERROR_DESCRIPTIONS: Record<Pox5ErrorCode, string> = {
   [Pox5ErrorCode.StakeInPreparePhase]:
     "A staker tried to modify the next reward cycle's state during the prepare phase.",
   [Pox5ErrorCode.RolloverTooEarly]: 'A staker tried to rollover a bond too early.',
+  [Pox5ErrorCode.ReentrantCall]:
+    'A reentrant call into pox-5 was detected while a signer-manager trait call was in flight.',
+  [Pox5ErrorCode.L1EarlyExitAlreadyAnnounced]:
+    'The staker already announced an L1 early exit for this bond period.',
+  [Pox5ErrorCode.InsufficientReserveBalance]:
+    'A reserve withdrawal was attempted with insufficient reserve balance.',
 };
 
 /**
