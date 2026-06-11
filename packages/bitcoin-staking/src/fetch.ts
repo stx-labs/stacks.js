@@ -15,7 +15,15 @@ import {
   fetchContractMapEntry,
 } from '@stacks/transactions';
 import { POX5_CONTRACT_NAME } from './constants';
-import { type BondStatusName, bondStatus } from './cycles';
+import {
+  type BondStatusName,
+  bondPeriodToBurnHeight,
+  bondPeriodToRewardCycle,
+  bondStatus,
+  isInPreparePhase,
+  minUstxForSatsAmount,
+} from './cycles';
+import { Pox5ErrorCode } from './errors';
 import type {
   AccountStatus,
   Bond,
@@ -1106,4 +1114,171 @@ async function _fetchFirstPox5RewardCycle(_opts: NetworkClientParam = {}): Promi
   //   });
   //   return Number((result as UIntCV).value);
   throw new Error('not implemented');
+}
+
+// ---------------------------------------------------------------------------
+// Eligibility preflights
+// ---------------------------------------------------------------------------
+
+/**
+ * Result of an eligibility preflight (`fetchEligible*`).
+ *
+ * On `ok: false`, `reasons` lists every check that would fail, as the
+ * contract's own error codes ({@link Pox5ErrorCode}), in the order the
+ * contract evaluates them — `reasons[0]` is the error the transaction would
+ * actually abort with.
+ */
+export type EligibilityResult =
+  | { ok: true }
+  | { ok: false; reasons: [Pox5ErrorCode, ...Pox5ErrorCode[]] };
+
+/**
+ * **Unstable / UI-experimental.** Dry-run the checks of `register-for-bond`
+ * via read-only fetches, without broadcasting anything.
+ *
+ * Rebuilds the contract's assert chain client-side and reports every gate
+ * that would fail (allowlist, timing, STX minimum and balance, signer
+ * registration and key grant, overlapping positions, rollover window).
+ *
+ * Two checks are NOT covered, as they aren't reachable read-only:
+ * - `signer-manager-validate-stake` — a public trait call on the signer
+ *   manager contract; it may still reject the registration.
+ * - L1 lockup proof verification (`verify-l1-lockups`) — pass the summed
+ *   output sats as `satsTotal`; proof validity is checked only on-chain.
+ *
+ * `poxInfo` is fetched when not provided, so callers that already hold it
+ * avoid the extra round-trip.
+ */
+export async function fetchEligibleRegisterForBond(
+  opts: {
+    bondIndex: number;
+    /** The staker registering (the future `tx-sender`). */
+    staker: string;
+    /** uSTX the staker would commit. */
+    amountUstx: bigint;
+    /** Sats being staked: the sBTC amount, or the summed L1 lockup outputs. */
+    satsTotal: bigint;
+    /** The signer-manager contract the staker would register with. */
+    signerManager: string;
+    /** Contract calling on the staker's behalf. Omit for a direct call. */
+    contractCaller?: string;
+    poxInfo?: PoxInfo;
+  } & NetworkClientParam
+): Promise<EligibilityResult> {
+  const networkClient = { network: opts.network, client: opts.client };
+  const staker = { address: opts.staker };
+
+  const [poxInfo, bond, allowance, stakerInfo, account, membership, signerInfo, callerGrant] =
+    await Promise.all([
+      opts.poxInfo ?? fetchPoxInfo(networkClient),
+      fetchProtocolBond({ bondIndex: opts.bondIndex, ...networkClient }),
+      fetchBondAllowance({ bondIndex: opts.bondIndex, ...staker, ...networkClient }),
+      fetchStakerInfo({ ...staker, ...networkClient }),
+      fetchAccountStatus({ ...staker, ...networkClient }),
+      fetchBondMembership({ ...staker, ...networkClient }),
+      fetchSignerInfo({ signerManager: opts.signerManager, ...networkClient }),
+      opts.contractCaller
+        ? fetchAllowanceContractCallers({
+            sender: opts.staker,
+            contractCaller: opts.contractCaller,
+            poxInfo: opts.poxInfo,
+            ...networkClient,
+          })
+        : undefined,
+    ]);
+
+  const burnHeight = poxInfo.currentBurnchainBlockHeight;
+  const firstRewardCycle = bondPeriodToRewardCycle({ bondIndex: opts.bondIndex, poxInfo });
+  const bondStartHeight = bondPeriodToBurnHeight({ bondIndex: opts.bondIndex, poxInfo });
+
+  // Second stage: reads that depend on the first stage's results.
+  const [grantActive, overlaps, l1UnlockHeight] = await Promise.all([
+    signerInfo
+      ? fetchVerifySignerKeyGrant({
+          signerKey: signerInfo.signerKey,
+          signerManager: opts.signerManager,
+          ...networkClient,
+        })
+      : false,
+    membership
+      ? fetchBondOverlapsNewPosition({
+          membership,
+          newFirstRewardCycle: firstRewardCycle,
+          ...networkClient,
+        })
+      : false,
+    membership
+      ? fetchBondL1UnlockHeight({ bondIndex: membership.bondIndex, ...networkClient })
+      : undefined,
+  ]);
+
+  // Mirror the contract's assert order, so `reasons[0]` matches the error a
+  // real `register-for-bond` would abort with.
+  const reasons: Pox5ErrorCode[] = [];
+
+  // `(unwrap! (map-get? protocol-bonds ...))` / allowlist unwraps in the let-bindings
+  if (!bond) reasons.push(Pox5ErrorCode.BondNotFound);
+  // No allowlist entry and an entry of `0` are indistinguishable here; both
+  // make any positive `satsTotal` fail, the former as NOT_ALLOWLISTED.
+  if (allowance === 0n) reasons.push(Pox5ErrorCode.NotAllowlisted);
+
+  // (verify-not-prepare-phase)
+  if (isInPreparePhase({ burnHeight, poxInfo })) {
+    reasons.push(Pox5ErrorCode.StakeInPreparePhase);
+  }
+
+  // amount-ustx >= min-ustx-for-sats-amount
+  if (
+    bond &&
+    opts.amountUstx <
+      minUstxForSatsAmount({
+        sats: opts.satsTotal,
+        stxValueRatio: bond.stxValueRatio,
+        minUstxRatioBps: bond.minUstxRatioBps,
+      })
+  ) {
+    reasons.push(Pox5ErrorCode.InsufficientStx);
+  }
+
+  // burn-block-height < bond-start-height
+  if (burnHeight >= bondStartHeight) reasons.push(Pox5ErrorCode.BondAlreadyStarted);
+
+  // Existing STX-only stake must end no later than this bond's first cycle
+  if (
+    stakerInfo.staked &&
+    stakerInfo.details.firstRewardCycle + stakerInfo.details.numCycles > firstRewardCycle
+  ) {
+    reasons.push(Pox5ErrorCode.AlreadyStaked);
+  }
+
+  // sats-total <= allowance
+  if (opts.satsTotal > allowance) reasons.push(Pox5ErrorCode.TooMuchSats);
+
+  // total balance (locked + unlocked) >= amount-ustx
+  if (account.balance + account.locked < opts.amountUstx) {
+    if (!reasons.includes(Pox5ErrorCode.InsufficientStx)) {
+      reasons.push(Pox5ErrorCode.InsufficientStx);
+    }
+  }
+
+  // Signer registered + active key grant
+  if (!signerInfo) reasons.push(Pox5ErrorCode.SignerNotFound);
+  else if (!grantActive) reasons.push(Pox5ErrorCode.SignerKeyGrantNotFound);
+
+  // (check-caller-allowed)
+  if (callerGrant && !callerGrant.callerAllowed) {
+    reasons.push(Pox5ErrorCode.UnauthorizedCaller);
+  }
+
+  // No overlapping bond membership (incl. re-registering the same bond)
+  if (overlaps) reasons.push(Pox5ErrorCode.AlreadyRegistered);
+
+  // Rollover from a non-overlapping bond only in its L1 unlock window
+  if (membership && !overlaps && l1UnlockHeight !== undefined && burnHeight < l1UnlockHeight) {
+    reasons.push(Pox5ErrorCode.RolloverTooEarly);
+  }
+
+  return reasons.length === 0
+    ? { ok: true }
+    : { ok: false, reasons: reasons as [Pox5ErrorCode, ...Pox5ErrorCode[]] };
 }
