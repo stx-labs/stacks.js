@@ -35,18 +35,33 @@ async function callPox5(
   tx: TxParams
 ): Promise<StacksTransactionWire> {
   const network = networkFrom(tx.network);
-  return makeUnsignedContractCall({
+  const base = {
     contractAddress: network.bootAddress,
     contractName: POX5_CONTRACT_NAME,
     functionName,
     functionArgs,
-    publicKey: tx.publicKey,
     fee: tx.fee,
     nonce: tx.nonce,
     network: tx.network,
     ...(tx.postConditions ? { postConditions: tx.postConditions } : {}),
     ...(tx.postConditionMode ? { postConditionMode: tx.postConditionMode } : {}),
-  });
+  };
+  // Discriminate single-sig (`publicKey`) vs multisig (`publicKeys`), mirroring
+  // `makeUnsignedContractCall` — so any pox-5 admin call can target a multisig
+  // origin (e.g. a multisig `bond-admin`) just by passing `publicKeys`. Multisig
+  // defaults to the non-sequential hashmode (order-independent signatures); pass
+  // `useNonSequentialMultiSig: false` to opt back into the legacy sequential one.
+  return makeUnsignedContractCall(
+    'publicKey' in tx
+      ? { ...base, publicKey: tx.publicKey }
+      : {
+          ...base,
+          publicKeys: tx.publicKeys,
+          numSignatures: tx.numSignatures,
+          useNonSequentialMultiSig: tx.useNonSequentialMultiSig ?? true,
+          ...(tx.address ? { address: tx.address } : {}),
+        }
+  );
 }
 
 // ---------------------------------------------------------------------------

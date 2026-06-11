@@ -1,15 +1,24 @@
 import {
   type ClarityValue,
   type ContractCallPayload,
+  type MultiSigSpendingCondition,
+  AddressHashMode,
+  AddressVersion,
   ClarityType,
+  addressFromPublicKeys,
+  addressToString,
+  createStacksPublicKey,
   cvToString,
+  privateKeyToPublic,
 } from '@stacks/transactions';
+import { c32address } from 'c32check';
 import {
   buildAnnounceL1EarlyExit,
   buildClaimStakerRewardsForSigner,
   buildGrantSignerKey,
   buildRegisterForBond,
   buildRevokeSignerGrant,
+  buildSetBondAdmin,
   buildSetupBond,
   buildStakeUpdate,
   buildUnstake,
@@ -39,6 +48,48 @@ function asTuple(cv: ClarityValue): Record<string, ClarityValue> {
   if (cv.type !== ClarityType.Tuple) throw new Error(`expected Tuple, got ${cv.type}`);
   return (cv as { value: Record<string, ClarityValue> }).value;
 }
+
+describe('multisig builders', () => {
+  // 2-of-3 from three fixed keys.
+  const PRIV_KEYS = [
+    '6d430bb91222408e7706c9001cfaeb91b08c2be6d5ac95779ab52c6b431950e001',
+    '2a584d899fed1d24e26b524f202763c8ab30260167429f157f1c119f550fa6af01',
+    'd5200dee706ee53ae98a03fba6cf4fdcc5084c30cfa9e1b3462dcdeaa3e0f1d201',
+  ];
+  const PUB_KEYS = PRIV_KEYS.map(privateKeyToPublic);
+  const MULTISIG_TX = { publicKeys: PUB_KEYS, numSignatures: 2, fee: 1000n, nonce: 0n };
+
+  it('builds a multisig set-bond-admin whose origin is the 2-of-3 principal', async () => {
+    const tx = await buildSetBondAdmin({ newAdmin: STAKER, network: 'testnet', ...MULTISIG_TX });
+    const sc = tx.auth.spendingCondition as MultiSigSpendingCondition;
+    // defaults to the non-sequential hashmode (5), order-independent signatures.
+    expect(sc.hashMode).toBe(AddressHashMode.P2SHNonSequential);
+    expect(sc.signaturesRequired).toBe(2);
+    // origin principal == the 2-of-3 address derived from the same keys.
+    const expected = addressToString(
+      addressFromPublicKeys(
+        AddressVersion.TestnetMultiSig,
+        AddressHashMode.P2SHNonSequential,
+        2,
+        PUB_KEYS.map(createStacksPublicKey)
+      )
+    );
+    expect(c32address(AddressVersion.TestnetMultiSig, sc.signer)).toBe(expected);
+    expect(payloadOf(tx).functionName.content).toBe('set-bond-admin');
+  });
+
+  it('honors useNonSequentialMultiSig: false (legacy sequential hashmode)', async () => {
+    const tx = await buildSetBondAdmin({
+      newAdmin: STAKER,
+      network: 'testnet',
+      useNonSequentialMultiSig: false,
+      ...MULTISIG_TX,
+    });
+    expect((tx.auth.spendingCondition as MultiSigSpendingCondition).hashMode).toBe(
+      AddressHashMode.P2SH
+    );
+  });
+});
 
 describe('buildSetupBond', () => {
   it('emits an allowlist where each entry has staker / max-sats and includes early-unlock-admin', async () => {

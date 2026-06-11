@@ -1,13 +1,17 @@
 import type { IntegerType } from '@stacks/common';
 import type { StacksNetwork, StacksNetworkName } from '@stacks/network';
-import type { PostCondition, PostConditionModeName } from '@stacks/transactions';
+import type {
+  PostCondition,
+  PostConditionModeName,
+  UnsignedMultiSigOptions,
+} from '@stacks/transactions';
 
 // ---------------------------------------------------------------------------
 // Tx-level params (shared by all build*Tx functions)
 // ---------------------------------------------------------------------------
 
-export interface TxParams {
-  publicKey: string;
+/** Tx-level params common to single-sig and multisig builders. */
+export interface TxParamsBase {
   fee: IntegerType;
   nonce: IntegerType;
   network: StacksNetworkName | StacksNetwork;
@@ -21,6 +25,30 @@ export interface TxParams {
   /** Post-condition mode. Defaults to the wire default (`deny`). */
   postConditionMode?: PostConditionModeName;
 }
+
+/** Single-sig caller: the origin's public key. */
+export interface SingleSigTxParams extends TxParamsBase {
+  /** Compressed/uncompressed secp256k1 public key of the (single) caller. */
+  publicKey: string;
+}
+
+/**
+ * Multisig (M-of-N) caller: the full `publicKeys` set + required
+ * `numSignatures`. Mirrors `@stacks/transactions`' {@link UnsignedMultiSigOptions}
+ * (`address?` pins public-key ordering, `useNonSequentialMultiSig?` opts into the
+ * newer hashmode). Use this to build unsigned txs whose origin is a multisig
+ * principal — e.g. a `bond-admin` held by a 2-of-3 multisig. The returned tx is
+ * unsigned; sign it with `numSignatures` keys (plus `appendOrigin` for the rest).
+ */
+export type MultiSigTxParams = TxParamsBase & UnsignedMultiSigOptions;
+
+/**
+ * Tx-level params for every `build*` helper — either {@link SingleSigTxParams}
+ * (`publicKey`) or {@link MultiSigTxParams} (`publicKeys` + `numSignatures`).
+ * Builders discriminate on which is present (`'publicKey' in params`), exactly
+ * like `makeUnsignedContractCall`.
+ */
+export type TxParams = SingleSigTxParams | MultiSigTxParams;
 
 // ---------------------------------------------------------------------------
 // Data types (returned by fetch functions)
@@ -195,7 +223,7 @@ export interface SignerKeyGrantOptions {
 }
 
 /** Arguments for {@link buildGrantSignerKey} — wraps pox-5 `grant-signer-key`. */
-export interface BuildGrantSignerKeyTxArgs extends TxParams {
+export type BuildGrantSignerKeyTxArgs = TxParams & {
   /** Compressed secp256k1 public key (33 bytes) of the signer. */
   signerKey: Uint8Array | string;
   /** Stacks principal of the signer-manager being authorized. */
@@ -204,15 +232,15 @@ export interface BuildGrantSignerKeyTxArgs extends TxParams {
   authId: bigint | number;
   /** Recoverable secp256k1 signature in RSV order (65 bytes). */
   signerSignature: Uint8Array | string;
-}
+};
 
 /** Arguments for {@link buildRevokeSignerGrant} — wraps pox-5 `revoke-signer-grant`. */
-export interface BuildRevokeSignerKeyTxArgs extends TxParams {
+export type BuildRevokeSignerKeyTxArgs = TxParams & {
   /** Compressed secp256k1 public key (33 bytes) of the signer. */
   signerKey: Uint8Array | string;
   /** Stacks principal of the signer-manager whose grant is being revoked. */
   signerManager: string;
-}
+};
 
 // ---------------------------------------------------------------------------
 // Build function arg types — contract-caller authorization
