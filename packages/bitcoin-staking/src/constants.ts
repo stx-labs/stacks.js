@@ -1,5 +1,5 @@
 /** @internal PoX-5 contract name (on boot address, null address)  */
-export const POX5_CONTRACT_NAME = "pox-5";
+export const POX5_CONTRACT_NAME = 'pox-5';
 
 /** @internal Length of a paired-BTC bond in reward cycles (≈ 6 months). */
 export const BOND_LENGTH_CYCLES = 12;
@@ -63,10 +63,10 @@ export const SEGWIT_V1_ADDR_PREFIX = /^(bc1p|tb1p|bcrt1p)/i;
 
 /** @internal Bech32 human-readable part per network */
 export const SegwitPrefix = {
-  mainnet: "bc",
-  testnet: "tb",
-  devnet: "bcrt",
-  mocknet: "bcrt",
+  mainnet: 'bc',
+  testnet: 'tb',
+  devnet: 'bcrt',
+  mocknet: 'bcrt',
 } as const;
 
 /** @internal Segwit v0 */

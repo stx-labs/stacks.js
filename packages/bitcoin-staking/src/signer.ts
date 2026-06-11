@@ -67,9 +67,7 @@ export function computeSignerGrantHash(opts: SignerKeyGrantOptions): Uint8Array 
  * Sign a signer-key grant. Returns a 65-byte recoverable signature in RSV
  * order, hex-encoded.
  */
-export function signSignerGrant(
-  opts: SignerKeyGrantOptions & { privateKey: PrivateKey }
-): string {
+export function signSignerGrant(opts: SignerKeyGrantOptions & { privateKey: PrivateKey }): string {
   return signStructuredData({
     ...buildSignerGrantMessage(opts),
     privateKey: opts.privateKey,

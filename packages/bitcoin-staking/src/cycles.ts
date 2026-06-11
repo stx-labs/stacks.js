@@ -1,8 +1,21 @@
 import { BOND_GAP_CYCLES, BOND_LENGTH_CYCLES, POX5_CONTRACT_NAME } from './constants';
 import type { PoxInfo } from './types';
 
-/** Phase label for a bond's lifecycle — matches the D-day naming in `notes/api-mock-scenarios.md`. */
-export type BondPhaseName = 'announced' | 'open' | 'active' | 're-lock-window' | 'closed';
+/**
+ * Phase label for a bond's lifecycle.
+ *
+ * - `open` — registration window. Spans the contract's full setup window
+ *   ({@link BOND_GAP_CYCLES} reward cycles before the bond starts). There is
+ *   no on-chain "announce" — `setup-bond` publishes the bond and opens
+ *   registration in one step, so registration actually succeeds only once
+ *   the admin has called `setup-bond` (and outside the PoX prepare phase).
+ * - `locked` — bond term running; collateral locked, no new registrations
+ *   (`ERR_BOND_ALREADY_STARTED`).
+ * - `unlocked` — tail of the bond term where BTC unlocks on L1 and stakers
+ *   may roll into the next bond (`verify-bond-rollover-window`).
+ * - `closed` — term over; claim rewards / unlock remaining positions.
+ */
+export type BondPhaseName = 'open' | 'locked' | 'unlocked' | 'closed';
 
 /**
  * A single named, burn-height-anchored phase of a bond's lifecycle.
@@ -11,7 +24,7 @@ export type BondPhaseName = 'announced' | 'open' | 'active' | 're-lock-window' |
  * and `endBurnHeight === startBurnHeight + length`.
  */
 export interface BondPhaseRange {
-  /** Phase label — matches the D-day naming in `notes/api-mock-scenarios.md`. */
+  /** Phase label — see {@link BondPhaseName}. */
   name: BondPhaseName;
   /** Inclusive start burn-block height. */
   startBurnHeight: number;
@@ -239,29 +252,23 @@ export function isBondActiveAtHeight(opts: {
  * internally from `poxInfo` via {@link firstPox5RewardCycle}; throws if pox-5
  * has not yet activated on-chain.
  *
- * Phase boundaries (see `notes/api-mock-scenarios.md` for the D-day map):
- * - `announced` ≈ D-30 → D-7 (**convention**, see below)
- * - `open` ≈ D-7 → D0 — registration window mirrors the re-lock window
- *   (`rewardCycleLength / 2`). **Convention.**
- * - `active` = D0 → D172 — opens at `bondPeriodToBurnHeight(bondIndex)`.
- *   D0 is the only contract-enforced boundary here (registration cutoff
- *   via `ERR_BOND_ALREADY_STARTED`).
- * - `re-lock-window` ≈ D172 → D182 — last `rewardCycleLength / 2` blocks
- *   before close. BTC unlocks on L1 (exact moment is the script CLTV
- *   expiry); STX still locked on L2. The burn-height boundary here is
- *   the canonical display convention from flow 23.
- * - `closed` = D182 onward — capped at `BOND_LENGTH_CYCLES * rewardCycleLength`
- *   worth of blocks so consumers can render a finite range. Bonds remain
- *   readable past this cap; the cap is a UI convention only.
- *
- * Convention notes (not contract-enforced):
- * - `announced` is rendered as one full reward cycle before `open` starts
- *   (`openStart - rewardCycleLength`). On mainnet that's ~14 days — close
- *   to but not exactly the D-30 label in `api-mock-scenarios.md`, which
- *   is a marketing/Waterfall-paper day count rather than a contract gate.
- * - `open` length mirrors the re-lock window (`rewardCycleLength / 2`)
- *   per the "D-7" convention. The contract only enforces the D0 cutoff
- *   and the L1 BTC CLTV expiry — earlier boundaries are display-only.
+ * Phase boundaries:
+ * - `open` — starts `BOND_GAP_CYCLES` reward cycles before the bond's start
+ *   height (the contract's `setup-bond` window) and ends at the start height.
+ *   Registration succeeds anywhere in this range once the admin has called
+ *   `setup-bond` and the chain is not in the PoX prepare phase — the contract
+ *   only enforces the end boundary (`ERR_BOND_ALREADY_STARTED`); whether the
+ *   bond is configured yet requires an on-chain read (`get-protocol-bond`),
+ *   which this pure helper deliberately doesn't do.
+ * - `locked` — `bondPeriodToBurnHeight(bondIndex)` →
+ *   `BOND_LENGTH_CYCLES * rewardCycleLength` blocks later.
+ * - `unlocked` — last `rewardCycleLength / 2` blocks of the term. BTC unlocks
+ *   on L1 (exact moment is the script CLTV expiry); STX still locked on L2.
+ *   Stakers may roll into the next overlapping bond.
+ * - `closed` — after the term; capped at `BOND_LENGTH_CYCLES *
+ *   rewardCycleLength` worth of blocks so consumers can render a finite
+ *   range. Bonds remain readable past this cap; the cap is a UI convention
+ *   only.
  *
  * `endBurnHeight` is exclusive: `startBurnHeight + length === endBurnHeight`,
  * and the next phase, if any, begins at `endBurnHeight`.
@@ -270,10 +277,9 @@ export function bondPhaseRanges(opts: { bondIndex: number; poxInfo: PoxInfo }): 
   const { rewardCycleLength } = opts.poxInfo;
   const openBurnHeight = bondPeriodToBurnHeight(opts);
   const closeBurnHeight = openBurnHeight + BOND_LENGTH_CYCLES * rewardCycleLength;
-  const reLockWindowBlocks = Math.floor(rewardCycleLength / 2);
-  const reLockStart = closeBurnHeight - reLockWindowBlocks;
-  const openStart = openBurnHeight - reLockWindowBlocks;
-  const announceStart = openStart - rewardCycleLength;
+  const unlockedBlocks = Math.floor(rewardCycleLength / 2);
+  const unlockedStart = closeBurnHeight - unlockedBlocks;
+  const openStart = openBurnHeight - BOND_GAP_CYCLES * rewardCycleLength;
   const closedEnd = closeBurnHeight + BOND_LENGTH_CYCLES * rewardCycleLength;
 
   const range = (name: BondPhaseName, start: number, end: number): BondPhaseRange => ({
@@ -284,10 +290,62 @@ export function bondPhaseRanges(opts: { bondIndex: number; poxInfo: PoxInfo }): 
   });
 
   return [
-    range('announced', announceStart, openStart),
     range('open', openStart, openBurnHeight),
-    range('active', openBurnHeight, reLockStart),
-    range('re-lock-window', reLockStart, closeBurnHeight),
+    range('locked', openBurnHeight, unlockedStart),
+    range('unlocked', unlockedStart, closeBurnHeight),
     range('closed', closeBurnHeight, closedEnd),
   ];
+}
+
+/**
+ * Point-in-time status of a bond, without assuming it exists on-chain.
+ *
+ * For a set-up bond (`setup-bond` has been called) these are the
+ * {@link BondPhaseName} phases. For a bond that hasn't been set up:
+ * - `too-early` — before the bond's setup window; `setup-bond` would revert.
+ * - `eligible` — within the setup window ({@link BOND_GAP_CYCLES} reward
+ *   cycles before the bond's start height); the admin can `setup-bond` now.
+ * - `missing` — the start height passed without `setup-bond`; this bond
+ *   period can never run.
+ */
+export type BondStatusName = BondPhaseName | 'too-early' | 'eligible' | 'missing';
+
+/**
+ * **Unstable / UI-experimental.** Classify a bond's status at the
+ * `poxInfo.currentBurnchainBlockHeight`.
+ *
+ * Unlike {@link bondPhaseRanges}, this doesn't assume the bond exists:
+ * `isBondSetup` says whether `setup-bond` has been called for this
+ * `bondIndex` (i.e. the contract's `get-protocol-bond` returned `some`) —
+ * that's an on-chain read, which this pure helper leaves to the caller.
+ * For the fetching variant, see `fetchBondStatus`.
+ *
+ * Set-up bonds map onto the {@link bondPhaseRanges} phases; bonds that
+ * haven't been set up resolve to `too-early` / `eligible` / `missing` by
+ * where the height falls relative to the setup window.
+ *
+ * Note `open` only means registration is allowed by bond timing — the PoX
+ * prepare phase ({@link isInPreparePhase}) still periodically blocks it.
+ */
+export function bondStatus(opts: {
+  bondIndex: number;
+  poxInfo: PoxInfo;
+  /** Whether `setup-bond` has been called for this bond (`get-protocol-bond` is `some`). */
+  isBondSetup: boolean;
+}): BondStatusName {
+  const { currentBurnchainBlockHeight: burnHeight, rewardCycleLength } = opts.poxInfo;
+  const startBurnHeight = bondPeriodToBurnHeight(opts);
+  const closeBurnHeight = startBurnHeight + BOND_LENGTH_CYCLES * rewardCycleLength;
+  const unlockedStart = closeBurnHeight - Math.floor(rewardCycleLength / 2);
+  const setupStart = startBurnHeight - BOND_GAP_CYCLES * rewardCycleLength;
+
+  if (!opts.isBondSetup) {
+    if (burnHeight < setupStart) return 'too-early';
+    if (burnHeight < startBurnHeight) return 'eligible';
+    return 'missing';
+  }
+  if (burnHeight < startBurnHeight) return 'open';
+  if (burnHeight < unlockedStart) return 'locked';
+  if (burnHeight < closeBurnHeight) return 'unlocked';
+  return 'closed';
 }

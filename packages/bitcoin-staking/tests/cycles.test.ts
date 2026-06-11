@@ -3,12 +3,12 @@ import {
   isBondActiveAtHeight,
   isInPreparePhase,
   minUstxForSatsAmount,
-} from "../src/cycles";
-import type { PoxInfo } from "../src/types";
+} from '../src/cycles';
+import type { PoxInfo } from '../src/types';
 
 /** Minimal PoxInfo fixture sufficient for the cycle-math helpers under test. */
 const POX_INFO: PoxInfo = {
-  contractId: "SP000000000000000000002Q6VF78.pox-5",
+  contractId: 'SP000000000000000000002Q6VF78.pox-5',
   currentBurnchainBlockHeight: 700_000,
   firstBurnchainBlockHeight: 666_050,
   rewardCycleId: 10,

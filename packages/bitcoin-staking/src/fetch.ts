@@ -15,6 +15,7 @@ import {
   fetchContractMapEntry,
 } from '@stacks/transactions';
 import { POX5_CONTRACT_NAME } from './constants';
+import { type BondStatusName, bondStatus } from './cycles';
 import type {
   AccountStatus,
   Bond,
@@ -320,6 +321,36 @@ export async function fetchProtocolBond(
   return decodeBondTuple(opts.bondIndex, optional.value);
 }
 
+/**
+ * **Unstable / UI-experimental.** Classify a bond's {@link BondStatusName}
+ * at the current burn height, fetching whatever isn't injected.
+ *
+ * Wraps the pure {@link bondStatus} helper: `poxInfo` and `isBondSetup` are
+ * fetched (via {@link fetchPoxInfo} / {@link fetchProtocolBond}) when not
+ * provided, so callers that already hold them avoid the network round-trips
+ * (e.g. after {@link fetchProtocolBond}, pass `isBondSetup: bond !== undefined`).
+ */
+export async function fetchBondStatus(
+  opts: {
+    bondIndex: number;
+    poxInfo?: PoxInfo;
+    /** Whether `setup-bond` has been called for this bond. Fetched when omitted. */
+    isBondSetup?: boolean;
+  } & NetworkClientParam
+): Promise<BondStatusName> {
+  const [poxInfo, isBondSetup] = await Promise.all([
+    opts.poxInfo ?? fetchPoxInfo({ network: opts.network, client: opts.client }),
+    opts.isBondSetup ??
+      fetchProtocolBond({
+        bondIndex: opts.bondIndex,
+        network: opts.network,
+        client: opts.client,
+      }).then(bond => bond !== undefined),
+  ]);
+
+  return bondStatus({ bondIndex: opts.bondIndex, poxInfo, isBondSetup });
+}
+
 /** @ignore */
 function decodeBondTuple(bondIndex: number, tuple: TupleCV): Bond {
   const targetRate = (tuple.value['target-rate'] as UIntCV).value;
@@ -616,7 +647,11 @@ export async function fetchSignerSharesStakedForCycle(
     contractAddress: network.bootAddress,
     contractName: POX5_CONTRACT_NAME,
     functionName: 'get-signer-shares-staked-for-cycle',
-    functionArgs: [Cl.address(opts.signerManager), Cl.uint(opts.rewardCycle), bondIndexCV(opts.bondIndex)],
+    functionArgs: [
+      Cl.address(opts.signerManager),
+      Cl.uint(opts.rewardCycle),
+      bondIndexCV(opts.bondIndex),
+    ],
     senderAddress: network.bootAddress,
     network: opts.network,
     client: opts.client,
@@ -650,7 +685,11 @@ export async function fetchEarned(
     contractAddress: network.bootAddress,
     contractName: POX5_CONTRACT_NAME,
     functionName: 'get-earned',
-    functionArgs: [Cl.address(opts.signerManager), Cl.uint(opts.rewardCycle), bondIndexCV(opts.bondIndex)],
+    functionArgs: [
+      Cl.address(opts.signerManager),
+      Cl.uint(opts.rewardCycle),
+      bondIndexCV(opts.bondIndex),
+    ],
     senderAddress: network.bootAddress,
     network: opts.network,
     client: opts.client,
@@ -678,7 +717,11 @@ export async function fetchSignerUnclaimedRewards(
     contractAddress: network.bootAddress,
     contractName: POX5_CONTRACT_NAME,
     functionName: 'get-signer-unclaimed-rewards-for-cycle',
-    functionArgs: [Cl.address(opts.signerManager), Cl.uint(opts.rewardCycle), bondIndexCV(opts.bondIndex)],
+    functionArgs: [
+      Cl.address(opts.signerManager),
+      Cl.uint(opts.rewardCycle),
+      bondIndexCV(opts.bondIndex),
+    ],
     senderAddress: network.bootAddress,
     network: opts.network,
     client: opts.client,
@@ -706,7 +749,11 @@ export async function fetchSignerRewardsPerTokenSettled(
     contractAddress: network.bootAddress,
     contractName: POX5_CONTRACT_NAME,
     functionName: 'get-signer-rewards-per-token-settled-for-cycle',
-    functionArgs: [Cl.address(opts.signerManager), Cl.uint(opts.rewardCycle), bondIndexCV(opts.bondIndex)],
+    functionArgs: [
+      Cl.address(opts.signerManager),
+      Cl.uint(opts.rewardCycle),
+      bondIndexCV(opts.bondIndex),
+    ],
     senderAddress: network.bootAddress,
     network: opts.network,
     client: opts.client,
@@ -733,7 +780,11 @@ export async function fetchSignerRewardsPerTokenForCycle(
     contractAddress: network.bootAddress,
     contractName: POX5_CONTRACT_NAME,
     functionName: 'get-signer-rewards-per-token-for-cycle',
-    functionArgs: [Cl.address(opts.signerManager), Cl.uint(opts.rewardCycle), bondIndexCV(opts.bondIndex)],
+    functionArgs: [
+      Cl.address(opts.signerManager),
+      Cl.uint(opts.rewardCycle),
+      bondIndexCV(opts.bondIndex),
+    ],
     senderAddress: network.bootAddress,
     network: opts.network,
     client: opts.client,

@@ -424,7 +424,7 @@ export function lockScriptToAddress(
  *
  * Set to the start of the staker's unlock cycle (i.e.
  * {@link rewardCycleToBurnHeight} of `firstRewardCycle + numCycles - 1`),
- * giving time to re-lock without missing a cycle.
+ * giving time to roll over into a new lock without missing a cycle.
  */
 export function computeUnlockHeight(opts: {
   firstRewardCycle: number;
