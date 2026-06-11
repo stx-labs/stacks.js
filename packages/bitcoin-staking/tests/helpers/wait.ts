@@ -11,7 +11,19 @@ import {
 } from '@stacks/transactions';
 import type { StacksNetwork } from '@stacks/network';
 import { fetchPoxInfo, fetchSignerInfo, type PoxInfo } from '../../src';
-import { ENV, getNetwork, isMocking, regtestReset, timeout } from './utils';
+import { ENV, getNetwork, isMocking, regtestReset, timeout, withRetry } from './utils';
+
+/**
+ * Retry-wrapped `fetch` for the raw node GETs below. These idempotent reads hit
+ * the node directly (bypassing the SDK client's retrying fetch), so a transient
+ * connection drop — common around Nakamoto tenure changes (`ECONNRESET` /
+ * `socket hang up`) — would otherwise throw straight through and fail a test.
+ * Under replay `fetch` is mocked, so this is a single pass-through call.
+ */
+export const nodeFetch = withRetry(
+  10,
+  (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => fetch(input, init)
+);
 
 /**
  * Core wait primitive: poll `condition` until true. Under replay (`isMocking`)
@@ -43,28 +55,28 @@ export function getPoxInfo(): Promise<PoxInfo> {
 }
 
 export async function getBurnBlockHeight(): Promise<number> {
-  const res = await fetch(`${ENV.STACKS_API}/v2/info`);
+  const res = await nodeFetch(`${ENV.STACKS_API}/v2/info`);
   const data = (await res.json()) as { burn_block_height: number };
   return data.burn_block_height;
 }
 
 /** Next nonce via the node's `/v2/accounts` (node-only; avoids `/extended`). */
 export async function getNextNonce(address: string): Promise<number> {
-  const res = await fetch(`${ENV.STACKS_API}/v2/accounts/${address}?proof=0`);
+  const res = await nodeFetch(`${ENV.STACKS_API}/v2/accounts/${address}?proof=0`);
   const data = (await res.json()) as { nonce: number };
   return data.nonce;
 }
 
 export async function getTransaction(txid: string): Promise<TxRecord | null> {
   const id = txid.startsWith('0x') ? txid : `0x${txid}`;
-  const res = await fetch(`${ENV.STACKS_API}/extended/v1/tx/${id}`);
+  const res = await nodeFetch(`${ENV.STACKS_API}/extended/v1/tx/${id}`);
   if (!res.ok) return null;
   return (await res.json()) as TxRecord;
 }
 
 /** STX balance (microSTX) straight from the node via `/v2/accounts`. */
 export async function getStxBalance(address: string): Promise<bigint> {
-  const res = await fetch(`${ENV.STACKS_API}/v2/accounts/${address}?proof=0`);
+  const res = await nodeFetch(`${ENV.STACKS_API}/v2/accounts/${address}?proof=0`);
   if (!res.ok) throw new Error(`GET /v2/accounts/${address} → ${res.status}`);
   const data = (await res.json()) as { balance: string };
   return BigInt(data.balance); // hex "0x..."
@@ -132,7 +144,7 @@ interface RawPoxInfo {
  * snapshot is what `BASE_POX5` replays so this wait resolves offline.
  */
 async function getPoxInfoRaw(): Promise<RawPoxInfo> {
-  const res = await fetch(`${ENV.STACKS_API}/v2/pox`);
+  const res = await nodeFetch(`${ENV.STACKS_API}/v2/pox`);
   if (!res.ok) throw new Error(`/v2/pox → ${res.status}`);
   return (await res.json()) as RawPoxInfo;
 }
@@ -343,7 +355,7 @@ export async function fundStx(args: {
 
 /** Whether a contract is deployed, via the node's `/v2/contracts/interface`. */
 export async function contractExists(address: string, name: string): Promise<boolean> {
-  const res = await fetch(`${ENV.STACKS_API}/v2/contracts/interface/${address}/${name}`);
+  const res = await nodeFetch(`${ENV.STACKS_API}/v2/contracts/interface/${address}/${name}`);
   return res.ok;
 }
 

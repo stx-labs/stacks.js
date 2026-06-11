@@ -14,8 +14,21 @@ const sh = promisify(exec);
 
 /** Lightweight env (mirrors `stacks-functional-tests/src/env.ts`). */
 export const ENV = {
+  /**
+   * The chain id used to sign transactions — the node's `/v2/info` `.network_id`
+   * (for mainnet/testnet that field IS the chain id). Defaults to the standard
+   * testnet id; set it to match a custom net, e.g. `256` for the hosted private
+   * net (whose default-testnet id would otherwise fail signature validation).
+   */
+  NETWORK_ID: Number(process.env.NETWORK_ID ?? STACKS_TESTNET.chainId),
+
+  /**
+   * Base URL for ALL Stacks HTTP. A Hiro-style API proxies the node, so the SAME
+   * base serves both the `/extended/*` REST and the raw node `/v2/*` RPC — point
+   * it at a net (e.g. `https://api.private-1.hiro.so`) and everything (reads,
+   * broadcast, pox, waiters) targets that net. No separate node URL needed.
+   */
   STACKS_API: process.env.STACKS_API ?? "http://localhost:3999",
-  STACKS_NODE: process.env.STACKS_NODE ?? "http://localhost:20443",
   BITCOIND_URL: process.env.BITCOIND_URL ?? "http://btc:btc@localhost:18443",
 
   /** regtest-env compose cwd, relative to this package dir. */
@@ -24,6 +37,11 @@ export const ENV = {
   NETWORK_UP_CMD: process.env.NETWORK_UP_CMD ?? "",
   NETWORK_DOWN_CMD: process.env.NETWORK_DOWN_CMD ?? "",
 
+  // On the hosted private testnet the API rate-limits at ~1 req/s (HTTP 429).
+  // Devnet is local and can be polled fast (250 ms is fine). Testnet callers
+  // should set POLL_INTERVAL=10000 RETRY_INTERVAL=10000 or the tests will
+  // hammer the endpoint and get throttled. These defaults keep devnet behaviour
+  // unchanged while making the override easy.
   POLL_INTERVAL: Number(process.env.POLL_INTERVAL ?? 250),
   RETRY_INTERVAL: Number(process.env.RETRY_INTERVAL ?? 250),
   STACKS_TX_TIMEOUT: Number(process.env.STACKS_TX_TIMEOUT ?? 120_000),
@@ -210,6 +228,7 @@ const liveFetch: typeof fetch = async (input, init) => {
 export function getNetwork(): StacksNetwork {
   return {
     ...STACKS_TESTNET,
+    chainId: ENV.NETWORK_ID,
     client: { baseUrl: ENV.STACKS_API, fetch: withRetry(10, liveFetch) },
   };
 }
@@ -227,7 +246,13 @@ export function withRetry<T, A extends unknown[]>(
         const response = await fn(...args);
         if (response instanceof Response && !response.ok) {
           if (attempts >= maxRetries) return response as T;
-          await timeout(ENV.RETRY_INTERVAL);
+          // 429 Rate Limited: respect Retry-After header, else back off 15 s.
+          // Without this, fast retries re-trigger 429s in a tight loop.
+          const wait =
+            response.status === 429
+              ? (Number(response.headers.get('retry-after') ?? 0) * 1000 || 15_000)
+              : ENV.RETRY_INTERVAL;
+          await timeout(wait);
           attempts++;
           continue;
         }
