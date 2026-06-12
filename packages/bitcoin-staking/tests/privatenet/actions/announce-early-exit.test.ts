@@ -54,10 +54,9 @@ jest.setTimeout(30 * 60_000);
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-// BOND_INDEX is required (no sensible default — it must match the staker's enrollment).
-// Guarded rather than thrown at module load so the skipped suite still imports in CI;
-// the real test is test.skip and asserts BOND_INDEX when un-skipped/run live.
-const BOND_INDEX = Number(process.env.BOND_INDEX);
+// Default matches the sibling actions (btc-lock/register-for-bond record their
+// artifacts/fixtures against bond 4); override with BOND_INDEX for other bonds.
+const BOND_INDEX = Number(process.env.BOND_INDEX ?? 4);
 
 // The signer-manager the staker is currently bound to (must equal oldSignerManager
 // in the contract call; the daemon registers this contract on the private testnet).
