@@ -20,7 +20,8 @@ import {
   minUstxForSatsAmount,
 } from '../../../src';
 import { Pc } from '@stacks/transactions';
-import { ACCOUNTS, REGTEST_KEYS, SIGNER_MANAGER, getAccount } from '../regtest';
+import { ACCOUNTS, REGTEST_KEYS, SIGNER_MANAGER, getAccount, type Account } from '../regtest';
+import { getBondAdminAccount } from '../../helpers/bondAdmin';
 import { getNetwork } from '../../helpers/utils';
 import { SBTC_ASSET_NAME, SBTC_TOKEN } from '../../helpers/constants';
 import {
@@ -35,10 +36,10 @@ import { useFixtures } from '../../helpers/mock';
 import { signTransaction } from '../../helpers/sign';
 import { deploySbtcMinter, mintSbtc, fetchSbtcBalance } from '../../helpers/sbtc';
 
-jest.setTimeout(20 * 60_000);
+jest.setTimeout(5 * 60_000);
 
 const network = getNetwork();
-const admin = ACCOUNTS.admin;
+let admin: Account;
 const sbtcDeployer = ACCOUNTS.sbtcDeployer; // owns sbtc-token + the staked signer-manager
 const staker = getAccount(REGTEST_KEYS.account6);
 const signerManager = SIGNER_MANAGER;
@@ -51,10 +52,11 @@ const MIN_USTX_RATIO_BPS = 500n; // 5%
 const EARLY_UNLOCK_BYTES = '00'.repeat(683); // opaque to the sBTC path
 
 beforeAll(async () => {
+  admin = await getBondAdminAccount();
   useFixtures('register-for-bond-sbtc');
   await ensurePox5();
   await waitForSignerManager(signerManager);
-}, 20 * 60_000);
+}, 5 * 60_000);
 
 test('sbtc register-for-bond happy path: setup-bond → mint → register → enrolled', async () => {
   const signerInfo = await fetchSignerInfo({ signerManager, network });

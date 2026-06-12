@@ -1,18 +1,19 @@
-// Live-oriented (RECORD=1 / Docker) — NOT wired for offline replay: this action
-// hits the same path `…/pox-5/get-total-sbtc-staked` twice expecting different
-// bodies (before vs. after pox-5 activation), and `setApiMocks` keys by path
-// only. See "Caveat" in tests/regtest/README.md.
+// Recording resets the chain on purpose: the pre-activation error state only
+// exists on a fresh chain. Replay never touches Docker.
 import { fetchTotalSbtcStaked } from '../../../src';
-import { getNetwork, regtestReset } from '../../helpers/utils';
+import { getNetwork, isMocking, networkReset } from '../../helpers/utils';
 import { waitForNetwork, waitForPox5 } from '../../helpers/wait';
+import { useFixtures } from '../../helpers/mock';
 
-const BOOT = 20 * 60_000; // 20 min: fresh chain boot + reach epoch 4.0
+const BOOT = 5 * 60_000; // fresh chain boot (~150s) + reach epoch 4.0 + margin
 jest.setTimeout(BOOT);
 
 const network = getNetwork();
 
 beforeAll(async () => {
-  await regtestReset(); // down --volumes + up -d --build → fresh chain
+  useFixtures('pox5-readonly');
+  if (isMocking) return; // replay: fixtures provide both phases, no Docker
+  await networkReset(); // NETWORK_WIPE_CMD + NETWORK_UP_CMD → fresh chain
   await waitForNetwork(); // node + pox endpoint responsive (still pre-pox-5)
 }, BOOT);
 
@@ -21,6 +22,8 @@ test('pox-5 read-only get-total-sbtc-staked (only after activation)', async () =
   // (contract not yet published), so the wait below is what makes it work.
   await expect(fetchTotalSbtcStaked({ network })).rejects.toBeDefined();
 
+  // Phase switch: the same read returns a different body once pox-5 is live.
+  useFixtures('pox5-readonly-active');
   await waitForPox5(); // epoch 4.0 / pox-5 active
 
   const total = await fetchTotalSbtcStaked({ network });

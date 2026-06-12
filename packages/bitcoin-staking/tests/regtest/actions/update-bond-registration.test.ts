@@ -12,7 +12,8 @@ import {
   minUstxForSatsAmount,
 } from '../../../src';
 import { Pc } from '@stacks/transactions';
-import { ACCOUNTS, REGTEST_KEYS, SIGNER_MANAGER, SIGNER_MANAGER_2, getAccount } from '../regtest';
+import { ACCOUNTS, REGTEST_KEYS, SIGNER_MANAGER, SIGNER_MANAGER_2, getAccount, type Account } from '../regtest';
+import { getBondAdminAccount } from '../../helpers/bondAdmin';
 import { getNetwork } from '../../helpers/utils';
 import { SBTC_ASSET_NAME, SBTC_TOKEN } from '../../helpers/constants';
 import { broadcastAndWait, ensurePox5, getNextNonce, waitForSignerManager } from '../../helpers/wait';
@@ -21,10 +22,10 @@ import { useFixtures } from '../../helpers/mock';
 import { signTransaction } from '../../helpers/sign';
 import { deploySbtcMinter, mintSbtc } from '../../helpers/sbtc';
 
-jest.setTimeout(20 * 60_000);
+jest.setTimeout(5 * 60_000);
 
 const network = getNetwork();
-const admin = ACCOUNTS.admin;
+let admin: Account;
 const sbtcDeployer = ACCOUNTS.sbtcDeployer;
 const staker = getAccount(REGTEST_KEYS.account6);
 
@@ -36,6 +37,7 @@ const MIN_USTX_RATIO_BPS = 500n;
 const EARLY_UNLOCK_BYTES = '00'.repeat(683);
 
 beforeAll(async () => {
+  admin = await getBondAdminAccount();
   useFixtures('update-bond-registration');
   await ensurePox5();
   await waitForSignerManager(SIGNER_MANAGER);
@@ -50,7 +52,7 @@ beforeAll(async () => {
     fee: FEE,
     network,
   });
-}, 20 * 60_000);
+}, 5 * 60_000);
 
 test('update-bond-registration: rotate the membership signer-manager', async () => {
   const { bondIndex } = await waitForBondWithRunway();

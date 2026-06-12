@@ -24,7 +24,8 @@ import {
   fetchSignerInfo,
   minUstxForSatsAmount,
 } from "../../../src";
-import { ACCOUNTS, REGTEST_KEYS, SIGNER_MANAGER, getAccount } from "../regtest";
+import { REGTEST_KEYS, SIGNER_MANAGER, getAccount, type Account } from "../regtest";
+import { getBondAdminAccount } from "../../helpers/bondAdmin";
 import { getNetwork } from "../../helpers/utils";
 import {
   broadcastAndWait,
@@ -39,10 +40,10 @@ import { useFixtures } from "../../helpers/mock";
 import { signTransaction } from "../../helpers/sign";
 import { getBtcTxProofInputs, sendToAddress } from "../../helpers/btc";
 
-jest.setTimeout(20 * 60_000);
+jest.setTimeout(5 * 60_000);
 
 const network = getNetwork();
-const admin = ACCOUNTS.admin;
+let admin: Account;
 const staker = getAccount(REGTEST_KEYS.account5);
 const signerManager = SIGNER_MANAGER;
 
@@ -54,10 +55,11 @@ const MIN_USTX_RATIO_BPS = 500n;
 const EARLY_UNLOCK_BYTES = "00".repeat(683);
 
 beforeAll(async () => {
+  admin = await getBondAdminAccount();
   useFixtures("register-for-bond-l1");
   await ensurePox5();
   await waitForSignerManager(signerManager);
-}, 20 * 60_000);
+}, 5 * 60_000);
 
 test("l1 register-for-bond happy path: setup-bond → fund BTC → prove → register → enrolled", async () => {
   const signerInfo = await fetchSignerInfo({ signerManager, network });

@@ -3,20 +3,26 @@ import { getNetwork } from '../../helpers/utils';
 import { deployContract, loadContractSource } from '../../helpers/deploy';
 import { ensurePox5 } from '../../helpers/wait';
 
-const BOOT = 20 * 60_000;
+const BOOT = 5 * 60_000;
 jest.setTimeout(BOOT);
 
 const network = getNetwork();
-const deployer = ACCOUNTS.admin; // STACKING_KEYS[0]; idle while the daemon is disabled
+const deployer = ACCOUNTS.admin;
 
-// keep-alive staking now runs on dedicated accounts, so the admin deployer is
-// free — no need to disable staking.
-beforeAll(() => ensurePox5(), BOOT);
+// Live-only: loads the .clar source from the regtest-env checkout, which is
+// not available offline/CI — skip under replay.
+const liveTest = process.env.RECORD === '1' ? test : test.skip;
 
-test('deploy pox-5 signer-manager contract', async () => {
+beforeAll(() => (process.env.RECORD === '1' ? ensurePox5() : undefined), BOOT);
+
+liveTest('deploy pox-5 signer-manager contract', async () => {
+  // The SM3VDX… `deployer` placeholder is the sbtc-token/-registry OWNER
+  // (ACCOUNTS.sbtcDeployer), NOT the account deploying this contract. Passing
+  // the test deployer makes the contract reference <test-addr>.sbtc-token,
+  // which doesn't exist → analysis abort → the deploy never lands.
   const source = loadContractSource('stacking/contracts/pox-5-signer.clar', {
     bootAddress: network.bootAddress,
-    deployer: deployer.address,
+    deployer: ACCOUNTS.sbtcDeployer.address,
   });
 
   // deployContract confirms node-only (waits until the contract is queryable on

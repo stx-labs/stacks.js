@@ -22,12 +22,14 @@ import {
   minUstxForSatsAmount,
 } from '../../../src';
 import { Pc } from '@stacks/transactions';
-import { ACCOUNTS, REGTEST_KEYS, SIGNER_MANAGER, getAccount } from '../regtest';
+import { ACCOUNTS, REGTEST_KEYS, SIGNER_MANAGER, getAccount, type Account } from '../regtest';
+import { getBondAdminAccount } from '../../helpers/bondAdmin';
 import { getNetwork } from '../../helpers/utils';
 import { SBTC_ASSET_NAME, SBTC_TOKEN } from '../../helpers/constants';
 import {
   broadcastAndWait,
   ensurePox5,
+  fundStx,
   getNextNonce,
   waitForBurnBlockHeight,
   waitForFulfilled,
@@ -39,13 +41,13 @@ import { signTransaction } from '../../helpers/sign';
 import { getBtcTxProofInputs, sendToAddress } from '../../helpers/btc';
 import { deploySbtcMinter, mintSbtc } from '../../helpers/sbtc';
 
-jest.setTimeout(20 * 60_000);
+jest.setTimeout(5 * 60_000);
 
 const network = getNetwork();
-const admin = ACCOUNTS.admin;
+let admin: Account;
 const sbtcDeployer = ACCOUNTS.sbtcDeployer; // owns sbtc-token + the staked signer-manager
-const userA = getAccount(REGTEST_KEYS.account5); // L1 staker
-const userB = getAccount(REGTEST_KEYS.account7); // sBTC staker (disjoint from the sBTC test's account6)
+const userA = getAccount(REGTEST_KEYS.account9); // L1 staker
+const userB = getAccount(REGTEST_KEYS.account10); // sBTC staker
 const signerManager = SIGNER_MANAGER;
 
 const MAX_SATS = 10_000n;
@@ -56,9 +58,24 @@ const MIN_USTX_RATIO_BPS = 500n;
 const EARLY_UNLOCK_BYTES = '00'.repeat(683);
 
 beforeAll(async () => {
+  admin = await getBondAdminAccount();
   useFixtures('register-for-bond-combined');
   await ensurePox5();
   await waitForSignerManager(signerManager);
+  await fundStx({
+    funder: admin,
+    recipient: userA.address,
+    amountUstx: 10_000_000n,
+    nonce: await getNextNonce(admin.address),
+    network,
+  });
+  await fundStx({
+    funder: admin,
+    recipient: userB.address,
+    amountUstx: 10_000_000n,
+    nonce: await getNextNonce(admin.address),
+    network,
+  });
   await deploySbtcMinter({ deployerKey: sbtcDeployer.key, network });
   await mintSbtc({
     deployer: sbtcDeployer.address,
@@ -69,7 +86,7 @@ beforeAll(async () => {
     fee: FEE,
     network,
   });
-}, 20 * 60_000);
+}, 5 * 60_000);
 
 test('one bond, two participants: user A (L1) + user B (sBTC)', async () => {
   expect(await fetchBondMembership({ address: userA.address, network })).toBeUndefined();

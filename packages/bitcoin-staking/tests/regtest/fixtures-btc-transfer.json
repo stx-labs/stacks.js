@@ -1,0 +1,6 @@
+{
+  "localhost:18443/wallet/main#getnewaddress:[\"e2e-recipient\"]": "{\"result\":\"mx2CGj5TsSVoZ8kqpoRqjepFjr15VURjT7\",\"error\":null,\"id\":\"e2e\"}\n",
+  "localhost:18443/wallet/main#getreceivedbyaddress:[\"mx2CGj5TsSVoZ8kqpoRqjepFjr15VURjT7\",0]": "{\"result\":0.00000000,\"error\":null,\"id\":\"e2e\"}\n",
+  "localhost:18443/wallet/main#getreceivedbyaddress:[\"mx2CGj5TsSVoZ8kqpoRqjepFjr15VURjT7\",1]": "{\"result\":0.50000000,\"error\":null,\"id\":\"e2e\"}\n",
+  "localhost:18443/wallet/main#sendtoaddress:[\"mx2CGj5TsSVoZ8kqpoRqjepFjr15VURjT7\",0.5]": "{\"result\":\"caf0ade8ef5beb45eaf8730c7e597ca7f66037fdf617b9987fa4b34f3f0419e4\",\"error\":null,\"id\":\"e2e\"}\n"
+}

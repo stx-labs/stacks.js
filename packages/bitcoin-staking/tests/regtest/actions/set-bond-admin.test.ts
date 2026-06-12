@@ -5,16 +5,17 @@
  */
 import { buildSetBondAdmin } from '../../../src';
 import { cvToValue, deserializeCV, type PrincipalCV } from '@stacks/transactions';
-import { ACCOUNTS, REGTEST_KEYS, getAccount } from '../regtest';
+import { REGTEST_KEYS, getAccount, type Account } from '../regtest';
 import { ENV, getNetwork } from '../../helpers/utils';
 import { broadcastAndWait, ensurePox5, getNextNonce } from '../../helpers/wait';
 import { useFixtures } from '../../helpers/mock';
 import { signTransaction } from '../../helpers/sign';
+import { getBondAdminAccount } from '../../helpers/bondAdmin';
 
-jest.setTimeout(20 * 60_000);
+jest.setTimeout(5 * 60_000);
 
 const network = getNetwork();
-const admin = ACCOUNTS.admin; // current pox_5_bond_admin
+let admin: Account; // resolved in beforeAll from BOND_ADMIN_KEY
 const tempAdmin = getAccount(REGTEST_KEYS.account5); // prefunded; holds the role mid-test
 const FEE = 10_000n;
 const POX5 = 'ST000000000000000000002AMW42H';
@@ -43,9 +44,10 @@ const setBondAdmin = async (newAdmin: string, from: typeof admin) =>
   );
 
 beforeAll(async () => {
+  admin = await getBondAdminAccount();
   useFixtures('set-bond-admin');
   await ensurePox5();
-}, 20 * 60_000);
+}, 5 * 60_000);
 
 test('set-bond-admin: rotate to a temp admin and back', async () => {
   expect(await fetchBondAdmin()).toBe(admin.address);

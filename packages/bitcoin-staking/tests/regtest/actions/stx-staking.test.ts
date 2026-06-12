@@ -30,7 +30,7 @@ import {
 import { useFixtures } from '../../helpers/mock';
 import { signTransaction } from '../../helpers/sign';
 
-jest.setTimeout(20 * 60_000);
+jest.setTimeout(5 * 60_000);
 
 const network = getNetwork();
 const admin = ACCOUNTS.admin; // funder (clean nonce, no daemon drives it)
@@ -56,7 +56,7 @@ beforeAll(async () => {
     fee: FEE,
     network,
   });
-}, 20 * 60_000);
+}, 5 * 60_000);
 
 test('stx staking lifecycle: stake → extend + top-up → unstake', async () => {
   expect((await fetchStakerInfo({ address: staker.address, network })).staked).toBe(false);

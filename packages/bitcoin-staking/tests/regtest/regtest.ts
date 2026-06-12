@@ -21,8 +21,8 @@ export const REGTEST_KEYS = {
     "975b251dd7809469ef0c26ec3917971b75c51cd73a022024df4bf3b232cc2dc001",
   account3:
     "c71700b07d520a8c9731e4d0f095aa6efb91e16e25fb27ce2b72e7b698f8127a01",
-  // ST11NJTTKG… — the env's `pox_5_bond_admin`: dedicated, NEVER staked → clean
-  // nonce for setup-bond / register-for-bond. Exposed as ACCOUNTS.admin.
+  // ST11NJTTKG… — funded, NEVER staked, daemon-free. Use as a clean test account;
+  // the actual pox_5_bond_admin is ST1V2ASRWG… — see helpers/bondAdmin.ts.
   account4:
     "21d43d2ae0da1d9d04cfcaac7d397a33733881081f0b2cd038062cf0ccbb752601",
   // STB44… — clean (no daemon touches it). L1 register-for-bond staker.
@@ -39,6 +39,23 @@ export const REGTEST_KEYS = {
   // `fundStx`). Shows the funding pattern that sidesteps the prefunded-key pool.
   account8:
     "6fb38ff674aced1d8cb5a36cd8304011ea65e096188b99603aeb793df481147401",
+  // ST2F8Y6JR… — NOT prefunded; register-for-bond-combined userA (L1). Dedicated
+  // so the combined test never collides with the other register tests' stakers
+  // (account5/6/7 each get enrolled by their own suite on a shared chain).
+  account9:
+    "ac2cb1f06257f8a31f88902adb0f99a7510e85d5d590f84de317de5a0feca57701",
+  // STABQXXMD… — NOT prefunded; register-for-bond-combined userB (sBTC). See account9.
+  account10:
+    "13013c0030f44da89ee5a84442eb8720cdbc46c5117e80811580465c688c272601",
+  // ST3K70TER… — NOT prefunded; e2e/bond-lifecycle staker. Touched ONLY there.
+  account11:
+    "63989aea64fcc091c5979c8eed90278671212d4f00db1d46df4e6488d3cc519901",
+  // ST3CWHQBE… — NOT prefunded; adversarial suite staker (allowlisted leg).
+  account12:
+    "bec0e90f3717aebaa3c75d1e94f068b1bccb85a23be211a688c471d31420910901",
+  // ST251J6G9… — NOT prefunded; adversarial suite outsider (never allowlisted).
+  account13:
+    "362eb8d1bb05b03a6fefa2e356ec3f92abc22ddf4a2cbf9c93384d1215ec6d6601",
 } as const;
 
 /** The 3 keys the regtest staking daemons drive (also our bond roles). */
@@ -49,6 +66,23 @@ export const STACKING_KEYS = [
 ] as const;
 
 export type Account = ReturnType<typeof getAccount>;
+
+/**
+ * Resolve a test account from an env var, falling back to a default account
+ * name. Lets the parallel runner reassign which REGTEST_KEYS account a test
+ * broadcasts from (so concurrent lanes use disjoint accounts) without editing
+ * the test. `envVar` value may be an accountN name OR a raw hex private key.
+ */
+export function resolveAccount(
+  envVar: string,
+  fallback: keyof typeof REGTEST_KEYS,
+): ReturnType<typeof getAccount> {
+  const v = process.env[envVar];
+  if (!v) return getAccount(REGTEST_KEYS[fallback]);
+  if (v in REGTEST_KEYS) return getAccount(REGTEST_KEYS[v as keyof typeof REGTEST_KEYS]);
+  // treat as raw hex key
+  return getAccount(v.length === 64 ? v + "01" : v);
+}
 
 /** Derive the full account view (addresses + keys) for a private key. */
 export function getAccount(key: string) {
@@ -64,9 +98,11 @@ export function getAccount(key: string) {
 }
 
 /**
- * Named roles for the bond flow — see ../stacks-regtest-env/KEYS.md.
- * - `admin`: `pox_5_bond_admin`, a dedicated key the daemon NEVER stakes → clean
- *   nonce for setup-bond / register-for-bond.
+ * Named roles for the bond flow.
+ * - `admin`: account4 — funded, idle. Use for funding/nonce-clean ops. For
+ *   bond-admin transactions (`buildSetupBond`, `buildSetBondAdmin`, …) use
+ *   `getBondAdminAccount()` from `helpers/bondAdmin.ts` instead — the real
+ *   `pox_5_bond_admin` is `ST1V2ASRWG…`, keyed by `BOND_ADMIN_KEY` in `.env`.
  * - `sbtcDeployer`: `STACKING_KEYS[0]` (ST3NBRSFK…). It deployed `sbtc-token`
  *   (= `pox_5_sbtc_contract`) and hosts the daemon-registered, STAKED
  *   `signer-manager`. It's staked every cycle, so NEVER send test txs from it

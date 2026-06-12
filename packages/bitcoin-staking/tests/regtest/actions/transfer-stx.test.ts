@@ -53,6 +53,9 @@ test(`transfer ${AMOUNT} ustx: account4 → ${RECIPIENT_ADDRESS}`, async () => {
     fee: FEE,
     nonce,
   });
+  // Switch BEFORE the broadcast: its nonce polling shares URLs with the
+  // before-reads and would clobber them in the main fixture (latest-wins).
+  useFixtures("transfer-stx-after");
   await broadcastAndWait(tx, sender.address, network);
 
   const senderAfter = await getStxBalance(sender.address);

@@ -10,7 +10,7 @@ import {
   fetchBond,
   firstPox5RewardCycle,
 } from "../../../src";
-import { ACCOUNTS, REGTEST_KEYS, getAccount } from "../regtest";
+import { REGTEST_KEYS, getAccount, type Account } from "../regtest";
 import { getNetwork } from "../../helpers/utils";
 import {
   ensurePox5,
@@ -20,11 +20,12 @@ import {
 } from "../../helpers/wait";
 import { signTransaction } from "../../helpers/sign";
 import { useFixtures } from "../../helpers/mock";
+import { getBondAdminAccount } from "../../helpers/bondAdmin";
 
-jest.setTimeout(20 * 60_000);
+jest.setTimeout(5 * 60_000);
 
 const network = getNetwork();
-const admin = ACCOUNTS.admin;
+let admin: Account;
 const staker = getAccount(REGTEST_KEYS.account5); // just an allowlist entry
 
 const FEE = 10_000n;
@@ -35,9 +36,10 @@ const MIN_USTX_RATIO_BPS = 500n;
 const EARLY_UNLOCK_BYTES = "00".repeat(683);
 
 beforeAll(async () => {
+  admin = await getBondAdminAccount();
   useFixtures("setup-bond");
   await ensurePox5();
-}, 20 * 60_000);
+}, 5 * 60_000);
 
 test("setup-bond: admin creates a bond at the correct time", async () => {
   // Nearest future bond period whose setup-bond window is open (computed from the
