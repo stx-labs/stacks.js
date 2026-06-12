@@ -552,6 +552,204 @@ export async function fetchConstructLockupOutputScript(
   return fetchConstructLockupRead('construct-lockup-output-script', opts);
 }
 
+// ---------------------------------------------------------------------------
+// On-chain SPV / script cross-checks
+//
+// These mirror pure helpers in `script.ts` / `proof.ts`. They exist so a test
+// or tool can assert the local implementation byte-for-byte matches the
+// deployed contract — fetch the on-chain result and compare against the local
+// one. They are NOT needed on a hot path; the local pure helpers are.
+// ---------------------------------------------------------------------------
+
+/** @ignore Accept a buffer arg as raw bytes or a hex string. */
+function bufferArg(v: Uint8Array | string) {
+  return typeof v === 'string' ? Cl.bufferFromHex(v) : Cl.buffer(v);
+}
+
+/** @ignore Run a read-only that returns a `(buff ...)` and decode to bytes. */
+async function fetchBufferRead(
+  functionName: string,
+  functionArgs: Parameters<typeof fetchCallReadOnlyFunction>[0]['functionArgs'],
+  opts: NetworkClientParam
+): Promise<Uint8Array> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName,
+    functionArgs,
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+  return hexToBytes((result as BufferCV).value as string);
+}
+
+/**
+ * Wraps the contract's `push-script-bytes` read-only.
+ *
+ * Returns `bytes` prefixed with its Bitcoin-Script push opcode(s). Mirrors the
+ * local, pure {@link pushScriptBytes} — fetch to cross-check.
+ */
+export async function fetchPushScriptBytes(
+  opts: { bytes: Uint8Array | string } & NetworkClientParam
+): Promise<Uint8Array> {
+  return fetchBufferRead('push-script-bytes', [bufferArg(opts.bytes)], opts);
+}
+
+/**
+ * Wraps the contract's `serialize-c-script-num` read-only.
+ *
+ * Returns the minimal little-endian CScriptNum encoding of `n`. Mirrors the
+ * local, pure {@link serializeCScriptNum} — fetch to cross-check.
+ */
+export async function fetchSerializeCScriptNum(
+  opts: { n: number | bigint } & NetworkClientParam
+): Promise<Uint8Array> {
+  return fetchBufferRead('serialize-c-script-num', [Cl.uint(opts.n)], opts);
+}
+
+/**
+ * Wraps the contract's `push-c-script-num` read-only.
+ *
+ * Returns the script-push encoding of the number `n` (OP_0 / OP_1..OP_16 small
+ * forms, else a pushed CScriptNum). Mirrors the local, pure
+ * {@link pushCScriptNum} — fetch to cross-check.
+ */
+export async function fetchPushCScriptNum(
+  opts: { n: number | bigint } & NetworkClientParam
+): Promise<Uint8Array> {
+  return fetchBufferRead('push-c-script-num', [Cl.uint(opts.n)], opts);
+}
+
+/**
+ * Wraps the contract's `uint-to-buff-le` read-only.
+ *
+ * Returns the little-endian 1–2 byte encoding of `n` (`n <= 0xffff`; the
+ * contract panics otherwise).
+ */
+export async function fetchUintToBuffLe(
+  opts: { n: number | bigint } & NetworkClientParam
+): Promise<Uint8Array> {
+  return fetchBufferRead('uint-to-buff-le', [Cl.uint(opts.n)], opts);
+}
+
+/**
+ * Wraps the contract's `reverse-buff32` read-only.
+ *
+ * Returns the 32-byte input with its byte order reversed (endianness flip).
+ */
+export async function fetchReverseBuff32(
+  opts: { input: Uint8Array | string } & NetworkClientParam
+): Promise<Uint8Array> {
+  return fetchBufferRead('reverse-buff32', [bufferArg(opts.input)], opts);
+}
+
+/**
+ * Wraps the contract's `get-reversed-txid` read-only.
+ *
+ * Returns the little-endian (internal byte order) txid `sha256(sha256(tx))` of
+ * a raw transaction — the reverse of the explorer-displayed txid. Mirrors the
+ * local, pure {@link computeBitcoinTxid} — fetch to cross-check.
+ */
+export async function fetchReversedTxid(
+  opts: { tx: Uint8Array | string } & NetworkClientParam
+): Promise<Uint8Array> {
+  return fetchBufferRead('get-reversed-txid', [bufferArg(opts.tx)], opts);
+}
+
+/** Decoded fields of an 80-byte Bitcoin block header. */
+export interface ParsedBlockHeader {
+  version: number;
+  /** Previous-block hash, big-endian (display order). */
+  parent: Uint8Array;
+  /** Merkle root, big-endian (display order). */
+  merkleRoot: Uint8Array;
+  timestamp: number;
+  nbits: number;
+  nonce: number;
+}
+
+/**
+ * Wraps the contract's `parse-block-header` read-only.
+ *
+ * Decodes an 80-byte Bitcoin header into its fields. Throws if the contract
+ * returns an error response (e.g. the buffer is shorter than 80 bytes).
+ */
+export async function fetchParseBlockHeader(
+  opts: { header: Uint8Array | string } & NetworkClientParam
+): Promise<ParsedBlockHeader> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName: 'parse-block-header',
+    functionArgs: [bufferArg(opts.header)],
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+  if (result.type !== ClarityType.ResponseOk) {
+    throw new Error('parse-block-header returned an error response');
+  }
+  const tuple = result.value as TupleCV;
+  return {
+    version: Number((tuple.value.version as UIntCV).value),
+    parent: hexToBytes((tuple.value.parent as BufferCV).value as string),
+    merkleRoot: hexToBytes((tuple.value['merkle-root'] as BufferCV).value as string),
+    timestamp: Number((tuple.value.timestamp as UIntCV).value),
+    nbits: Number((tuple.value.nbits as UIntCV).value),
+    nonce: Number((tuple.value.nonce as UIntCV).value),
+  };
+}
+
+/**
+ * Wraps the contract's `verify-block-header` read-only.
+ *
+ * Returns `true` if the 80-byte header double-SHA256s to the burnchain header
+ * hash the node records at `expectedBlockHeight`. `false` if it does not, or if
+ * the node has no header at that height.
+ */
+export async function fetchVerifyBlockHeader(
+  opts: { header: Uint8Array | string; expectedBlockHeight: number } & NetworkClientParam
+): Promise<boolean> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName: 'verify-block-header',
+    functionArgs: [bufferArg(opts.header), Cl.uint(opts.expectedBlockHeight)],
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+  return (result as BooleanCV).type === ClarityType.BoolTrue;
+}
+
+/**
+ * Wraps the contract's `get-bc-h-hash` read-only.
+ *
+ * Returns the burnchain header hash the node records at burn height `bh`, or
+ * `undefined` if it has no header at that height.
+ */
+export async function fetchBurnBlockHeaderHash(
+  opts: { burnHeight: number } & NetworkClientParam
+): Promise<Uint8Array | undefined> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName: 'get-bc-h-hash',
+    functionArgs: [Cl.uint(opts.burnHeight)],
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+  const optional = result as OptionalCV<BufferCV>;
+  if (optional.type === ClarityType.OptionalNone) return undefined;
+  return hexToBytes(optional.value.value as string);
+}
+
 /**
  * Wraps the contract's `get-total-ustx-stacked` read-only.
  *
@@ -904,6 +1102,378 @@ export async function fetchStakerUnclaimedRewards(
 }
 
 // ---------------------------------------------------------------------------
+// Pool / accounting reads
+//
+// The undistributed-pool and per-cycle accounting state behind the rewards
+// lifecycle. A cycle is still *pending* (rewards in the contract, not yet
+// claimable) while `fetchLastRewardComputeHeight` lags
+// `distributionCycleToBurnHeight(currentDistributionCycle) - 1`; once
+// `calculate-rewards` advances it, `fetchEarned` turns the pending pool into a
+// claimable per-leg figure.
+// ---------------------------------------------------------------------------
+
+/**
+ * Wraps the contract's `get-last-reward-compute-height` read-only.
+ *
+ * The burn height of the last settled distribution cycle. Compare against
+ * `distributionCycleToBurnHeight(currentDistributionCycle) - 1`: while this is
+ * lower, the current cycle is still *pending* and `calculate-rewards` can run;
+ * `buildCalculateRewards` reverts `ERR_DISTRIBUTION_ALREADY_COMPUTED` once they
+ * are equal.
+ */
+export async function fetchLastRewardComputeHeight(
+  opts: NetworkClientParam = {}
+): Promise<number> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName: 'get-last-reward-compute-height',
+    functionArgs: [],
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+  return Number((result as UIntCV).value);
+}
+
+/**
+ * Wraps the contract's `get-rewards` read-only.
+ *
+ * Total undistributed sBTC sats the contract currently holds
+ * (`balance - totalStaked - reserve`) — the whole pool awaiting the next
+ * `calculate-rewards`, settled and unsettled portions combined.
+ */
+export async function fetchRewards(opts: NetworkClientParam = {}): Promise<bigint> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName: 'get-rewards',
+    functionArgs: [],
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+  return BigInt((result as UIntCV).value);
+}
+
+/**
+ * Wraps the contract's `get-new-rewards` read-only.
+ *
+ * The sBTC sats received since the last `calculate-rewards`
+ * (`get-rewards - last-accounted-rewards-only`) — i.e. the pool the *next*
+ * settlement will distribute. This is the "gathered pool" a pending-rewards
+ * view projects each leg's cut from.
+ */
+export async function fetchNewRewards(opts: NetworkClientParam = {}): Promise<bigint> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName: 'get-new-rewards',
+    functionArgs: [],
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+  return BigInt((result as UIntCV).value);
+}
+
+/**
+ * Wraps the contract's `get-reserve-balance` read-only.
+ *
+ * sBTC sats set aside for the reserve (the `RESERVE_RATIO` cut taken off the
+ * top of each distribution, plus the staker cut for cycles with no STX staked).
+ */
+export async function fetchReserveBalance(opts: NetworkClientParam = {}): Promise<bigint> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName: 'get-reserve-balance',
+    functionArgs: [],
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+  return BigInt((result as UIntCV).value);
+}
+
+/**
+ * Wraps the contract's `get-last-accounted-rewards-only` read-only.
+ *
+ * The running total of rewards already accounted into per-token accumulators
+ * by past settlements. Subtract from {@link fetchRewards} to get
+ * {@link fetchNewRewards}.
+ */
+export async function fetchLastAccountedRewards(opts: NetworkClientParam = {}): Promise<bigint> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName: 'get-last-accounted-rewards-only',
+    functionArgs: [],
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+  return BigInt((result as UIntCV).value);
+}
+
+/**
+ * Wraps the contract's `get-rewards-per-token-for-cycle` read-only.
+ *
+ * The cumulative rewards-per-token accumulator for a leg of a cycle (settled
+ * value written by `calculate-rewards`). Pass `bondIndex` for the paired-BTC
+ * bond leg; omit it for the STX-only leg. This is the contract-wide accumulator
+ * — for a single signer's settled snapshot use
+ * {@link fetchSignerRewardsPerTokenSettled}.
+ */
+export async function fetchRewardsPerTokenForCycle(
+  opts: { rewardCycle: number; bondIndex?: number } & NetworkClientParam
+): Promise<bigint> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName: 'get-rewards-per-token-for-cycle',
+    functionArgs: [Cl.uint(opts.rewardCycle), bondIndexCV(opts.bondIndex)],
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+  return BigInt((result as UIntCV).value);
+}
+
+/**
+ * Wraps the contract's `get-signer-pending-staked-ustx-per-cycle` read-only.
+ *
+ * uSTX queued for a signer in `cycle` that has not yet rolled into the active
+ * stake (pending delegation). `0` when there is nothing pending.
+ */
+export async function fetchSignerPendingStakedUstx(
+  opts: { signerManager: string; cycle: number } & NetworkClientParam
+): Promise<bigint> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName: 'get-signer-pending-staked-ustx-per-cycle',
+    functionArgs: [Cl.address(opts.signerManager), Cl.uint(opts.cycle)],
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+  return BigInt((result as UIntCV).value);
+}
+
+/**
+ * Wraps the contract's `get-amount-delegated-for-signer` read-only.
+ *
+ * Total uSTX delegated to a signer in `cycle` (across both protocol bonds and
+ * STX-only staking). `0` when none.
+ */
+export async function fetchAmountDelegatedForSigner(
+  opts: { signerManager: string; cycle: number } & NetworkClientParam
+): Promise<bigint> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName: 'get-amount-delegated-for-signer',
+    functionArgs: [Cl.address(opts.signerManager), Cl.uint(opts.cycle)],
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+  return BigInt((result as UIntCV).value);
+}
+
+/**
+ * Wraps the contract's `get-ustx-delegated-for-cycle` read-only.
+ *
+ * Total uSTX delegated across the whole protocol for `rewardCycle` (the
+ * denominator behind `chainstate.get_total_ustx_stacked`). `0` when none.
+ */
+export async function fetchUstxDelegatedForCycle(
+  opts: { rewardCycle: number } & NetworkClientParam
+): Promise<bigint> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName: 'get-ustx-delegated-for-cycle',
+    functionArgs: [Cl.uint(opts.rewardCycle)],
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+  return BigInt((result as UIntCV).value);
+}
+
+// ---------------------------------------------------------------------------
+// Signer-set reads
+//
+// Per-cycle membership of the signer set, stored as a doubly-linked list keyed
+// by cycle. Walk it with `fetchSignerSetFirstItem` →
+// `fetchSignerSetNextItem` until `undefined`.
+// ---------------------------------------------------------------------------
+
+/**
+ * Wraps the contract's `get-signer-cycle-membership` read-only.
+ *
+ * The staker's signer assignment for `cycle`, or `undefined` if they have none.
+ */
+export async function fetchSignerCycleMembership(
+  opts: { staker: string; cycle: number } & NetworkClientParam
+): Promise<{ amountUstx: bigint; signer: string } | undefined> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName: 'get-signer-cycle-membership',
+    functionArgs: [Cl.address(opts.staker), Cl.uint(opts.cycle)],
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+  const optional = result as OptionalCV<TupleCV>;
+  if (optional.type === ClarityType.OptionalNone) return undefined;
+  return {
+    amountUstx: BigInt((optional.value.value['amount-ustx'] as UIntCV).value),
+    signer: cvToValue(optional.value.value.signer as PrincipalCV),
+  };
+}
+
+/**
+ * Wraps the contract's `signer-set-contains-for-cycle` read-only.
+ *
+ * `true` if the signer is in the signer set for `cycle`.
+ */
+export async function fetchSignerSetContainsForCycle(
+  opts: { signer: string; cycle: number } & NetworkClientParam
+): Promise<boolean> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName: 'signer-set-contains-for-cycle',
+    functionArgs: [Cl.address(opts.signer), Cl.uint(opts.cycle)],
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+  return (result as BooleanCV).type === ClarityType.BoolTrue;
+}
+
+/** @ignore Resolve an `(optional principal)`-returning signer-set read. */
+async function fetchSignerSetPrincipal(
+  functionName: string,
+  functionArgs: Parameters<typeof fetchCallReadOnlyFunction>[0]['functionArgs'],
+  opts: NetworkClientParam
+): Promise<string | undefined> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName,
+    functionArgs,
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+  const optional = result as OptionalCV<PrincipalCV>;
+  if (optional.type === ClarityType.OptionalNone) return undefined;
+  return cvToValue(optional.value);
+}
+
+/**
+ * Wraps the contract's `get-signer-set-first-item-for-cycle` read-only.
+ *
+ * The first signer in the cycle's linked list, or `undefined` if the set is
+ * empty. Start a full walk here.
+ */
+export async function fetchSignerSetFirstItem(
+  opts: { cycle: number } & NetworkClientParam
+): Promise<string | undefined> {
+  return fetchSignerSetPrincipal('get-signer-set-first-item-for-cycle', [Cl.uint(opts.cycle)], opts);
+}
+
+/**
+ * Wraps the contract's `get-signer-set-last-item-for-cycle` read-only.
+ *
+ * The last signer in the cycle's linked list, or `undefined` if the set is
+ * empty.
+ */
+export async function fetchSignerSetLastItem(
+  opts: { cycle: number } & NetworkClientParam
+): Promise<string | undefined> {
+  return fetchSignerSetPrincipal('get-signer-set-last-item-for-cycle', [Cl.uint(opts.cycle)], opts);
+}
+
+/**
+ * Wraps the contract's `get-signer-set-next-item-for-cycle` read-only.
+ *
+ * The signer after `signer` in the cycle's linked list, or `undefined` at the
+ * tail (or if `signer` is not a member).
+ */
+export async function fetchSignerSetNextItem(
+  opts: { signer: string; cycle: number } & NetworkClientParam
+): Promise<string | undefined> {
+  return fetchSignerSetPrincipal(
+    'get-signer-set-next-item-for-cycle',
+    [Cl.address(opts.signer), Cl.uint(opts.cycle)],
+    opts
+  );
+}
+
+/**
+ * Wraps the contract's `get-signer-set-prev-item-for-cycle` read-only.
+ *
+ * The signer before `signer` in the cycle's linked list, or `undefined` at the
+ * head (or if `signer` is not a member).
+ */
+export async function fetchSignerSetPrevItem(
+  opts: { signer: string; cycle: number } & NetworkClientParam
+): Promise<string | undefined> {
+  return fetchSignerSetPrincipal(
+    'get-signer-set-prev-item-for-cycle',
+    [Cl.address(opts.signer), Cl.uint(opts.cycle)],
+    opts
+  );
+}
+
+/**
+ * Wraps the contract's `get-signer-set-item-for-cycle` read-only.
+ *
+ * The `{ prev, next }` linked-list node for `signer` in `cycle`, or `undefined`
+ * if not a member. Either neighbour is `undefined` at the list ends.
+ */
+export async function fetchSignerSetItem(
+  opts: { signer: string; cycle: number } & NetworkClientParam
+): Promise<{ prev: string | undefined; next: string | undefined } | undefined> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName: 'get-signer-set-item-for-cycle',
+    functionArgs: [Cl.address(opts.signer), Cl.uint(opts.cycle)],
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+  const optional = result as OptionalCV<TupleCV>;
+  if (optional.type === ClarityType.OptionalNone) return undefined;
+  const unwrapPrincipal = (cv: OptionalCV<PrincipalCV>) =>
+    cv.type === ClarityType.OptionalNone ? undefined : cvToValue(cv.value);
+  return {
+    prev: unwrapPrincipal(optional.value.value.prev as OptionalCV<PrincipalCV>),
+    next: unwrapPrincipal(optional.value.value.next as OptionalCV<PrincipalCV>),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Rollover preflight reads
 // ---------------------------------------------------------------------------
 
@@ -1081,7 +1651,9 @@ export async function fetchSignerGrantMessageHash(
 
 // Out of scope for `@stacks/bitcoin-staking`. The surfaces below live
 // upstream of the pox-5 contract (ops multisig) — not planned for this SDK:
-//   - flow 15 (andon cord) — `fetchLastRewardComputeHeight`, `fetchPayoutWindow`
+//   - flow 15 (andon cord) — `fetchPayoutWindow`
+//     (`get-last-reward-compute-height` is now exposed — see
+//     `fetchLastRewardComputeHeight` in the pool/accounting reads above.)
 
 /**
  * **Intentionally not exposed.** Wraps the contract's

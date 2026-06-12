@@ -496,9 +496,14 @@ export async function buildCalculateRewards(
  * uses `contract-caller` as the signer address); for direct calls this
  * means `tx-sender` is the signer-manager principal.
  *
- * unsure: todo: `rewardCycle` semantics. Common usage passes
- * `currentDistributionCycle - 1` (claim the cycle the caller just settled
- * via `calculate-rewards`). Surfaced as a plain arg here — callers decide.
+ * `rewardCycle` is a **reward cycle** (the PoX-cycle clock) — the same value
+ * as `poxInfo.rewardCycleId` and {@link fetchEarned}'s `rewardCycle`. It is
+ * NOT the distribution-cycle index (distribution cycles are half a reward
+ * cycle, so they tick twice as fast). To claim the cycle `calculate-rewards`
+ * just settled, convert the settlement height back to its reward cycle:
+ * `burnHeightToRewardCycle({ burnHeight: distributionCycleToBurnHeight({`
+ * `distributionCycle: currentDistributionCycle(poxInfo), poxInfo }) - 1,`
+ * `poxInfo })` — not `currentDistributionCycle - 1`.
  */
 export async function buildClaimRewards(
   args: {
