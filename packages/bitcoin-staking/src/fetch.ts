@@ -1121,9 +1121,7 @@ export async function fetchStakerUnclaimedRewards(
  * `buildCalculateRewards` reverts `ERR_DISTRIBUTION_ALREADY_COMPUTED` once they
  * are equal.
  */
-export async function fetchLastRewardComputeHeight(
-  opts: NetworkClientParam = {}
-): Promise<number> {
+export async function fetchLastRewardComputeHeight(opts: NetworkClientParam = {}): Promise<number> {
   const network = networkFrom(opts.network ?? 'mainnet');
   const result = await fetchCallReadOnlyFunction({
     contractAddress: network.bootAddress,
@@ -1397,7 +1395,11 @@ async function fetchSignerSetPrincipal(
 export async function fetchSignerSetFirstItem(
   opts: { cycle: number } & NetworkClientParam
 ): Promise<string | undefined> {
-  return fetchSignerSetPrincipal('get-signer-set-first-item-for-cycle', [Cl.uint(opts.cycle)], opts);
+  return fetchSignerSetPrincipal(
+    'get-signer-set-first-item-for-cycle',
+    [Cl.uint(opts.cycle)],
+    opts
+  );
 }
 
 /**
