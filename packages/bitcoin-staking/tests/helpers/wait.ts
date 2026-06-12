@@ -11,7 +11,7 @@ import {
 } from '@stacks/transactions';
 import type { StacksNetwork } from '@stacks/network';
 import { fetchPoxInfo, fetchSignerInfo, type PoxInfo } from '../../src';
-import { ENV, getNetwork, isMocking, regtestReset, timeout, withRetry } from './utils';
+import { ENV, getNetwork, isMocking, networkReset, timeout, withRetry } from './utils';
 
 /**
  * Retry-wrapped `fetch` for the raw node GETs below. These idempotent reads hit
@@ -33,10 +33,23 @@ export const nodeFetch = withRetry(
  */
 export async function waitFor(
   condition: () => Promise<boolean>,
-  interval: number = ENV.POLL_INTERVAL
+  interval: number = ENV.POLL_INTERVAL,
+  timeoutMs?: number
 ): Promise<void> {
   if (isMocking) return;
-  while (!(await condition())) await timeout(interval);
+  const startedAt = Date.now();
+  while (!(await condition())) {
+    if (timeoutMs !== undefined && Date.now() - startedAt > timeoutMs) {
+      throw new Error(`waitFor: condition not met within ${timeoutMs}ms`);
+    }
+    await timeout(interval);
+  }
+}
+
+/** Extract `N` from a `(err uN)` result repr (undefined for ok/other shapes). */
+export function parseErrCode(repr: string | undefined): number | undefined {
+  const m = repr?.match(/^\(err u(\d+)\)$/);
+  return m ? Number(m[1]) : undefined;
 }
 
 /** Subset of the API transaction record we read/assert on. */
@@ -179,7 +192,7 @@ export async function ensurePox5({
   const burn = await currentBurnHeight();
   if (burn === null) {
     console.log('node not ready — starting fresh chain');
-    await regtestReset(env);
+    await networkReset(env);
   } else {
     console.log(`chain up (burn ${burn}) — reusing`);
   }
@@ -238,14 +251,25 @@ export async function waitForPreparePhase(poxInfo: PoxInfo, diff = 0): Promise<v
   return waitForBurnBlockHeight(poxInfo.currentBurnchainBlockHeight + blocksUntilPreparePhase + diff);
 }
 
-/** Wait until we're back in the reward phase (optional `diff` block offset). */
-export async function waitForRewardPhase(poxInfo: PoxInfo, diff = 0): Promise<void> {
-  if (!isInPreparePhase(poxInfo.currentBurnchainBlockHeight, poxInfo)) return;
-  const pos =
-    (poxInfo.currentBurnchainBlockHeight - poxInfo.firstBurnchainBlockHeight) %
-    poxInfo.rewardCycleLength;
-  const blocksUntilRewardPhase = poxInfo.rewardCycleLength - pos;
-  return waitForBurnBlockHeight(poxInfo.currentBurnchainBlockHeight + blocksUntilRewardPhase + diff);
+/**
+ * Wait until we're in the reward phase with at least `margin` blocks left
+ * before the next prepare phase. A tx broadcast now must also CONFIRM before
+ * prepare starts — pox-5 rejects bond/stake ops during prepare
+ * (`ERR_STAKE_IN_PREPARE_PHASE`, err u47) — so being merely "not in prepare"
+ * is not enough near the phase edge. Call before broadcasting any
+ * stake/register/unstake/update bond op.
+ */
+export async function waitForRewardPhase(poxInfo: PoxInfo, margin = 4): Promise<void> {
+  if (isMocking) return;
+  let pox = poxInfo;
+  while (true) {
+    const prepareStart = pox.rewardCycleLength - pox.prepareCycleLength;
+    const pos =
+      (pox.currentBurnchainBlockHeight - pox.firstBurnchainBlockHeight) % pox.rewardCycleLength;
+    if (pos + margin <= prepareStart) return;
+    await timeout(ENV.POLL_INTERVAL);
+    pox = await getPoxInfo();
+  }
 }
 
 export async function waitForNextNonce(
@@ -277,10 +301,15 @@ export async function waitForFulfilled<T>(
   }
 }
 
-/** Poll until a tx leaves the mempool; returns the final tx record. */
+/**
+ * Poll until a tx leaves the mempool; returns the final tx record. Reads
+ * `/extended` (the API), NOT the node: the tx confirms on the node in seconds,
+ * but the API indexes through the buffered event relay and can lag tens of
+ * seconds under recording load — hence the 3x budget vs node-side waits.
+ */
 export async function waitForTransaction(
   txid: string,
-  timeoutMs: number = ENV.STACKS_TX_TIMEOUT
+  timeoutMs: number = 3 * ENV.STACKS_TX_TIMEOUT
 ): Promise<TxRecord> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
@@ -296,6 +325,10 @@ export async function broadcastAndWaitForTransaction(
   tx: StacksTransactionWire,
   network: StacksNetwork
 ): Promise<TxRecord> {
+  // pox-5 rejects bond/stake ops during the prepare phase (err u47). All action
+  // txs route through the broadcast helpers, so wait here for a reward-phase
+  // window wide enough for the tx to also confirm before prepare starts.
+  await waitForRewardPhase(await getPoxInfo());
   const res = await broadcastTransaction({ transaction: tx, network });
   if ('error' in res) {
     throw new Error(`broadcast rejected: ${res.error} — ${'reason' in res ? res.reason : ''}`);
@@ -311,6 +344,9 @@ export async function broadcastAndWaitForTransaction(
  * {@link waitFor}, so under replay it's skipped and this returns the recorded
  * txid immediately. It can't distinguish success from a runtime abort, so callers
  * MUST assert the on-chain *effect* afterwards (a read via {@link waitForFulfilled}).
+ *
+ * Stall detection: if the burn block height hasn't advanced for `BITCOIN_TX_TIMEOUT`
+ * while the tx is pending, we throw — a stalled chain means the tx will never confirm.
  */
 export async function broadcastAndWait(
   tx: StacksTransactionWire,
@@ -318,13 +354,32 @@ export async function broadcastAndWait(
   network: StacksNetwork,
   interval: number = ENV.POLL_INTERVAL
 ): Promise<string> {
+  // See broadcastAndWaitForTransaction: avoid prepare-phase aborts (err u47).
+  await waitForRewardPhase(await getPoxInfo());
   const startNonce = await getNextNonce(senderAddress);
   const res = await broadcastTransaction({ transaction: tx, network });
   if ('error' in res) {
     throw new Error(`broadcast rejected: ${res.error} — ${'reason' in res ? res.reason : ''}`);
   }
   console.log('broadcast txid', res.txid);
-  await waitFor(async () => (await getNextNonce(senderAddress)) > startNonce, interval);
+  if (!isMocking) {
+    let lastBurn = await getBurnBlockHeight();
+    let lastBurnTime = Date.now();
+    while (true) {
+      const nonce = await getNextNonce(senderAddress);
+      if (nonce > startNonce) break;
+      const burn = await getBurnBlockHeight();
+      if (burn > lastBurn) {
+        lastBurn = burn;
+        lastBurnTime = Date.now();
+      } else if (Date.now() - lastBurnTime > ENV.BITCOIN_TX_TIMEOUT) {
+        throw new Error(
+          `Chain stall: burn block stuck at ${burn} for ${ENV.BITCOIN_TX_TIMEOUT / 1000}s while waiting for tx ${res.txid}`
+        );
+      }
+      await timeout(interval);
+    }
+  }
   return res.txid;
 }
 
@@ -365,5 +420,12 @@ export async function waitForContract(
   name: string,
   interval: number = ENV.POLL_INTERVAL
 ): Promise<void> {
-  await waitFor(() => contractExists(address, name), interval);
+  // A healthy deploy confirms within 1-2 stacks blocks (seconds). 30s means the
+  // tx aborted (e.g. failed Clarity analysis) — fail loudly, don't sit out the
+  // jest timeout.
+  await waitFor(() => contractExists(address, name), interval, 30_000).catch(() => {
+    throw new Error(
+      `waitForContract: ${address}.${name} not on-chain after 30s — deploy tx likely aborted`
+    );
+  });
 }

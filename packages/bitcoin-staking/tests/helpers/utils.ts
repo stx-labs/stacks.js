@@ -4,7 +4,7 @@
  * (+ `stacksNetwork()` from its `helpers.ts`), kept dependency-light.
  */
 import { exec } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
 import { STACKS_TESTNET, type StacksNetwork } from "@stacks/network";
@@ -12,8 +12,34 @@ import fetchMock from "jest-fetch-mock";
 
 const sh = promisify(exec);
 
+// Self-load the package `.env` (if present) so runs never depend on the caller
+// having sourced it or on the shell's working directory — the path is anchored
+// to THIS file, not `process.cwd()`. Real environment variables always win
+// (never overridden), so explicit overrides keep working.
+const dotenvPath = resolve(__dirname, "../../.env");
+if (existsSync(dotenvPath)) {
+  for (const line of readFileSync(dotenvPath, "utf8").split("\n")) {
+    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
+    if (!m || line.trimStart().startsWith("#")) continue;
+    const [, key, raw] = m;
+    if (process.env[key] !== undefined) continue;
+    process.env[key] = raw!.replace(/^(['"])(.*)\1$/, "$2");
+  }
+}
+
 /** Lightweight env (mirrors `stacks-functional-tests/src/env.ts`). */
 export const ENV = {
+  /**
+   * Which environment the suite drives:
+   * - `devnet` (default) — the local docker regtest env; drive its lifecycle
+   *   via the `NETWORK_*_CMD` commands (`networkReset`/`networkUp`/…).
+   * - `testnet` — a remote, already-running net (e.g. the hosted private net).
+   *   Same default network state; just point `STACKS_API` at it and leave the
+   *   `NETWORK_*_CMD` lifecycle commands unset (they no-op).
+   * Both use ST-prefixed testnet addresses — there is no mainnet flavor here.
+   */
+  NETWORK: (process.env.NETWORK ?? "devnet") as "devnet" | "testnet",
+
   /**
    * The chain id used to sign transactions — the node's `/v2/info` `.network_id`
    * (for mainnet/testnet that field IS the chain id). Defaults to the standard
@@ -31,11 +57,20 @@ export const ENV = {
   STACKS_API: process.env.STACKS_API ?? "http://localhost:3999",
   BITCOIND_URL: process.env.BITCOIND_URL ?? "http://btc:btc@localhost:18443",
 
-  /** regtest-env compose cwd, relative to this package dir. */
+  /** stacks-regtest-env checkout (contract sources for `deploy.ts`), relative to this package dir. */
   REGTEST_WORKING_DIR:
     process.env.REGTEST_WORKING_DIR ?? "../../../stacks-regtest-env",
+
+  /**
+   * Network lifecycle commands (inversion of control): the harness never runs
+   * docker itself — `networkUp`/`networkDown`/`networkReset` only exec these.
+   * Whoever runs the suite decides what each op means for their environment;
+   * see `.env.example` for the local stacks-regtest-env commands. An unset
+   * command makes the op a no-op (right for remote/externally-managed nets).
+   */
   NETWORK_UP_CMD: process.env.NETWORK_UP_CMD ?? "",
   NETWORK_DOWN_CMD: process.env.NETWORK_DOWN_CMD ?? "",
+  NETWORK_WIPE_CMD: process.env.NETWORK_WIPE_CMD ?? "",
 
   // On the hosted private testnet the API rate-limits at ~1 req/s (HTTP 429).
   // Devnet is local and can be polled fast (250 ms is fine). Testnet callers
@@ -44,15 +79,27 @@ export const ENV = {
   // unchanged while making the override easy.
   POLL_INTERVAL: Number(process.env.POLL_INTERVAL ?? 250),
   RETRY_INTERVAL: Number(process.env.RETRY_INTERVAL ?? 250),
-  STACKS_TX_TIMEOUT: Number(process.env.STACKS_TX_TIMEOUT ?? 120_000),
-  BITCOIN_TX_TIMEOUT: Number(process.env.BITCOIN_TX_TIMEOUT ?? 30_000),
+  // Regtest confirms a tx in 2-6s; 30s without confirmation means broken — fail
+  // loudly. Live testnets override via env (e.g. STACKS_TX_TIMEOUT=300000 for
+  // ~2 min block times on the hosted private testnet).
+  STACKS_TX_TIMEOUT: Number(process.env.STACKS_TX_TIMEOUT ?? 30_000),
+  BITCOIN_TX_TIMEOUT: Number(process.env.BITCOIN_TX_TIMEOUT ?? 10_000),
 
   /**
    * The canonical fixtures store the recorder maintains (relative to cwd, the
    * package dir) — a JSON map of request `path + search` → response body. Source
    * of truth for offline replay; tests read it via `fixtures.ts` (`FIXTURES`).
+   *
+   * Defaults by network when `FIXTURES_JSON` is not explicitly set:
+   * - `devnet` (or unset) → `tests/regtest/fixtures.json`
+   * - `testnet`           → `tests/privatenet/fixtures/fixtures.json`
+   *   so privatenet recordings never touch the committed regtest fixtures.
    */
-  FIXTURES_JSON: process.env.FIXTURES_JSON ?? "tests/regtest/fixtures.json",
+  FIXTURES_JSON:
+    process.env.FIXTURES_JSON ??
+    ((process.env.NETWORK ?? "devnet") === "testnet"
+      ? "tests/privatenet/fixtures/fixtures.json"
+      : "tests/regtest/fixtures.json"),
   /**
    * Capture mode. When `RECORD=1`, hit the live node (jest-fetch-mock disabled)
    * and record every observed request/response into FIXTURES_JSON. Unset →
@@ -283,99 +330,47 @@ export function withTimeout<T, A extends unknown[]>(
   };
 }
 
-// Docker lifecycle (port of functional-tests utils.ts)
+// Network lifecycle (inversion of control) ====================================
+// The harness has no docker/compose knowledge — it only execs the agent-provided
+// `NETWORK_*_CMD` commands (see `ENV`). The agent chooses what to run and when
+// to wipe; with no command set the op is a no-op.
 
-export async function networkEnvUp() {
-  if (!ENV.NETWORK_UP_CMD) return;
-  console.log("starting network...");
-  return (await sh(ENV.NETWORK_UP_CMD)).stdout;
-}
-
-export async function networkEnvDown() {
-  if (!ENV.NETWORK_DOWN_CMD) return;
-  console.log("stopping network...");
-  return (await sh(ENV.NETWORK_DOWN_CMD)).stdout;
-}
-
-export async function regtestComposeUp(services = "", opts = "") {
-  if (!ENV.REGTEST_WORKING_DIR) return;
-  console.log(`starting regtest services... ${services}`);
-  return (
-    await sh(
-      `cd ${ENV.REGTEST_WORKING_DIR} && docker compose ${opts} up -d ${services}`,
-    )
-  ).stdout;
-}
-
-export async function regtestComposeDown(services = "") {
-  if (!ENV.REGTEST_WORKING_DIR) return;
-  console.log(`stopping regtest services... ${services}`);
-  return (
-    await sh(`cd ${ENV.REGTEST_WORKING_DIR} && docker compose down ${services}`)
-  ).stdout;
-}
-
-export async function regtestComposeLogs(services = "") {
-  if (!ENV.REGTEST_WORKING_DIR) return;
-  return (
-    await sh(`cd ${ENV.REGTEST_WORKING_DIR} && docker compose logs ${services}`)
-  ).stdout;
-}
-
-// build output can be large; give exec room
-const composeOpts = { maxBuffer: 64 * 1024 * 1024 };
-
-const envPrefix = (env: Record<string, string>) => {
-  const s = Object.entries(env)
+/** Exec an agent-provided lifecycle command; no-op (logged) when unset. */
+async function networkCmd(
+  label: string,
+  cmd: string,
+  env: Record<string, string> = {},
+): Promise<string | undefined> {
+  if (!cmd) {
+    console.log(`skip ${label}: no command set (externally managed network)`);
+    return;
+  }
+  const vars = Object.entries(env)
     .map(([k, v]) => `${k}=${v}`)
     .join(" ");
-  return s ? `${s} ` : "";
-};
+  console.log(`${label}...${vars ? ` ${vars}` : ""}`);
+  // command output (e.g. docker builds) can be large; give exec room
+  return (
+    await sh(cmd, {
+      maxBuffer: 64 * 1024 * 1024,
+      env: { ...process.env, ...env },
+    })
+  ).stdout;
+}
 
 /**
- * Bring the env up (build if needed), detached. `env` is passed to compose,
- * e.g. `{ POX5_STACKING_ENABLED: 'false' }` to disable the keep-alive daemon so
- * a test can drive stake txs itself.
- *
- * `--scale tx-broadcaster=0` keeps the env's STX-flooder service OFF: it spams
- * transfers from `REGTEST_KEYS.account1/2/3` (its compose `ACCOUNT_KEYS`) and
- * can wedge the shared stacks-api. Unlike the btc-staker daemon there's no
- * env-var to disable it, so it must be scaled to zero at compose up.
+ * Bring the network up. `env` is forwarded to the command's environment, e.g.
+ * `{ POX5_STACKING_ENABLED: 'false' }` to disable regtest-env's keep-alive
+ * staking daemon so a test can drive stake txs itself.
  */
-export async function regtestUp(env: Record<string, string> = {}) {
-  console.log(`regtest up -d --build... ${envPrefix(env).trim()}`);
-  return (
-    await sh(
-      `cd ${ENV.REGTEST_WORKING_DIR} && ${envPrefix(env)}docker compose up -d --build --scale tx-broadcaster=0`,
-      composeOpts,
-    )
-  ).stdout;
-}
+export const networkUp = (env: Record<string, string> = {}) =>
+  networkCmd("network up", ENV.NETWORK_UP_CMD, env);
 
-/** Tear the env down and WIPE chain state (fresh chain on next up). */
-export async function regtestDownWipe() {
-  console.log("regtest down --volumes...");
-  return (
-    await sh(
-      `cd ${ENV.REGTEST_WORKING_DIR} && docker compose down --volumes --remove-orphans --timeout=1`,
-      composeOpts,
-    )
-  ).stdout;
-}
+/** Stop the network, KEEPING chain state. */
+export const networkDown = () => networkCmd("network down", ENV.NETWORK_DOWN_CMD);
 
-/** Fresh chain: wipe then bring back up (passing `env` to compose). */
-export async function regtestReset(env: Record<string, string> = {}) {
-  await regtestDownWipe();
-  return regtestUp(env);
-}
-
-/** Soft restart — restarts services but KEEPS chain state (nudges stuck nodes). */
-export async function regtestRestart() {
-  console.log("regtest restart (soft)...");
-  return (
-    await sh(
-      `cd ${ENV.REGTEST_WORKING_DIR} && docker compose restart`,
-      composeOpts,
-    )
-  ).stdout;
+/** Fresh chain: wipe state (`NETWORK_WIPE_CMD`), then up (forwarding `env`). */
+export async function networkReset(env: Record<string, string> = {}) {
+  await networkCmd("network wipe", ENV.NETWORK_WIPE_CMD);
+  return networkUp(env);
 }

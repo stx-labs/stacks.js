@@ -1,0 +1,48 @@
+{
+  "note": "Freshly-generated UNCONTENDED privatenet test accounts (only we hold keys). Funded from account5 (clean). regtest BTC + private-1 STX only.",
+  "created": "2026-06-09 ~18:53 CEST",
+  "funded": {
+    "stxEach": "50000 STX (from account5)",
+    "btcEach": "5,000,000 sats (from account5, tx a1d811fbe6ce59881fbd5f03afde408b7b25a142740fb0e5a32f0264692e7890)"
+  },
+  "roles": {
+    "adversarial": [
+      "f0",
+      "f1"
+    ],
+    "population": [
+      "f2",
+      "f3"
+    ]
+  },
+  "accounts": [
+    {
+      "id": "f0",
+      "rawKey": "82a8c4ead7d25f6dd929f6c6105eb5bd6cd5c6232faed082ae02f2a7b953fe9b",
+      "stxKey": "82a8c4ead7d25f6dd929f6c6105eb5bd6cd5c6232faed082ae02f2a7b953fe9b01",
+      "stxAddr": "ST2YT5PG1608G4Y63MTEB9JHD7G9JH1QBRS1E3GNF",
+      "btcAddr": "bcrt1qhk3d5qfszyp83saxnj6v5tfuzv5gd67xn7q0gu"
+    },
+    {
+      "id": "f1",
+      "rawKey": "f59f875965c6235b68323a17d66948929a4bffb481de40a4c02abeac08ae3876",
+      "stxKey": "f59f875965c6235b68323a17d66948929a4bffb481de40a4c02abeac08ae387601",
+      "stxAddr": "ST1BPEW0QEDTBMBKHX8ADKQZY9BBZAE79MPKB1TBD",
+      "btcAddr": "bcrt1q2anhq9mnwjazuu02znvallj26l6n36d97g37v7"
+    },
+    {
+      "id": "f2",
+      "rawKey": "34dfd74eb7d72b974f7bc9cbdbbbc1f8e72fc74702950331aa32a918e9a077a6",
+      "stxKey": "34dfd74eb7d72b974f7bc9cbdbbbc1f8e72fc74702950331aa32a918e9a077a601",
+      "stxAddr": "ST4X778Y508NZR8SF9TJP9T72SKC6YE8SKXFKNMB",
+      "btcAddr": "bcrt1qp8fe683gz907zxt6w54jw3ckvmphnjxvlz2q4n"
+    },
+    {
+      "id": "f3",
+      "rawKey": "4c0bb0e60effcab7b6073b0f3455cc04d49afd8159426a6856ee766a5c077dad",
+      "stxKey": "4c0bb0e60effcab7b6073b0f3455cc04d49afd8159426a6856ee766a5c077dad01",
+      "stxAddr": "ST3M6F7NT5KCKS55TSJH3NGSBHPYECE72KJKBM0HQ",
+      "btcAddr": "bcrt1qapneaw3vmy7ffwkv5gavx2udhnnr3c5uyw2c3l"
+    }
+  ]
+}
