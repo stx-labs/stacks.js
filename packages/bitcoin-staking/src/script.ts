@@ -460,3 +460,101 @@ export function computeBondUnlockHeight(opts: { bondIndex: number; poxInfo: PoxI
   });
   return endBurnHeight - Math.floor(opts.poxInfo.rewardCycleLength / 2);
 }
+
+// ---------------------------------------------------------------------------
+// Register-for-bond flow helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Everything derivable for a paired-BTC `register-for-bond` *before* the
+ * funding Bitcoin transaction exists. {@link buildRegisterMetadata} computes
+ * the whole chain (unlock height → unlock tail → lock script → address /
+ * output script) in one call, so callers fund {@link RegisterMetadata.lockAddress}
+ * and later pass {@link RegisterMetadata.lockScript} straight to `buildLockProof`
+ * / `buildLockProofFromBlock` (both accept `lockScript` in place of
+ * `expectedScript`).
+ */
+export interface RegisterMetadata {
+  /** P2WSH Bitcoin address to fund — send the locked sats here. */
+  lockAddress: string;
+  /**
+   * The witness/locking script the address commits to. Pass this as the
+   * `lockScript` of `buildLockProof` / `buildLockProofFromBlock` to locate the
+   * funding output in the SPV proof.
+   */
+  lockScript: Uint8Array;
+  /**
+   * The P2WSH `scriptPubKey` (34 bytes) the funding output must carry — the
+   * `expectedScript` the contract asserts. Equals
+   * `computeP2wshOutputScript(lockScript)`; exposed since it is derived along
+   * the way.
+   */
+  outputScript: Uint8Array;
+  /**
+   * The staker-signature tail (`<pubkey> OP_CHECKSIG`). This *is* the encoded
+   * unlock script — there is no separate "script vs bytes" representation; pass
+   * it straight through as the `unlockBytes` of `register-for-bond`'s lockup.
+   */
+  unlockBytes: Uint8Array;
+  /** L1 unlock burn height (the `OP_CLTV` branch). */
+  unlockHeight: number;
+}
+
+/**
+ * Derive every pre-funding artifact for a paired-BTC `register-for-bond`.
+ *
+ * Combines {@link computeBondUnlockHeight}, {@link buildUnlockScript},
+ * {@link buildLockScript}, {@link computeP2wshOutputScript} and
+ * {@link lockScriptToAddress} so the registration flow is a single call instead
+ * of five hand-wired steps. Pure — no I/O.
+ *
+ * @example
+ * ```ts
+ * const meta = buildRegisterMetadata({
+ *   bondIndex, poxInfo,
+ *   bitcoinPublicKey: user.publicKey,
+ *   stxAddress: user.address,
+ *   earlyUnlockBytes: bond.earlyUnlockBytes, // from fetchBond(...)
+ *   network: 'devnet',
+ * });
+ * const txid = await sendToAddress(meta.lockAddress, sats);
+ * // ...wait for confirmation, fetch the proof inputs...
+ * const output = buildLockProofFromBlock({ ...proof, lockScript: meta.lockScript });
+ * await buildRegisterForBond({
+ *   bondIndex, signerManager, amountUstx,
+ *   lockup: { kind: 'btc', outputs: [output], unlockBytes: meta.unlockBytes },
+ *   publicKey: user.publicKey, ...
+ * });
+ * ```
+ */
+export function buildRegisterMetadata(opts: {
+  bondIndex: number;
+  poxInfo: PoxInfo;
+  /** Compressed (33-byte) public key the staker signs the unlock with. */
+  bitcoinPublicKey: Uint8Array | string;
+  /** Stacks standard principal of the staker. */
+  stxAddress: string;
+  /** Per-bond early-unlock subscript, from `fetchBond(...)`. */
+  earlyUnlockBytes: Uint8Array | string;
+  network: StacksNetworkName | StacksNetwork;
+}): RegisterMetadata {
+  const unlockHeight = computeBondUnlockHeight({
+    bondIndex: opts.bondIndex,
+    poxInfo: opts.poxInfo,
+  });
+  const unlockBytes = buildUnlockScript(opts.bitcoinPublicKey);
+  const lockScript = buildLockScript({
+    stxAddress: opts.stxAddress,
+    unlockHeight,
+    unlockBytes,
+    earlyUnlockBytes: opts.earlyUnlockBytes,
+  });
+
+  return {
+    lockAddress: lockScriptToAddress(lockScript, networkNameFrom(opts.network)),
+    lockScript,
+    outputScript: computeP2wshOutputScript(lockScript),
+    unlockBytes,
+    unlockHeight,
+  };
+}

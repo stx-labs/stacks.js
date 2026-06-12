@@ -1,6 +1,7 @@
 import * as btc from '@scure/btc-signer';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, concatBytes, equals, hexToBytes } from '@stacks/common';
+import { computeP2wshOutputScript } from './script';
 import type { BondL1LockupOutput } from './types';
 
 // ---------------------------------------------------------------------------
@@ -111,23 +112,54 @@ export interface EsploraMerkleProof {
  *   header: await (await fetch(`${esplora}/block/${blockHash}/header`)).text(),
  *   merkleProof: await (await fetch(`${esplora}/tx/${txid}/merkle-proof`)).json(),
  *   txCount: (await (await fetch(`${esplora}/block/${blockHash}`)).json()).tx_count,
- *   expectedScript,
+ *   expectedScript, // or: lockScript: meta.lockScript (from buildRegisterMetadata)
  * });
  * // → buildRegisterForBond({ lockup: { kind: 'btc', outputs: [output], unlockBytes }, ... })
  * ```
  */
-export function buildLockProof(input: {
-  /** Raw tx hex (`GET /tx/:txid/hex`). May be segwit-serialized; the witness is stripped. */
-  txHex: string;
-  /** 80-byte block header (`GET /block/:hash/header`), hex or bytes. */
-  header: Uint8Array | string;
-  /** Esplora-compatible merkle-proof response (`GET /tx/:txid/merkle-proof`). */
-  merkleProof: EsploraMerkleProof;
-  /** Total tx count in the block (`GET /block/:hash` → `tx_count`). */
-  txCount: number;
-  /** Expected P2WSH `scriptPubKey` (34 bytes) — see {@link buildLockOutputScript}. */
-  expectedScript: Uint8Array | string;
-}): BondL1LockupOutput {
+/**
+ * How to locate the lockup output: by the P2WSH `scriptPubKey` directly
+ * (`expectedScript`, 34 bytes) or by the witness `lockScript` it commits to
+ * (converted internally via {@link computeP2wshOutputScript}). Provide exactly
+ * one. `lockScript` is what {@link buildRegisterMetadata} returns, so the
+ * common path is `{ ...proof, lockScript: meta.lockScript }`.
+ */
+export type ExpectedScriptInput =
+  | { expectedScript: Uint8Array | string; lockScript?: never }
+  | { lockScript: Uint8Array | string; expectedScript?: never };
+
+/** @internal @ignore Resolve {@link ExpectedScriptInput} to the P2WSH scriptPubKey bytes. */
+function resolveExpectedScript(input: {
+  expectedScript?: Uint8Array | string;
+  lockScript?: Uint8Array | string;
+}): Uint8Array {
+  if (input.expectedScript !== undefined) {
+    return typeof input.expectedScript === 'string'
+      ? hexToBytes(input.expectedScript)
+      : input.expectedScript;
+  }
+  if (input.lockScript !== undefined) {
+    const script =
+      typeof input.lockScript === 'string' ? hexToBytes(input.lockScript) : input.lockScript;
+    return computeP2wshOutputScript(script);
+  }
+  throw new Error(
+    'buildLockProof: provide either `expectedScript` (P2WSH scriptPubKey) or `lockScript` (witness script)'
+  );
+}
+
+export function buildLockProof(
+  input: {
+    /** Raw tx hex (`GET /tx/:txid/hex`). May be segwit-serialized; the witness is stripped. */
+    txHex: string;
+    /** 80-byte block header (`GET /block/:hash/header`), hex or bytes. */
+    header: Uint8Array | string;
+    /** Esplora-compatible merkle-proof response (`GET /tx/:txid/merkle-proof`). */
+    merkleProof: EsploraMerkleProof;
+    /** Total tx count in the block (`GET /block/:hash` → `tx_count`). */
+    txCount: number;
+  } & ExpectedScriptInput
+): BondL1LockupOutput {
   const tx = btc.Transaction.fromRaw(hexToBytes(input.txHex), {
     allowUnknownOutputs: true,
     disableScriptCheck: true,
@@ -135,10 +167,7 @@ export function buildLockProof(input: {
   // (withScriptSig, withWitness=false) → legacy bytes that hash to the txid.
   const legacy = tx.toBytes(true, false);
 
-  const expectedScript =
-    typeof input.expectedScript === 'string'
-      ? hexToBytes(input.expectedScript)
-      : input.expectedScript;
+  const expectedScript = resolveExpectedScript(input);
 
   const outputIndex = range(tx.outputsLength).findIndex(i => {
     const out = tx.getOutput(i);
@@ -218,18 +247,18 @@ export function computeMerkleBranch(txids: string[], pos: number): string[] {
  * });
  * ```
  */
-export function buildLockProofFromBlock(input: {
-  /** Raw tx hex (segwit serialization is fine; the witness is stripped). */
-  txHex: string;
-  /** 80-byte block header, hex or bytes. */
-  header: Uint8Array | string;
-  /** Height of the block containing the tx. */
-  blockHeight: number;
-  /** Block's ordered txid list (display/big-endian hex), `getblock` v1 `tx`. */
-  txids: string[];
-  /** Expected P2WSH `scriptPubKey` — see {@link buildLockOutputScript}. */
-  expectedScript: Uint8Array | string;
-}): BondL1LockupOutput {
+export function buildLockProofFromBlock(
+  input: {
+    /** Raw tx hex (segwit serialization is fine; the witness is stripped). */
+    txHex: string;
+    /** 80-byte block header, hex or bytes. */
+    header: Uint8Array | string;
+    /** Height of the block containing the tx. */
+    blockHeight: number;
+    /** Block's ordered txid list (display/big-endian hex), `getblock` v1 `tx`. */
+    txids: string[];
+  } & ExpectedScriptInput
+): BondL1LockupOutput {
   const tx = btc.Transaction.fromRaw(hexToBytes(input.txHex), {
     allowUnknownOutputs: true,
     disableScriptCheck: true,
@@ -244,7 +273,8 @@ export function buildLockProofFromBlock(input: {
     txHex: input.txHex,
     header: input.header,
     txCount: input.txids.length,
-    expectedScript: input.expectedScript,
+    // Resolve here so the lockScript/expectedScript overload is handled once.
+    expectedScript: resolveExpectedScript(input),
     merkleProof: {
       block_height: input.blockHeight,
       merkle: computeMerkleBranch(input.txids, pos),
