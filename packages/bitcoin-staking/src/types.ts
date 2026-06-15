@@ -6,20 +6,14 @@ import type {
   UnsignedMultiSigOptions,
 } from '@stacks/transactions';
 
-// ---------------------------------------------------------------------------
-// Tx-level params (shared by all build*Tx functions)
-// ---------------------------------------------------------------------------
-
 /** Tx-level params common to single-sig and multisig builders. */
 export interface TxParamsBase {
   fee: IntegerType;
   nonce: IntegerType;
   network: StacksNetworkName | StacksNetwork;
   /**
-   * Post-conditions to attach. Required for calls that move assets *from the
-   * caller* under the default deny mode — notably `register-for-bond` with an
-   * sBTC lockup, whose `lock-sbtc` transfers sBTC from the caller (an
-   * uncovered transfer otherwise aborts with `abort_by_post_condition`).
+   * Post-conditions to attach. Required for calls that move assets from the
+   * caller under deny mode — e.g. `register-for-bond` with an sBTC lockup.
    */
   postConditions?: PostCondition[];
   /** Post-condition mode. Defaults to the wire default (`deny`). */
@@ -34,9 +28,9 @@ export interface SingleSigTxParams extends TxParamsBase {
 
 /**
  * Multisig (M-of-N) caller: the full `publicKeys` set + required
- * `numSignatures`. Mirrors `@stacks/transactions`' {@link UnsignedMultiSigOptions}
- * (`address?` pins public-key ordering, `useNonSequentialMultiSig?` opts into the
- * newer hashmode). Use this to build unsigned txs whose origin is a multisig
+ * `numSignatures` ({@link UnsignedMultiSigOptions} — `address?` pins public-key
+ * ordering, `useNonSequentialMultiSig?` opts into the newer hashmode).
+ * Use this to build unsigned txs whose origin is a multisig
  * principal — e.g. a `bond-admin` held by a 2-of-3 multisig. The returned tx is
  * unsigned; sign it with `numSignatures` keys (plus `appendOrigin` for the rest).
  */
@@ -50,41 +44,55 @@ export type MultiSigTxParams = TxParamsBase & UnsignedMultiSigOptions;
  */
 export type TxParams = SingleSigTxParams | MultiSigTxParams;
 
-// ---------------------------------------------------------------------------
-// Data types (returned by fetch functions)
-// ---------------------------------------------------------------------------
-
+/**
+ * PoX network parameters.
+ *
+ * Mirrors the node's `/v2/pox` response.
+ */
 export interface PoxInfo {
+  /** Fully-qualified pox contract id. */
   contractId: string;
+  /** Current burnchain block height. */
   currentBurnchainBlockHeight: number;
+  /** Burnchain height at which PoX began. */
   firstBurnchainBlockHeight: number;
+  /** Reward cycle currently in progress. */
   rewardCycleId: number;
+  /** Reward cycle length in burnchain blocks. */
   rewardCycleLength: number;
+  /** Prepare phase length in burnchain blocks. */
   prepareCycleLength: number;
+  /** Reward slots per cycle. */
   rewardSlots: number;
+  /** Current reward cycle summary. */
   currentCycle: CycleInfo;
+  /** Next reward cycle summary. */
   nextCycle: CycleInfo;
-  /**
-   * One entry per deployed pox contract version (pox-1, pox-2, …, pox-5).
-   * Sourced from the node's `/v2/pox` `contract_versions[]` field. A row only
-   * appears once that version has been activated on-chain.
-   */
+  /** One entry per deployed pox contract version (pox-1, …, pox-5). */
   contractVersions: PoxContractVersion[];
 }
 
+/**
+ * Per-cycle stake summary.
+ *
+ * Mirrors a cycle entry of the node's `/v2/pox` response.
+ */
 export interface CycleInfo {
+  /** Reward cycle id. */
   id: number;
+  /** Total micro-STX stacked for the cycle. */
   stakedUstx: bigint;
+  /** Whether PoX is active for the cycle. */
   isPoxActive: boolean;
 }
 
 /**
- * One entry of `/v2/pox`'s `contract_versions[]`. Mirrors the node JSON
- * `{ contract_id, activation_burnchain_block_height, first_reward_cycle_id }`
- * shape, camelCased.
+ * Activation record for one deployed pox contract version.
+ *
+ * Mirrors an entry of the node's `/v2/pox` `contract_versions[]`.
  */
 export interface PoxContractVersion {
-  /** Fully-qualified contract id (e.g. `SP000…0002.pox-5`). */
+  /** Fully-qualified contract id. */
   contractId: string;
   /** Burn-block height at which this contract version became active. */
   activationBurnchainBlockHeight: number;
@@ -93,38 +101,44 @@ export interface PoxContractVersion {
 }
 
 /**
- * Lock summary returned by `pox-5.get-staker-info`.
+ * STX-only stake record. Paired-BTC bond memberships are separate — see
+ * {@link BondMembership}.
  *
  * Mirrors the `staker-info` map value
- * `{ amount-ustx, first-reward-cycle, num-cycles, signer }`. This is the
- * STX-only stake record — paired-BTC bond memberships live in
- * `protocol-bond-memberships` and are surfaced by {@link BondMembership}.
+ * `{ amount-ustx, first-reward-cycle, num-cycles, signer }`.
  */
-export type StakerInfo = { staked: false } | { staked: true; details: StakerLock };
+export type StakerInfo = { staked: false } | { staked: true; details: StakerInfoDetails };
 
-export interface StakerLock {
+/** STX-only lock details from `pox-5.get-staker-info`. */
+export interface StakerInfoDetails {
+  /** Locked micro-STX. */
   amountUstx: bigint;
+  /** First reward cycle the lock applies to. */
   firstRewardCycle: number;
+  /** Number of cycles locked. */
   numCycles: number;
   /** Stacks principal of the signer the staker is delegated to. */
   signer: string;
 }
 
 /**
- * Account-level balance/lock view returned by the `/v2/accounts/<addr>` node
- * endpoint. Mirrors the wallet-level balance + STX-lock state.
+ * Account-level balance and STX-lock view.
+ *
+ * Mirrors the node's `/v2/accounts/<addr>` response.
  */
 export interface AccountStatus {
+  /** Liquid micro-STX balance. */
   balance: bigint;
+  /** Locked (stacked) micro-STX. */
   locked: bigint;
+  /** Account nonce. */
   nonce: bigint;
+  /** Burn height at which the locked STX unlocks. */
   unlockHeight: number;
 }
 
 /**
- * Active paired-BTC bond membership for a staker. Returned as `undefined` when
- * the staker has no current bond (the contract returns `none` when the bond's
- * unlock cycle has been reached).
+ * Active paired-BTC bond membership for a staker.
  *
  * Mirrors the `protocol-bond-memberships` map value
  * `{ bond-index, amount-ustx, signer, is-l1-lock, amount-sats }`.
@@ -141,18 +155,13 @@ export interface BondMembership {
 }
 
 /**
- * Static configuration of a protocol bond, sourced from the on-chain
- * `protocol-bonds` map.
+ * Static configuration of a protocol bond.
  *
  * `openBurnHeight` / `firstRewardCycle` are NOT included — they are
  * deterministic functions of the bond index and pox params. Compose with
- * `bondPeriodToBurnHeight` / `bondPeriodToRewardCycle` from `cycles.ts`.
+ * {@link bondPeriodToBurnHeight} / {@link bondPeriodToRewardCycle}.
  *
- * Note: `capacitySats` is NOT a stored field on-chain. The contract emits the
- * sum of allowlist `max-sats` only as part of `setup-bond`'s response. Until a
- * dedicated read-only is added, this field is populated by summing the
- * `protocol-bond-allowances` map keyed on `bond-index`. If the SDK cannot
- * enumerate that map cheaply, `capacitySats` may be `undefined`.
+ * Mirrors the `protocol-bonds` map value.
  */
 export interface Bond {
   bondIndex: number;
@@ -168,13 +177,7 @@ export interface Bond {
    * is consumed by the script's shared OP_VERIFY.
    */
   earlyUnlockBytes: string;
-  /** Sum of allowlist `max-sats` (capacity). Optional; see note above. */
-  capacitySats?: bigint;
 }
-
-// ---------------------------------------------------------------------------
-// Reward / distribution types
-// ---------------------------------------------------------------------------
 
 /**
  * Earned-rewards amount in micro-STX. Mirrors `pox-5.get-earned -> uint`.
@@ -182,37 +185,30 @@ export interface Bond {
 export type EarnedRewards = bigint;
 
 /**
- * One entry of the list returned inside `claim-rewards`'s response. Mirrors
- * the tuple `{ earned, bond-index, rewards-per-token }`.
+ * Per-bond reward leg of a staker's claimable rewards.
+ *
+ * Mirrors a `claim-rewards` response tuple
+ * `{ earned, bond-index, rewards-per-token }`.
  */
 export interface BondRewardsLeg {
+  /** Earned micro-STX for this bond. */
   earned: bigint;
+  /** Bond index the leg refers to. */
   bondIndex: number;
+  /** Reward-per-token accumulator at claim time. */
   rewardsPerToken: bigint;
 }
-
-export interface ClaimableRewards {
-  stxRewards: EarnedRewards;
-  bondRewards: BondRewardsLeg[];
-}
-
-// ---------------------------------------------------------------------------
-// Build function arg types — bond admin
-// ---------------------------------------------------------------------------
 
 export interface BuildSetBondAdminArgs {
   /** Principal to install as the new `bond-admin`. */
   newAdmin: string;
 }
 
-// ---------------------------------------------------------------------------
-// Signer-key grant (SIP-018) types
-// ---------------------------------------------------------------------------
-
 /**
- * Inputs to the SIP-018 signer-key grant message hash. Mirrors the args of
- * pox-5's `get-signer-grant-message-hash` plus the `chain-id` carried in
- * the `POX_5_SIGNER_DOMAIN`.
+ * Inputs to the SIP-018 signer-key grant message hash.
+ *
+ * Mirrors the args of `pox-5.get-signer-grant-message-hash` plus the
+ * `chain-id` carried in the `POX_5_SIGNER_DOMAIN`.
  */
 export interface SignerKeyGrantOptions {
   /** Stacks principal of the signer-manager contract being authorized. */
@@ -243,10 +239,6 @@ export type BuildRevokeSignerKeyTxArgs = TxParams & {
   signerManager: string;
 };
 
-// ---------------------------------------------------------------------------
-// Build function arg types — contract-caller authorization
-// ---------------------------------------------------------------------------
-
 export interface BuildAllowContractCallerArgs {
   /** Address (standard or contract) authorized to call PoX-5 methods on the
    * sender's behalf. */
@@ -263,10 +255,6 @@ export interface BuildDisallowContractCallerArgs {
 
 // todo: flow 15 (andon cord) — `PayoutWindow`.
 
-// ---------------------------------------------------------------------------
-// BTC L1 lockup proof types
-// ---------------------------------------------------------------------------
-//
 // NOTE: BTC SPV proof types used by `register-for-bond` live here, but the
 // helpers that *construct* them (parsing tx bytes, computing merkle paths,
 // etc.) live in `locking.ts`.

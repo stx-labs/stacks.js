@@ -277,11 +277,7 @@ export async function fetchStakerSharesStakedForCycle(
  * `openBurnHeight` / `firstRewardCycle` are NOT included — they are
  * deterministic functions of `bondIndex`, `firstBondPeriodCycle`, and the pox
  * params. Compose with {@link bondPeriodToBurnHeight} /
- * {@link bondPeriodToRewardCycle} from `cycles.ts` when needed.
- *
- * Does NOT populate `capacitySats` — the contract does not expose total
- * allowlist capacity as a single read; sum `protocol-bond-allowances`
- * separately if needed.
+ * {@link bondPeriodToRewardCycle} when needed.
  */
 export async function fetchBond(
   opts: { bondIndex: number } & NetworkClientParam

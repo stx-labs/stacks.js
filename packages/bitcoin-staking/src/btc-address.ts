@@ -21,6 +21,7 @@ export interface BtcAddressRepr {
   data: Uint8Array;
 }
 
+/** @internal */
 function btcAddressVersionToLegacyHashMode(btcAddressVersion: number): PoXAddressVersion {
   switch (btcAddressVersion) {
     case BitcoinNetworkVersion.mainnet.P2PKH:
