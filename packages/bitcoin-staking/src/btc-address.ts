@@ -16,8 +16,11 @@ import {
 } from './constants';
 import { networkNameFrom } from './network';
 
+/** Parsed Bitcoin address: PoX version byte + hash bytes. */
 export interface BtcAddressRepr {
+  /** PoX address version byte. */
   version: PoXAddressVersion;
+  /** Hash / witness-program bytes. */
   data: Uint8Array;
 }
 
@@ -35,6 +38,7 @@ function btcAddressVersionToLegacyHashMode(btcAddressVersion: number): PoXAddres
   }
 }
 
+/** @internal */
 function nativeAddressToSegwitVersion(
   witnessVersion: number,
   dataLength: number
@@ -47,6 +51,7 @@ function nativeAddressToSegwitVersion(
   );
 }
 
+/** @internal */
 function bech32Decode(btcAddress: string) {
   const { words } = bech32.decode(btcAddress as `${string}1${string}`);
   const witnessVersion = words[0];
@@ -55,6 +60,7 @@ function bech32Decode(btcAddress: string) {
   return { witnessVersion, data: bech32.fromWords(words.slice(1)) };
 }
 
+/** @internal */
 function bech32MDecode(btcAddress: string) {
   const { words } = bech32m.decode(btcAddress as `${string}1${string}`);
   const witnessVersion = words[0];
@@ -63,12 +69,14 @@ function bech32MDecode(btcAddress: string) {
   return { witnessVersion, data: bech32m.fromWords(words.slice(1)) };
 }
 
+/** @internal */
 function decodeNativeSegwitBtcAddress(btcAddress: string) {
   if (SEGWIT_V0_ADDR_PREFIX.test(btcAddress)) return bech32Decode(btcAddress);
   if (SEGWIT_V1_ADDR_PREFIX.test(btcAddress)) return bech32MDecode(btcAddress);
   throw new Error(`Native segwit address ${btcAddress} does not match a valid prefix`);
 }
 
+/** @internal */
 function legacyHashModeToBtcAddressVersion(
   hashMode: PoXAddressVersion,
   network: StacksNetworkName
@@ -85,6 +93,7 @@ function legacyHashModeToBtcAddressVersion(
   }
 }
 
+/** @internal */
 function fromPoxTuple(poxAddr: ClarityValue): BtcAddressRepr {
   const cv = poxAddr as TupleCV;
   if (cv.type !== ClarityType.Tuple || !cv.value) {
