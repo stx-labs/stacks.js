@@ -190,7 +190,7 @@ const authResponse = await makeAuthResponse({
 
 ### Usage with `@stacks/transactions`
 
-This library is meant to be used in conjunction with the [`@stacks/transactions`](https://github.com/blockstack/stacks.js/tree/main/packages/transactions) library for signing transactions.
+This library is meant to be used in conjunction with the [`@stacks/transactions`](https://github.com/hirosystems/stacks.js/tree/main/packages/transactions) library for signing transactions.
 
 #### Getting an account's STX address
 
