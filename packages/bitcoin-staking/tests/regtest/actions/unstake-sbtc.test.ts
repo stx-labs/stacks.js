@@ -61,7 +61,11 @@ beforeAll(async () => {
 }, 5 * 60_000);
 
 test('sbtc unstake: register → unstake-sbtc → sBTC returned, total falls back', async () => {
-  const balanceMinted = await fetchSbtcBalance({ tokenContract: SBTC_TOKEN, address: staker.address, network });
+  const balanceMinted = await fetchSbtcBalance({
+    tokenContract: SBTC_TOKEN,
+    address: staker.address,
+    network,
+  });
   expect(balanceMinted).toBeGreaterThanOrEqual(MAX_SATS);
   const totalBefore = await fetchTotalSbtcStaked({ network });
 
@@ -101,15 +105,17 @@ test('sbtc unstake: register → unstake-sbtc → sBTC returned, total falls bac
     fee: FEE,
     nonce: await getNextNonce(staker.address),
     network,
-    postConditions: [Pc.principal(staker.address).willSendEq(MAX_SATS).ft(SBTC_TOKEN, SBTC_ASSET_NAME)],
+    postConditions: [
+      Pc.principal(staker.address).willSendEq(MAX_SATS).ft(SBTC_TOKEN, SBTC_ASSET_NAME),
+    ],
   });
   await broadcastAndWait(signTransaction(registerUnsigned, staker.key), staker.address, network);
 
   useFixtures('unstake-sbtc-registered');
 
-  expect(await fetchSbtcBalance({ tokenContract: SBTC_TOKEN, address: staker.address, network })).toBe(
-    balanceMinted - MAX_SATS
-  );
+  expect(
+    await fetchSbtcBalance({ tokenContract: SBTC_TOKEN, address: staker.address, network })
+  ).toBe(balanceMinted - MAX_SATS);
   expect(await fetchTotalSbtcStaked({ network })).toBe(totalBefore + MAX_SATS);
 
   // UNSTAKE
@@ -121,14 +127,16 @@ test('sbtc unstake: register → unstake-sbtc → sBTC returned, total falls bac
     fee: FEE,
     nonce: await getNextNonce(staker.address),
     network,
-    postConditions: [Pc.principal(POX5_CONTRACT).willSendEq(MAX_SATS).ft(SBTC_TOKEN, SBTC_ASSET_NAME)],
+    postConditions: [
+      Pc.principal(POX5_CONTRACT).willSendEq(MAX_SATS).ft(SBTC_TOKEN, SBTC_ASSET_NAME),
+    ],
   });
   await broadcastAndWait(signTransaction(unstakeUnsigned, staker.key), staker.address, network);
 
   useFixtures('unstake-sbtc-done');
 
-  expect(await fetchSbtcBalance({ tokenContract: SBTC_TOKEN, address: staker.address, network })).toBe(
-    balanceMinted
-  );
+  expect(
+    await fetchSbtcBalance({ tokenContract: SBTC_TOKEN, address: staker.address, network })
+  ).toBe(balanceMinted);
   expect(await fetchTotalSbtcStaked({ network })).toBe(totalBefore);
 });

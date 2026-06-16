@@ -39,7 +39,10 @@ function foldToRoot(internalLeaf: Uint8Array, internalSiblings: Uint8Array[], po
   let h = internalLeaf;
   let index = pos;
   for (const sib of internalSiblings) {
-    h = index % 2 === 0 ? dsha256(new Uint8Array([...h, ...sib])) : dsha256(new Uint8Array([...sib, ...h]));
+    h =
+      index % 2 === 0
+        ? dsha256(new Uint8Array([...h, ...sib]))
+        : dsha256(new Uint8Array([...sib, ...h]));
     index = Math.floor(index / 2);
   }
   return bytesToHex(reverse32(h));
@@ -64,9 +67,10 @@ afterAll(() => {
 runIf('buildLockProof (Esplora): folds back to the block merkle root', async () => {
   const txHex = await getText(`/tx/${TXID}/hex`);
   const merkleProof = await getJson<EsploraMerkleProof>(`/tx/${TXID}/merkle-proof`);
-  const tx = await getJson<{ status: { block_hash: string }; vout: { scriptpubkey: string; value: number }[] }>(
-    `/tx/${TXID}`
-  );
+  const tx = await getJson<{
+    status: { block_hash: string };
+    vout: { scriptpubkey: string; value: number }[];
+  }>(`/tx/${TXID}`);
   const blockHash = tx.status.block_hash;
   const header = await getText(`/block/${blockHash}/header`);
   const block = await getJson<{ merkle_root: string; tx_count: number }>(`/block/${blockHash}`);

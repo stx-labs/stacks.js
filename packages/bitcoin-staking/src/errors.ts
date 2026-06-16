@@ -23,7 +23,6 @@ export enum Pox5ErrorCode {
   SignerKeyGrantNotFound = 17,
   AlreadyStaked = 19,
   InvalidNumCycles = 20,
-  UnauthorizedCaller = 22,
   SignerNotFound = 23,
   InvalidStartBurnHeight = 24,
   UnauthorizedSignerRegistration = 26,
@@ -72,7 +71,6 @@ export const POX5_ERROR_NAMES: Record<Pox5ErrorCode, string> = {
   [Pox5ErrorCode.SignerKeyGrantNotFound]: 'ERR_SIGNER_KEY_GRANT_NOT_FOUND',
   [Pox5ErrorCode.AlreadyStaked]: 'ERR_ALREADY_STAKED',
   [Pox5ErrorCode.InvalidNumCycles]: 'ERR_INVALID_NUM_CYCLES',
-  [Pox5ErrorCode.UnauthorizedCaller]: 'ERR_UNAUTHORIZED_CALLER',
   [Pox5ErrorCode.SignerNotFound]: 'ERR_SIGNER_NOT_FOUND',
   [Pox5ErrorCode.InvalidStartBurnHeight]: 'ERR_INVALID_START_BURN_HEIGHT',
   [Pox5ErrorCode.UnauthorizedSignerRegistration]: 'ERR_UNAUTHORIZED_SIGNER_REGISTRATION',
@@ -126,7 +124,6 @@ export const POX5_ERROR_DESCRIPTIONS: Record<Pox5ErrorCode, string> = {
   [Pox5ErrorCode.SignerKeyGrantNotFound]: 'No signer-key grant was found for this signer key.',
   [Pox5ErrorCode.AlreadyStaked]: 'The principal has already staked in this bond period.',
   [Pox5ErrorCode.InvalidNumCycles]: 'The requested number of cycles is outside the allowed range.',
-  [Pox5ErrorCode.UnauthorizedCaller]: 'The caller is not authorized to perform this action.',
   [Pox5ErrorCode.SignerNotFound]: 'No signer was found for the supplied principal.',
   [Pox5ErrorCode.InvalidStartBurnHeight]:
     'The provided start burn height does not match the current burn block.',

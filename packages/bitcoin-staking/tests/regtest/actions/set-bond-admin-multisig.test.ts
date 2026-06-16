@@ -124,7 +124,9 @@ const setupBondParams = (bondIndex: number, staker: string) => ({
  */
 async function bondSchedulePoxInfo(): Promise<PoxInfo> {
   const poxInfo = await getPoxInfo();
-  const res = await nodeFetch(`${ENV.STACKS_API}/v2/data_var/${POX5}/pox-5/first-bond-period-cycle?proof=0`);
+  const res = await nodeFetch(
+    `${ENV.STACKS_API}/v2/data_var/${POX5}/pox-5/first-bond-period-cycle?proof=0`
+  );
   const { data } = (await res.json()) as { data: string };
   const firstRewardCycleId = Number(cvToValue(deserializeCV(data)));
   return {

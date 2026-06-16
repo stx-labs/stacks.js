@@ -1,11 +1,15 @@
 import { type IntegerType, bytesToHex } from '@stacks/common';
 import type { NetworkClientParam } from '@stacks/network';
 import { BOND_GAP_CYCLES } from './constants';
-import { bondPeriodToBurnHeight, bondPeriodToRewardCycle, isInPreparePhase, minUstxForSatsAmount } from './cycles';
+import {
+  bondPeriodToBurnHeight,
+  bondPeriodToRewardCycle,
+  isInPreparePhase,
+  minUstxForSatsAmount,
+} from './cycles';
 import { Pox5ErrorCode } from './errors';
 import {
   fetchAccountStatus,
-  fetchAllowanceContractCallers,
   fetchBondAdmin,
   fetchBondAllowance,
   fetchBondL1UnlockHeight,
@@ -65,8 +69,6 @@ export async function fetchEligibleRegisterForBond(
     satsTotal: bigint;
     /** The signer-manager contract the staker would register with. */
     signerManager: string;
-    /** Contract calling on the staker's behalf. Omit for a direct call. */
-    contractCaller?: string;
     /**
      * L1 lockup outputs, when registering with a `kind: 'btc'` lockup. Enables
      * the header (u40) and duplicate-outpoint (u46) SPV checks; omit for sBTC.
@@ -78,8 +80,8 @@ export async function fetchEligibleRegisterForBond(
   const networkClient = { network: opts.network, client: opts.client };
   const staker = { address: opts.staker };
 
-  const [poxInfo, bond, allowance, stakerInfo, account, membership, signerInfo, callerGrant] =
-    await Promise.all([
+  const [poxInfo, bond, allowance, stakerInfo, account, membership, signerInfo] = await Promise.all(
+    [
       opts.poxInfo ?? fetchPoxInfo(networkClient),
       fetchProtocolBond({ bondIndex: opts.bondIndex, ...networkClient }),
       fetchBondAllowance({ bondIndex: opts.bondIndex, ...staker, ...networkClient }),
@@ -87,15 +89,8 @@ export async function fetchEligibleRegisterForBond(
       fetchAccountStatus({ ...staker, ...networkClient }),
       fetchBondMembership({ ...staker, ...networkClient }),
       fetchSignerInfo({ signerManager: opts.signerManager, ...networkClient }),
-      opts.contractCaller
-        ? fetchAllowanceContractCallers({
-            sender: opts.staker,
-            contractCaller: opts.contractCaller,
-            poxInfo: opts.poxInfo,
-            ...networkClient,
-          })
-        : undefined,
-    ]);
+    ]
+  );
 
   const burnHeight = poxInfo.currentBurnchainBlockHeight;
   const firstRewardCycle = bondPeriodToRewardCycle({ bondIndex: opts.bondIndex, poxInfo });
@@ -126,7 +121,11 @@ export async function fetchEligibleRegisterForBond(
   const headerValidity = opts.outputs?.length
     ? await Promise.all(
         opts.outputs.map(o =>
-          fetchVerifyBlockHeader({ header: o.header, expectedBlockHeight: o.height, ...networkClient })
+          fetchVerifyBlockHeader({
+            header: o.header,
+            expectedBlockHeight: o.height,
+            ...networkClient,
+          })
         )
       )
     : [];
@@ -189,10 +188,6 @@ export async function fetchEligibleRegisterForBond(
 
   if (!signerInfo) reasons.push(Pox5ErrorCode.SignerNotFound);
   else if (!grantActive) reasons.push(Pox5ErrorCode.SignerKeyGrantNotFound);
-
-  if (callerGrant && !callerGrant.callerAllowed) {
-    reasons.push(Pox5ErrorCode.UnauthorizedCaller);
-  }
 
   // No overlapping bond membership (incl. re-registering the same bond)
   if (overlaps) reasons.push(Pox5ErrorCode.AlreadyRegistered);

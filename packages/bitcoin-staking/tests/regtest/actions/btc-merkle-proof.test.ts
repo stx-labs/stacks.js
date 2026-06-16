@@ -35,7 +35,10 @@ function foldToRoot(displayTxid: string, branchDisplay: string[], pos: number): 
   let index = pos;
   for (const sib of branchDisplay) {
     const s = reverse32(hexToBytes(sib));
-    h = index % 2 === 0 ? dsha256(new Uint8Array([...h, ...s])) : dsha256(new Uint8Array([...s, ...h]));
+    h =
+      index % 2 === 0
+        ? dsha256(new Uint8Array([...h, ...s]))
+        : dsha256(new Uint8Array([...s, ...h]));
     index = Math.floor(index / 2);
   }
   return bytesToHex(reverse32(h)); // back to display order

@@ -10,23 +10,17 @@
  *
  * Must be a testnet (ST…) address — the node rejects SP… with BadAddressVersionByte.
  */
-import { makeSTXTokenTransfer } from "@stacks/transactions";
-import { useFixtures } from "../../helpers/mock";
-import { REGTEST_KEYS, getAccount } from "../regtest";
-import { getNetwork } from "../../helpers/utils";
-import {
-  broadcastAndWait,
-  getNextNonce,
-  getStxBalance,
-} from "../../helpers/wait";
+import { makeSTXTokenTransfer } from '@stacks/transactions';
+import { useFixtures } from '../../helpers/mock';
+import { REGTEST_KEYS, getAccount } from '../regtest';
+import { getNetwork } from '../../helpers/utils';
+import { broadcastAndWait, getNextNonce, getStxBalance } from '../../helpers/wait';
 
 jest.setTimeout(300_000);
 
-const RECIPIENT_ADDRESS =
-  process.env.STACKS_ADDRESS ??
-  getAccount(REGTEST_KEYS.account5).address;
+const RECIPIENT_ADDRESS = process.env.STACKS_ADDRESS ?? getAccount(REGTEST_KEYS.account5).address;
 
-if (!RECIPIENT_ADDRESS.startsWith("ST")) {
+if (!RECIPIENT_ADDRESS.startsWith('ST')) {
   throw new Error(`expected a testnet (ST…) address, got ${RECIPIENT_ADDRESS}`);
 }
 
@@ -36,12 +30,14 @@ const FEE = 1_000n;
 const network = getNetwork();
 const sender = getAccount(REGTEST_KEYS.account4);
 
-beforeAll(() => { useFixtures("transfer-stx"); });
+beforeAll(() => {
+  useFixtures('transfer-stx');
+});
 
 test(`transfer ${AMOUNT} ustx: account4 → ${RECIPIENT_ADDRESS}`, async () => {
   const senderBefore = await getStxBalance(sender.address);
   const recipientBefore = await getStxBalance(RECIPIENT_ADDRESS);
-  console.log("before", { senderBefore, recipientBefore });
+  console.log('before', { senderBefore, recipientBefore });
   expect(senderBefore).toBeGreaterThan(AMOUNT + FEE);
 
   const nonce = await getNextNonce(sender.address);
@@ -55,12 +51,12 @@ test(`transfer ${AMOUNT} ustx: account4 → ${RECIPIENT_ADDRESS}`, async () => {
   });
   // Switch BEFORE the broadcast: its nonce polling shares URLs with the
   // before-reads and would clobber them in the main fixture (latest-wins).
-  useFixtures("transfer-stx-after");
+  useFixtures('transfer-stx-after');
   await broadcastAndWait(tx, sender.address, network);
 
   const senderAfter = await getStxBalance(sender.address);
   const recipientAfter = await getStxBalance(RECIPIENT_ADDRESS);
-  console.log("after", { senderAfter, recipientAfter });
+  console.log('after', { senderAfter, recipientAfter });
   expect(recipientAfter).toBe(recipientBefore + AMOUNT);
   expect(senderAfter).toBe(senderBefore - AMOUNT - FEE);
 });

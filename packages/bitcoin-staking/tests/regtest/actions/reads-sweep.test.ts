@@ -3,7 +3,6 @@
 // is exercised at least once (ABI drift surfaces here, not in apps).
 import {
   fetchAccountStatus,
-  fetchAllowanceContractCallers,
   fetchAmountDelegatedForSigner,
   fetchBond,
   fetchBondAllowance,
@@ -102,16 +101,17 @@ test('every SDK read wrapper resolves against live state', async () => {
 
   const sweep: [string, () => Promise<unknown>][] = [
     ['fetchStakerInfo', () => fetchStakerInfo({ address: staker, network })],
-    [
-      'fetchAllowanceContractCallers',
-      () => fetchAllowanceContractCallers({ sender: staker, contractCaller: signerManager, network }),
-    ],
     ['fetchAccountStatus', () => fetchAccountStatus({ address: staker, network })],
     ['fetchBondMembership', () => fetchBondMembership({ address: staker, network })],
     [
       'fetchStakerSharesStakedForCycle',
       () =>
-        fetchStakerSharesStakedForCycle({ staker, signer: signerManager, rewardCycle: cycle, network }),
+        fetchStakerSharesStakedForCycle({
+          staker,
+          signer: signerManager,
+          rewardCycle: cycle,
+          network,
+        }),
     ],
     ['fetchBond', () => fetchBond({ bondIndex, network })],
     ['fetchProtocolBond', () => fetchProtocolBond({ bondIndex, network })],
@@ -164,7 +164,8 @@ test('every SDK read wrapper resolves against live state', async () => {
     ],
     [
       'fetchStakerRewardsPerTokenSettled',
-      () => fetchStakerRewardsPerTokenSettled({ signerManager, rewardCycle: cycle, staker, network }),
+      () =>
+        fetchStakerRewardsPerTokenSettled({ signerManager, rewardCycle: cycle, staker, network }),
     ],
     [
       'fetchStakerUnclaimedRewards',
@@ -187,7 +188,10 @@ test('every SDK read wrapper resolves against live state', async () => {
       'fetchAmountDelegatedForSigner',
       () => fetchAmountDelegatedForSigner({ signerManager, cycle, network }),
     ],
-    ['fetchUstxDelegatedForCycle', () => fetchUstxDelegatedForCycle({ rewardCycle: cycle, network })],
+    [
+      'fetchUstxDelegatedForCycle',
+      () => fetchUstxDelegatedForCycle({ rewardCycle: cycle, network }),
+    ],
     ['fetchSignerCycleMembership', () => fetchSignerCycleMembership({ staker, cycle, network })],
     [
       'fetchSignerSetContainsForCycle',
@@ -195,13 +199,24 @@ test('every SDK read wrapper resolves against live state', async () => {
     ],
     ['fetchSignerSetFirstItem', () => fetchSignerSetFirstItem({ cycle, network })],
     ['fetchSignerSetLastItem', () => fetchSignerSetLastItem({ cycle, network })],
-    ['fetchSignerSetNextItem', () => fetchSignerSetNextItem({ signer: signerManager, cycle, network })],
-    ['fetchSignerSetPrevItem', () => fetchSignerSetPrevItem({ signer: signerManager, cycle, network })],
+    [
+      'fetchSignerSetNextItem',
+      () => fetchSignerSetNextItem({ signer: signerManager, cycle, network }),
+    ],
+    [
+      'fetchSignerSetPrevItem',
+      () => fetchSignerSetPrevItem({ signer: signerManager, cycle, network }),
+    ],
     ['fetchSignerSetItem', () => fetchSignerSetItem({ signer: signerManager, cycle, network })],
     ['fetchStakerCustodiedSbtc', () => fetchStakerCustodiedSbtc({ staker, network })],
     [
       'fetchBondOverlapsNewPosition',
-      () => fetchBondOverlapsNewPosition({ membership: undefined, newFirstRewardCycle: cycle + 2, network }),
+      () =>
+        fetchBondOverlapsNewPosition({
+          membership: undefined,
+          newFirstRewardCycle: cycle + 2,
+          network,
+        }),
     ],
     [
       'fetchHasAnnouncedL1EarlyExit',
@@ -268,12 +283,23 @@ test('read wrappers: none/false paths', async () => {
     })
   ).toBe(false);
   expect(
-    await fetchBurnBlockHeaderHash({ burnHeight: pox.currentBurnchainBlockHeight + 10_000, network })
+    await fetchBurnBlockHeaderHash({
+      burnHeight: pox.currentBurnchainBlockHeight + 10_000,
+      network,
+    })
   ).toBeUndefined();
-  expect(await fetchSignerSetNextItem({ signer: unknown, cycle: pox.rewardCycleId, network })).toBeUndefined();
-  expect(await fetchSignerSetPrevItem({ signer: unknown, cycle: pox.rewardCycleId, network })).toBeUndefined();
-  expect(await fetchSignerSetItem({ signer: unknown, cycle: pox.rewardCycleId, network })).toBeUndefined();
-  expect(await fetchSignerCycleMembership({ staker: unknown, cycle: pox.rewardCycleId, network })).toBeUndefined();
+  expect(
+    await fetchSignerSetNextItem({ signer: unknown, cycle: pox.rewardCycleId, network })
+  ).toBeUndefined();
+  expect(
+    await fetchSignerSetPrevItem({ signer: unknown, cycle: pox.rewardCycleId, network })
+  ).toBeUndefined();
+  expect(
+    await fetchSignerSetItem({ signer: unknown, cycle: pox.rewardCycleId, network })
+  ).toBeUndefined();
+  expect(
+    await fetchSignerCycleMembership({ staker: unknown, cycle: pox.rewardCycleId, network })
+  ).toBeUndefined();
 
   const eligibility = await fetchEligibleRegisterForBond({
     bondIndex: pickBondIndex(pox).bondIndex,

@@ -252,20 +252,6 @@ export type BuildRevokeSignerKeyTxArgs = TxParams & {
   signerManager: string;
 };
 
-export interface BuildAllowContractCallerArgs {
-  /** Address (standard or contract) authorized to call PoX-5 methods on the
-   * sender's behalf. */
-  contractCaller: string;
-  /** Optional burn-block height at which the authorization expires. Omit for
-   * no expiry. */
-  untilBurnHeight?: number;
-}
-
-export interface BuildDisallowContractCallerArgs {
-  /** Address whose authorization should be revoked. */
-  contractCaller: string;
-}
-
 // todo: flow 15 (andon cord) — `PayoutWindow`.
 
 // NOTE: BTC SPV proof types used by `register-for-bond` live here, but the

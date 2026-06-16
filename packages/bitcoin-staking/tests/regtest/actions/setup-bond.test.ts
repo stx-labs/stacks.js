@@ -2,25 +2,20 @@
  * Simplest `buildSetupBond` action: the admin creates a bond at the correct time
  * and we read it back. Node-only; confirmed by polling `fetchBond`.
  */
-import { broadcastTransaction } from "@stacks/transactions";
+import { broadcastTransaction } from '@stacks/transactions';
 import {
   BOND_GAP_CYCLES,
   bondPeriodToBurnHeight,
   buildSetupBond,
   fetchBond,
   firstPox5RewardCycle,
-} from "../../../src";
-import { REGTEST_KEYS, getAccount, type Account } from "../regtest";
-import { getNetwork } from "../../helpers/utils";
-import {
-  ensurePox5,
-  getNextNonce,
-  getPoxInfo,
-  waitForFulfilled,
-} from "../../helpers/wait";
-import { signTransaction } from "../../helpers/sign";
-import { useFixtures } from "../../helpers/mock";
-import { getBondAdminAccount } from "../../helpers/bondAdmin";
+} from '../../../src';
+import { REGTEST_KEYS, getAccount, type Account } from '../regtest';
+import { getNetwork } from '../../helpers/utils';
+import { ensurePox5, getNextNonce, getPoxInfo, waitForFulfilled } from '../../helpers/wait';
+import { signTransaction } from '../../helpers/sign';
+import { useFixtures } from '../../helpers/mock';
+import { getBondAdminAccount } from '../../helpers/bondAdmin';
 
 jest.setTimeout(5 * 60_000);
 
@@ -33,15 +28,15 @@ const MAX_SATS = 10_000n;
 const TARGET_RATE_BPS = 1_000n;
 const STX_VALUE_RATIO = 1_000n;
 const MIN_USTX_RATIO_BPS = 500n;
-const EARLY_UNLOCK_BYTES = "00".repeat(683);
+const EARLY_UNLOCK_BYTES = '00'.repeat(683);
 
 beforeAll(async () => {
   admin = await getBondAdminAccount();
-  useFixtures("setup-bond");
+  useFixtures('setup-bond');
   await ensurePox5();
 }, 5 * 60_000);
 
-test("setup-bond: admin creates a bond at the correct time", async () => {
+test('setup-bond: admin creates a bond at the correct time', async () => {
   // Nearest future bond period whose setup-bond window is open (computed from the
   // current cycle, so it works at any burn height).
   const poxInfo = await getPoxInfo();
@@ -55,11 +50,10 @@ test("setup-bond: admin creates a bond at the correct time", async () => {
 
   let bondIndex = Math.max(
     0,
-    Math.ceil((poxInfo.rewardCycleId - firstBondCycle + 1) / BOND_GAP_CYCLES),
+    Math.ceil((poxInfo.rewardCycleId - firstBondCycle + 1) / BOND_GAP_CYCLES)
   );
-  while (bondPeriodToBurnHeight({ bondIndex, poxInfo }) <= burn + slack)
-    bondIndex++;
-  console.log("setup-bond", {
+  while (bondPeriodToBurnHeight({ bondIndex, poxInfo }) <= burn + slack) bondIndex++;
+  console.log('setup-bond', {
     bondIndex,
     burn,
     start: bondPeriodToBurnHeight({ bondIndex, poxInfo }),
@@ -80,14 +74,14 @@ test("setup-bond: admin creates a bond at the correct time", async () => {
 
   const transaction = signTransaction(unsigned, admin.key);
   const res = await broadcastTransaction({ transaction, network });
-  if ("error" in res) {
-    throw `broadcast rejected: ${res.error} — ${"reason" in res ? res.reason : ""}`;
+  if ('error' in res) {
+    throw `broadcast rejected: ${res.error} — ${'reason' in res ? res.reason : ''}`;
   }
-  console.log("setup-bond txid", res.txid);
+  console.log('setup-bond txid', res.txid);
 
   const bond = await waitForFulfilled(async () => {
     const b = await fetchBond({ bondIndex, network });
-    if (!b) throw "bond not on-chain yet";
+    if (!b) throw 'bond not on-chain yet';
     return b;
   });
 

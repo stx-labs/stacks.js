@@ -8,8 +8,6 @@ import {
 import { POX5_CONTRACT_NAME } from './constants';
 import type {
   BondLockup,
-  BuildAllowContractCallerArgs,
-  BuildDisallowContractCallerArgs,
   BuildGrantSignerKeyTxArgs,
   BuildRevokeSignerKeyTxArgs,
   BuildSetBondAdminArgs,
@@ -533,56 +531,6 @@ export async function buildUnstake(
   } & TxParams
 ): Promise<StacksTransactionWire> {
   return callPox5('unstake', [Cl.address(args.oldSignerManager)], args);
-}
-
-/**
- * Build an unsigned `allow-contract-caller` transaction.
- *
- * Authorizes another address (typically a helper / batching contract) to
- * make PoX-5 calls on behalf of the sending account. An optional
- * `untilBurnHeight` caps the authorization at a given burn-block height; omit
- * for no expiry.
- *
- * @example
- * ```ts
- * // Let a batching contract call PoX-5 on the sender's behalf, no expiry.
- * const tx = await buildAllowContractCaller({
- *   contractCaller: 'SP2C2YFP12AJZB4MABJBAJ55XECVS7E4PMMZ89YZR.batcher',
- *   publicKey,
- *   fee, nonce, network: 'mainnet',
- * });
- * ```
- */
-export async function buildAllowContractCaller(
-  args: BuildAllowContractCallerArgs & TxParams
-): Promise<StacksTransactionWire> {
-  return callPox5(
-    'allow-contract-caller',
-    [
-      Cl.address(args.contractCaller),
-      args.untilBurnHeight !== undefined ? Cl.some(Cl.uint(args.untilBurnHeight)) : Cl.none(),
-    ],
-    args
-  );
-}
-
-/**
- * Build an unsigned `disallow-contract-caller` transaction. Revokes a
- * previously granted contract-caller authorization for the sending account.
- *
- * @example
- * ```ts
- * const tx = await buildDisallowContractCaller({
- *   contractCaller: 'SP2C2YFP12AJZB4MABJBAJ55XECVS7E4PMMZ89YZR.batcher',
- *   publicKey,
- *   fee, nonce, network: 'mainnet',
- * });
- * ```
- */
-export async function buildDisallowContractCaller(
-  args: BuildDisallowContractCallerArgs & TxParams
-): Promise<StacksTransactionWire> {
-  return callPox5('disallow-contract-caller', [Cl.address(args.contractCaller)], args);
 }
 
 /**

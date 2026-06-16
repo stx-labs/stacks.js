@@ -12,11 +12,23 @@ import {
   minUstxForSatsAmount,
 } from '../../../src';
 import { Pc } from '@stacks/transactions';
-import { ACCOUNTS, REGTEST_KEYS, SIGNER_MANAGER, SIGNER_MANAGER_2, getAccount, type Account } from '../regtest';
+import {
+  ACCOUNTS,
+  REGTEST_KEYS,
+  SIGNER_MANAGER,
+  SIGNER_MANAGER_2,
+  getAccount,
+  type Account,
+} from '../regtest';
 import { getBondAdminAccount } from '../../helpers/bondAdmin';
 import { getNetwork } from '../../helpers/utils';
 import { SBTC_ASSET_NAME, SBTC_TOKEN } from '../../helpers/constants';
-import { broadcastAndWait, ensurePox5, getNextNonce, waitForSignerManager } from '../../helpers/wait';
+import {
+  broadcastAndWait,
+  ensurePox5,
+  getNextNonce,
+  waitForSignerManager,
+} from '../../helpers/wait';
 import { waitForBondWithRunway } from '../../helpers/bond';
 import { useFixtures } from '../../helpers/mock';
 import { signTransaction } from '../../helpers/sign';
@@ -91,7 +103,9 @@ test('update-bond-registration: rotate the membership signer-manager', async () 
     fee: FEE,
     nonce: await getNextNonce(staker.address),
     network,
-    postConditions: [Pc.principal(staker.address).willSendEq(MAX_SATS).ft(SBTC_TOKEN, SBTC_ASSET_NAME)],
+    postConditions: [
+      Pc.principal(staker.address).willSendEq(MAX_SATS).ft(SBTC_TOKEN, SBTC_ASSET_NAME),
+    ],
   });
   await broadcastAndWait(signTransaction(registerUnsigned, staker.key), staker.address, network);
 

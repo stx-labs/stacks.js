@@ -67,7 +67,11 @@ test('sbtc register-for-bond happy path: setup-bond → mint → register → en
   await deploySbtcMinter({ deployerKey: sbtcDeployer.key, network });
 
   const { bondIndex, bondStartHeight, poxInfo } = await waitForBondWithRunway();
-  console.log('chosen bond', { bondIndex, bondStartHeight, burn: poxInfo.currentBurnchainBlockHeight });
+  console.log('chosen bond', {
+    bondIndex,
+    bondStartHeight,
+    burn: poxInfo.currentBurnchainBlockHeight,
+  });
 
   let adminNonce = await getNextNonce(admin.address);
 
@@ -103,7 +107,11 @@ test('sbtc register-for-bond happy path: setup-bond → mint → register → en
     fee: FEE,
     network,
   });
-  const sbtcBalance = await fetchSbtcBalance({ tokenContract: SBTC_TOKEN, address: staker.address, network });
+  const sbtcBalance = await fetchSbtcBalance({
+    tokenContract: SBTC_TOKEN,
+    address: staker.address,
+    network,
+  });
   expect(sbtcBalance).toBeGreaterThanOrEqual(MAX_SATS);
 
   // REGISTER
@@ -125,7 +133,9 @@ test('sbtc register-for-bond happy path: setup-bond → mint → register → en
     fee: FEE,
     nonce: await getNextNonce(staker.address),
     network,
-    postConditions: [Pc.principal(staker.address).willSendEq(MAX_SATS).ft(SBTC_TOKEN, SBTC_ASSET_NAME)],
+    postConditions: [
+      Pc.principal(staker.address).willSendEq(MAX_SATS).ft(SBTC_TOKEN, SBTC_ASSET_NAME),
+    ],
   });
   const registerTransaction = signTransaction(registerUnsigned, staker.key);
   await broadcastAndWait(registerTransaction, staker.address, network);
@@ -138,6 +148,10 @@ test('sbtc register-for-bond happy path: setup-bond → mint → register → en
   expect(membershipAfter.isL1Lock).toBe(false);
   expect(membershipAfter.amountUstx).toBe(amountUstx);
 
-  const sbtcAfter = await fetchSbtcBalance({ tokenContract: SBTC_TOKEN, address: staker.address, network });
+  const sbtcAfter = await fetchSbtcBalance({
+    tokenContract: SBTC_TOKEN,
+    address: staker.address,
+    network,
+  });
   expect(sbtcAfter).toBe(sbtcBalance - MAX_SATS);
 });

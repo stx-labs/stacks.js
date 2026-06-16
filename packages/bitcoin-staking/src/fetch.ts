@@ -15,12 +15,7 @@ import {
   fetchContractMapEntry,
 } from '@stacks/transactions';
 import { POX5_CONTRACT_NAME } from './constants';
-import {
-  type BondStatusName,
-  bondPeriodToBurnHeight,
-  bondPeriodToRewardCycle,
-  bondStatus,
-} from './cycles';
+import { type BondStatusName, bondStatus } from './cycles';
 import type {
   AccountStatus,
   Bond,
@@ -119,53 +114,6 @@ export async function fetchStakerInfo(
       numCycles: Number((tuple.value['num-cycles'] as UIntCV).value),
       signer: cvToValue(tuple.value['signer'] as PrincipalCV) as string,
     },
-  };
-}
-
-/**
- * Wraps the contract's `allowance-contract-callers` map.
- *
- * Returns whether `sender` has authorized `contractCaller` to call PoX-5
- * methods on its behalf, honoring the optional expiry burn-height stored in
- * the grant. An authorization is in effect when an entry exists in the map
- * and either has no expiry or the current burn-block height has not yet
- * reached the expiry.
- */
-export async function fetchAllowanceContractCallers(
-  opts: { sender: string; contractCaller: string; poxInfo?: PoxInfo } & NetworkClientParam
-): Promise<{ callerAllowed: boolean; callerExpiryHeight?: number }> {
-  const network = networkFrom(opts.network ?? 'mainnet');
-  const entry = await fetchContractMapEntry({
-    contractAddress: network.bootAddress,
-    contractName: POX5_CONTRACT_NAME,
-    mapName: 'allowance-contract-callers',
-    mapKey: Cl.tuple({
-      sender: Cl.address(opts.sender),
-      'contract-caller': Cl.address(opts.contractCaller),
-    }),
-    network: opts.network,
-    client: opts.client,
-  });
-
-  // Map values are wrapped in (some ...) by the API; missing entries are
-  // returned as `none`.
-  const optional = entry as OptionalCV;
-  if (optional.type === ClarityType.OptionalNone) return { callerAllowed: false };
-
-  // Map value type is `(optional uint)`: outer Some wraps the stored
-  // expiry-burn-ht (or inner None for "no expiry").
-  const expiry = optional.value as OptionalCV<UIntCV>;
-  if (expiry.type === ClarityType.OptionalNone) return { callerAllowed: true };
-
-  const expiryHeight = Number(expiry.value.value);
-
-  // If the caller provided a PoxInfo, use it. Otherwise, fetch it from the network.
-  const poxInfo =
-    opts.poxInfo ?? (await fetchPoxInfo({ network: opts.network, client: opts.client }));
-
-  return {
-    callerAllowed: poxInfo.currentBurnchainBlockHeight < expiryHeight,
-    callerExpiryHeight: expiryHeight,
   };
 }
 

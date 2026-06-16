@@ -8,7 +8,9 @@ const AMOUNT = 0.5; // BTC
 
 // One fixture file suffices: the before/after balance reads differ in
 // `minconf`, so their JSON-RPC fixture keys never collide.
-beforeAll(() => { useFixtures('btc-transfer'); });
+beforeAll(() => {
+  useFixtures('btc-transfer');
+});
 
 test('bitcoin transfer via rpc', async () => {
   const recipient = await getNewAddress('e2e-recipient');

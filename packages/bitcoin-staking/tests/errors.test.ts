@@ -113,9 +113,7 @@ describe('Pox5ErrorCode enum', () => {
   it('every enum value has a corresponding name and description', () => {
     // Numeric enum values appear via `Object.values(enum)` as both keys (reverse-map
     // strings) and numeric values; filter to numbers only.
-    const codes = Object.values(Pox5ErrorCode).filter(
-      (v): v is number => typeof v === 'number'
-    );
+    const codes = Object.values(Pox5ErrorCode).filter((v): v is number => typeof v === 'number');
     expect(codes.length).toBeGreaterThan(0);
     for (const code of codes) {
       expect(POX5_ERROR_NAMES[code as Pox5ErrorCode]).toBeDefined();

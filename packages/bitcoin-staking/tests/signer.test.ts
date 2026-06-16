@@ -151,9 +151,7 @@ describe('signer calldata', () => {
 describe('package exports', () => {
   it('re-exports the signer helpers from the package index', () => {
     expect((pkg as Record<string, unknown>).buildSignerGrantMessage).toBe(buildSignerGrantMessage);
-    expect((pkg as Record<string, unknown>).computeSignerGrantHash).toBe(
-      computeSignerGrantHash
-    );
+    expect((pkg as Record<string, unknown>).computeSignerGrantHash).toBe(computeSignerGrantHash);
     expect((pkg as Record<string, unknown>).signSignerGrant).toBe(signSignerGrant);
     expect((pkg as Record<string, unknown>).verifySignerGrant).toBe(verifySignerGrant);
   });

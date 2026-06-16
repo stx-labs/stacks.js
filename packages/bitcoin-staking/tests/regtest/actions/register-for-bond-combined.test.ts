@@ -93,7 +93,11 @@ test('one bond, two participants: user A (L1) + user B (sBTC)', async () => {
   expect(await fetchBondMembership({ address: userB.address, network })).toBeUndefined();
 
   const { bondIndex, bondStartHeight, poxInfo } = await waitForBondWithRunway(15);
-  console.log('chosen bond', { bondIndex, bondStartHeight, burn: poxInfo.currentBurnchainBlockHeight });
+  console.log('chosen bond', {
+    bondIndex,
+    bondStartHeight,
+    burn: poxInfo.currentBurnchainBlockHeight,
+  });
 
   let adminNonce = await getNextNonce(admin.address);
 
@@ -130,7 +134,12 @@ test('one bond, two participants: user A (L1) + user B (sBTC)', async () => {
   // USER A (L1)
   const unlockHeight = computeBondUnlockHeight({ bondIndex, poxInfo });
   const unlockBytes = buildUnlockScript(userA.publicKey);
-  const lockupArgs = { stxAddress: userA.address, unlockHeight, unlockBytes, earlyUnlockBytes: EARLY_UNLOCK_BYTES };
+  const lockupArgs = {
+    stxAddress: userA.address,
+    unlockHeight,
+    unlockBytes,
+    earlyUnlockBytes: EARLY_UNLOCK_BYTES,
+  };
   const lockupAddress = buildLockAddress({ ...lockupArgs, network: 'devnet' }); // bcrt (regtest)
   const btcTxid = await sendToAddress(lockupAddress, Number(MAX_SATS) / 1e8);
   const proof = await waitForFulfilled(() => getBtcTxProofInputs(btcTxid));
@@ -170,7 +179,9 @@ test('one bond, two participants: user A (L1) + user B (sBTC)', async () => {
     fee: FEE,
     nonce: await getNextNonce(userB.address),
     network,
-    postConditions: [Pc.principal(userB.address).willSendEq(MAX_SATS).ft(SBTC_TOKEN, SBTC_ASSET_NAME)],
+    postConditions: [
+      Pc.principal(userB.address).willSendEq(MAX_SATS).ft(SBTC_TOKEN, SBTC_ASSET_NAME),
+    ],
   });
   await broadcastAndWait(signTransaction(regB, userB.key), userB.address, network);
 

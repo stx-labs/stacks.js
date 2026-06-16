@@ -23,10 +23,10 @@ import {
   fetchBondMembership,
   fetchSignerInfo,
   minUstxForSatsAmount,
-} from "../../../src";
-import { REGTEST_KEYS, SIGNER_MANAGER, getAccount, type Account } from "../regtest";
-import { getBondAdminAccount } from "../../helpers/bondAdmin";
-import { getNetwork } from "../../helpers/utils";
+} from '../../../src';
+import { REGTEST_KEYS, SIGNER_MANAGER, getAccount, type Account } from '../regtest';
+import { getBondAdminAccount } from '../../helpers/bondAdmin';
+import { getNetwork } from '../../helpers/utils';
 import {
   broadcastAndWait,
   ensurePox5,
@@ -34,11 +34,11 @@ import {
   waitForBurnBlockHeight,
   waitForFulfilled,
   waitForSignerManager,
-} from "../../helpers/wait";
-import { waitForBondWithRunway } from "../../helpers/bond";
-import { useFixtures } from "../../helpers/mock";
-import { signTransaction } from "../../helpers/sign";
-import { getBtcTxProofInputs, sendToAddress } from "../../helpers/btc";
+} from '../../helpers/wait';
+import { waitForBondWithRunway } from '../../helpers/bond';
+import { useFixtures } from '../../helpers/mock';
+import { signTransaction } from '../../helpers/sign';
+import { getBtcTxProofInputs, sendToAddress } from '../../helpers/btc';
 
 jest.setTimeout(5 * 60_000);
 
@@ -52,27 +52,24 @@ const FEE = 10_000n;
 const TARGET_RATE_BPS = 1_000n;
 const STX_VALUE_RATIO = 1_000n;
 const MIN_USTX_RATIO_BPS = 500n;
-const EARLY_UNLOCK_BYTES = "00".repeat(683);
+const EARLY_UNLOCK_BYTES = '00'.repeat(683);
 
 beforeAll(async () => {
   admin = await getBondAdminAccount();
-  useFixtures("register-for-bond-l1");
+  useFixtures('register-for-bond-l1');
   await ensurePox5();
   await waitForSignerManager(signerManager);
 }, 5 * 60_000);
 
-test("l1 register-for-bond happy path: setup-bond → fund BTC → prove → register → enrolled", async () => {
+test('l1 register-for-bond happy path: setup-bond → fund BTC → prove → register → enrolled', async () => {
   const signerInfo = await fetchSignerInfo({ signerManager, network });
   if (!signerInfo) throw `${signerManager} not registered`;
 
-  expect(
-    await fetchBondMembership({ address: staker.address, network }),
-  ).toBeUndefined();
+  expect(await fetchBondMembership({ address: staker.address, network })).toBeUndefined();
 
   // Extra runway: L1 also waits on a BTC confirmation + node indexing before D0.
-  const { bondIndex, bondStartHeight, poxInfo } =
-    await waitForBondWithRunway(15);
-  console.log("chosen bond", {
+  const { bondIndex, bondStartHeight, poxInfo } = await waitForBondWithRunway(15);
+  console.log('chosen bond', {
     bondIndex,
     bondStartHeight,
     burn: poxInfo.currentBurnchainBlockHeight,
@@ -97,7 +94,7 @@ test("l1 register-for-bond happy path: setup-bond → fund BTC → prove → reg
   await broadcastAndWait(setupTransaction, admin.address, network);
 
   const bond = await fetchBond({ bondIndex, network });
-  if (!bond) throw "setup-bond aborted";
+  if (!bond) throw 'setup-bond aborted';
 
   // FUND LOCKUP
   const unlockHeight = computeBondUnlockHeight({ bondIndex, poxInfo });
@@ -111,15 +108,13 @@ test("l1 register-for-bond happy path: setup-bond → fund BTC → prove → reg
   // regtest BTC addresses are bcrt (devnet), not the stacks-testnet network.
   const lockupAddress = buildLockAddress({
     ...lockupArgs,
-    network: "devnet",
+    network: 'devnet',
   });
   const btcTxid = await sendToAddress(lockupAddress, Number(MAX_SATS) / 1e8);
-  console.log("funded L1 lockup", { lockupAddress, btcTxid, unlockHeight });
+  console.log('funded L1 lockup', { lockupAddress, btcTxid, unlockHeight });
 
   // SPV PROOF
-  const proofInputs = await waitForFulfilled(() =>
-    getBtcTxProofInputs(btcTxid),
-  );
+  const proofInputs = await waitForFulfilled(() => getBtcTxProofInputs(btcTxid));
   await waitForBurnBlockHeight(proofInputs.blockHeight);
   const output = buildLockProofFromBlock({
     txHex: proofInputs.txHex,
@@ -141,7 +136,7 @@ test("l1 register-for-bond happy path: setup-bond → fund BTC → prove → reg
     bondIndex,
     signerManager,
     amountUstx,
-    lockup: { kind: "btc", outputs: [output], unlockBytes },
+    lockup: { kind: 'btc', outputs: [output], unlockBytes },
     publicKey: staker.publicKey,
     fee: FEE,
     nonce: await getNextNonce(staker.address),
@@ -150,13 +145,13 @@ test("l1 register-for-bond happy path: setup-bond → fund BTC → prove → reg
   const registerTransaction = signTransaction(registerUnsigned, staker.key);
   await broadcastAndWait(registerTransaction, staker.address, network);
 
-  useFixtures("register-for-bond-l1-after");
+  useFixtures('register-for-bond-l1-after');
 
   const membershipAfter = await fetchBondMembership({
     address: staker.address,
     network,
   });
-  if (!membershipAfter) throw "register-for-bond aborted";
+  if (!membershipAfter) throw 'register-for-bond aborted';
   expect(membershipAfter.bondIndex).toBe(bondIndex);
   expect(membershipAfter.isL1Lock).toBe(true);
   expect(membershipAfter.amountUstx).toBe(amountUstx);
