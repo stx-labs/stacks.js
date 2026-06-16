@@ -140,12 +140,24 @@ export async function fetchAccountStatus(
   };
 }
 
+/** @internal */
+function decodeBondMembership(tuple: TupleCV): BondMembership {
+  return {
+    bondIndex: Number((tuple.value['bond-index'] as UIntCV).value),
+    amountUstx: BigInt((tuple.value['amount-ustx'] as UIntCV).value),
+    signer: cvToValue(tuple.value['signer'] as PrincipalCV) as string,
+    isL1Lock: (tuple.value['is-l1-lock'] as BooleanCV).type === ClarityType.BoolTrue,
+    amountSats: BigInt((tuple.value['amount-sats'] as UIntCV).value),
+  };
+}
+
 /**
  * Wraps the contract's `get-bond-membership` read-only.
  *
  * Returns `undefined` when no active membership exists (either no entry, or
  * the bond's unlock cycle has been reached — the contract collapses both
- * cases to `none`).
+ * cases to `none`). Use {@link fetchProtocolBondMemberships} for the raw entry
+ * that survives bond expiry.
  *
  * Tuple shape: `{ bond-index, amount-ustx, signer, is-l1-lock, amount-sats }`.
  */
@@ -165,15 +177,34 @@ export async function fetchBondMembership(
 
   const optional = result as OptionalCV<TupleCV>;
   if (optional.type === ClarityType.OptionalNone) return undefined;
+  return decodeBondMembership(optional.value);
+}
 
-  const tuple = optional.value;
-  return {
-    bondIndex: Number((tuple.value['bond-index'] as UIntCV).value),
-    amountUstx: BigInt((tuple.value['amount-ustx'] as UIntCV).value),
-    signer: cvToValue(tuple.value['signer'] as PrincipalCV) as string,
-    isL1Lock: (tuple.value['is-l1-lock'] as BooleanCV).type === ClarityType.BoolTrue,
-    amountSats: BigInt((tuple.value['amount-sats'] as UIntCV).value),
-  };
+/**
+ * Reads the raw `protocol-bond-memberships` map entry for a staker.
+ *
+ * Unlike {@link fetchBondMembership} (which goes through `get-bond-membership`),
+ * this does NOT filter out expired memberships — it returns the entry as long
+ * as it's present, matching the raw `map-get?` reads in `unstake-sbtc`.
+ *
+ * Mirrors the `protocol-bond-memberships` map value.
+ */
+export async function fetchProtocolBondMemberships(
+  opts: { address: string } & NetworkClientParam
+): Promise<BondMembership | undefined> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const entry = await fetchContractMapEntry({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    mapName: 'protocol-bond-memberships',
+    mapKey: Cl.address(opts.address),
+    network: opts.network,
+    client: opts.client,
+  });
+
+  const optional = entry as OptionalCV<TupleCV>;
+  if (optional.type === ClarityType.OptionalNone) return undefined;
+  return decodeBondMembership(optional.value);
 }
 
 /**
@@ -1581,6 +1612,37 @@ export async function fetchVerifySignerKeyGrant(
 
   // Response is `(ok bool)` on success, `(err uint)` on missing grant.
   return result.type === ClarityType.ResponseOk;
+}
+
+/**
+ * Reads the `used-signer-key-grants` map: whether a `(signerKey, signerManager,
+ * authId)` grant triple has already been consumed (the `grant-signer-key`
+ * replay guard).
+ *
+ * Mirrors the `used-signer-key-grants` map.
+ */
+export async function fetchSignerKeyGrantUsed(
+  opts: {
+    signerKey: Uint8Array | string;
+    signerManager: string;
+    authId: bigint | number;
+  } & NetworkClientParam
+): Promise<boolean> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const entry = await fetchContractMapEntry({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    mapName: 'used-signer-key-grants',
+    mapKey: Cl.tuple({
+      'signer-key':
+        typeof opts.signerKey === 'string' ? Cl.bufferFromHex(opts.signerKey) : Cl.buffer(opts.signerKey),
+      'signer-manager': Cl.address(opts.signerManager),
+      'auth-id': Cl.uint(opts.authId),
+    }),
+    network: opts.network,
+    client: opts.client,
+  });
+  return (entry as OptionalCV<TupleCV>).type !== ClarityType.OptionalNone;
 }
 
 /**
