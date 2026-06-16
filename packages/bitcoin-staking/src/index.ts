@@ -5,6 +5,7 @@ export * from './script';
 export * from './proof';
 export * from './build';
 export * from './fetch';
+export * from './eligibility';
 export * from './cycles';
 export * from './errors';
 export * from './signer';

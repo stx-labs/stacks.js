@@ -1,5 +1,6 @@
 import type { IntegerType } from '@stacks/common';
 import type { StacksNetwork, StacksNetworkName } from '@stacks/network';
+import type { BtcAddressRepr } from './btc-address';
 import type {
   PostCondition,
   PostConditionModeName,
@@ -217,6 +218,18 @@ export interface SignerKeyGrantOptions {
   authId: bigint | number;
   /** Stacks chain id (e.g. `1` for mainnet, `0x80000000` for testnet). */
   chainId: number;
+}
+
+/**
+ * L1 BTC payout election carried in a `signerCalldata` blob. Encode it with
+ * {@link buildSignerCalldata}; omitting `signerCalldata` keeps the sBTC default.
+ */
+export interface SignerCalldataL1Payout {
+  /** Destination Bitcoin reward address — a parsed {@link BtcAddressRepr} or an
+   * address string (P2PKH/P2SH/P2WPKH/P2WSH/P2TR). */
+  poxAddress: string | BtcAddressRepr;
+  /** Max sBTC fee (sats) the staker tolerates on the L1 BTC withdrawal. */
+  maxFeeSats: IntegerType;
 }
 
 /** Arguments for {@link buildGrantSignerKey} — wraps pox-5 `grant-signer-key`. */

@@ -1,10 +1,13 @@
 import { ClarityType, privateKeyToPublic, type TupleCV } from '@stacks/transactions';
 import {
+  buildSignerCalldata,
   computeSignerGrantHash,
+  decodeSignerCalldata,
   signSignerGrant,
   buildSignerGrantMessage,
   verifySignerGrant,
 } from '../src/signer';
+import * as BtcAddress from '../src/btc-address';
 import * as pkg from '../src';
 
 // 32-byte hex private key (uncompressed marker absent → compressed pubkey).
@@ -117,6 +120,31 @@ describe('signSignerGrant + verifySignerGrant', () => {
       signature: sig,
     });
     expect(ok).toBe(false);
+  });
+});
+
+describe('signer calldata', () => {
+  it.each([
+    'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4', // P2WPKH
+    '1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMH', // P2PKH
+    'bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr', // P2TR
+  ])('round-trips %s through encode/decode', addr => {
+    const calldata = buildSignerCalldata({ poxAddress: addr, maxFeeSats: 1000n });
+    const decoded = decodeSignerCalldata(calldata);
+    expect(decoded.maxFeeSats).toBe(1000n);
+    expect(BtcAddress.stringify(decoded.poxAddress, 'mainnet')).toBe(addr);
+  });
+
+  it('accepts pre-parsed address components and Uint8Array | hex calldata', () => {
+    const parsed = BtcAddress.parse('bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4');
+    const bytes = buildSignerCalldata({ poxAddress: parsed, maxFeeSats: 0n });
+    const fromHex = decodeSignerCalldata(Buffer.from(bytes).toString('hex'));
+    expect(fromHex.poxAddress).toEqual(parsed);
+    expect(fromHex.maxFeeSats).toBe(0n);
+  });
+
+  it('throws on a non-tuple calldata blob', () => {
+    expect(() => decodeSignerCalldata('00')).toThrow();
   });
 });
 
