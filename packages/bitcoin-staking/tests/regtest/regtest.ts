@@ -56,6 +56,15 @@ export const REGTEST_KEYS = {
   // ST251J6G9… — NOT prefunded; adversarial suite outsider (never allowlisted).
   account13:
     "362eb8d1bb05b03a6fefa2e356ec3f92abc22ddf4a2cbf9c93384d1215ec6d6601",
+  // ST1B3TGMM4… — NOT prefunded; eligibility suite dedicated sBTC staker (update-bond-registration).
+  account14:
+    "367c1126f89a45263c98b0b4318bcd21ba5b82a0fabf722853d244b90ba22ea701",
+  // ST24BPCW1M… — NOT prefunded; eligibility suite dedicated sBTC staker (announce-l1-early-exit).
+  account15:
+    "337f3e895b795b84631420e4a8e2130124643ad3842c7aa377b8cfa3fd55559901",
+  // ST2YNPZ6W5… — NOT prefunded; eligibility suite dedicated sBTC staker (unstake-sbtc).
+  account16:
+    "6650f142402e683dc241334261e3c9d4effe19e069a72762d0913c0f4a5df09d01",
 } as const;
 
 /** The 3 keys the regtest staking daemons drive (also our bond roles). */

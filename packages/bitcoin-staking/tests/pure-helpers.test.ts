@@ -74,13 +74,13 @@ describe('cycle math', () => {
 
   test('bondPhaseRanges are contiguous and ordered', () => {
     const ranges = bondPhaseRanges({ bondIndex: 4, poxInfo });
-    expect(ranges.map(r => r.name)).toEqual(['open', 'locked', 'unlocked', 'closed']);
+    expect(ranges.map(r => r.name)).toEqual(['open', 'locked', 'unlocked', 'finished']);
     for (let i = 1; i < ranges.length; i++) {
       expect(ranges[i]!.startBurnHeight).toBe(ranges[i - 1]!.endBurnHeight);
     }
   });
 
-  test('bondStatus walks eligible → open → locked → unlocked → closed', () => {
+  test('bondStatus walks eligible → open → locked → unlocked → finished', () => {
     const at = (burnHeight: number, isBondSetup: boolean) =>
       bondStatus({
         bondIndex: 10,
@@ -90,11 +90,11 @@ describe('cycle math', () => {
     const start = bondPeriodToBurnHeight({ bondIndex: 10, poxInfo });
     expect(at(start - 200, false)).toBe('too-early');
     expect(at(start - 10, false)).toBe('eligible');
-    expect(at(start + 1, false)).toBe('missing');
+    expect(at(start + 1, false)).toBe('missed');
     expect(at(start - 10, true)).toBe('open');
     expect(at(start + 1, true)).toBe('locked');
     expect(at(start + 12 * 20 - 5, true)).toBe('unlocked');
-    expect(at(start + 12 * 20 + 1, true)).toBe('closed');
+    expect(at(start + 12 * 20 + 1, true)).toBe('finished');
   });
 
   test('isBondActiveAtHeight matches the locked range', () => {

@@ -1,6 +1,7 @@
 import * as btc from '@scure/btc-signer';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, concatBytes, hexToBytes } from '@stacks/common';
+import { Address } from '@stacks/transactions';
 import {
   buildUnlockScript,
   buildLockAddress,
@@ -10,7 +11,7 @@ import {
   lockScriptToAddress,
   parseUnlockScript,
   serializeCScriptNum,
-  toConsensusBuffStandardPrincipal,
+  toConsensusBuff,
 } from '../src/script';
 
 // A known compressed public key (33 bytes)
@@ -41,6 +42,41 @@ function findSubarray(hay: Uint8Array, needle: Uint8Array): number {
   }
   return -1;
 }
+
+describe('toConsensusBuff matches the reference (hand-rolled) implementation', () => {
+  // script.ts now delegates to @stacks/transactions' serializeCVBytes. This is
+  // the previous hand-rolled impl, kept as a reference oracle.
+  function refToConsensusBuff(addr: string): Uint8Array {
+    const parsed = Address.parse(addr) as {
+      version: number;
+      hash160: string;
+      contractName?: string;
+    };
+    if (parsed.contractName) throw new Error('contract principal');
+    const out = new Uint8Array(22);
+    out[0] = 0x05;
+    out[1] = parsed.version;
+    out.set(hexToBytes(parsed.hash160), 2);
+    return out;
+  }
+
+  it.each([
+    'ST000000000000000000002AMW42H',
+    'SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7',
+    'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE',
+  ])('encodes %s identically (22 bytes, 0x05 tag)', addr => {
+    const out = toConsensusBuff(addr);
+    expect(out.length).toBe(22);
+    expect(out[0]).toBe(0x05);
+    expect(bytesToHex(out)).toBe(bytesToHex(refToConsensusBuff(addr)));
+  });
+
+  it('rejects contract principals', () => {
+    expect(() =>
+      toConsensusBuff('SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7.my-contract')
+    ).toThrow();
+  });
+});
 
 describe('buildUnlockScript', () => {
   it('builds a valid <pubkey> CHECKSIG script', () => {
@@ -122,7 +158,7 @@ describe('buildLockScript', () => {
 
     // The staker is committed as a hash — its 22-byte consensus buff never
     // appears in the script in cleartext.
-    expect(findSubarray(script, toConsensusBuffStandardPrincipal(TEST_STX_ADDRESS))).toBe(-1);
+    expect(findSubarray(script, toConsensusBuff(TEST_STX_ADDRESS))).toBe(-1);
   });
 
   it('embeds the serialized ScriptNum for unlockHeight=850000 (3 bytes: 50 f8 0c)', () => {

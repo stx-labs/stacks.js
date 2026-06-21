@@ -3,7 +3,8 @@ import { bytesToHex, hexToBytes } from '@stacks/common';
 import {
   buildLockProof,
   computeBitcoinTxid,
-  computeP2wshOutputScript,
+  computeWshOutputScript,
+  pushCScriptNum,
   pushScriptBytes,
   serializeBitcoinHeader,
   serializeBitcoinTx,
@@ -62,13 +63,79 @@ describe('pushScriptBytes', () => {
   });
 });
 
-describe('computeP2wshOutputScript', () => {
+// The script.ts implementations now delegate to @scure/btc-signer. These are
+// the previous hand-rolled implementations, kept here as a reference oracle to
+// prove the btc-signer-backed versions encode identically.
+function refSerializeCScriptNum(n: number | bigint): number[] {
+  const big = typeof n === 'bigint' ? n : BigInt(n);
+  if (big < 0n) throw new Error('negative');
+  if (big === 0n) return [];
+  const bytes: number[] = [];
+  let v = big;
+  while (v > 0n) {
+    bytes.push(Number(v & 0xffn));
+    v >>= 8n;
+  }
+  if ((bytes[bytes.length - 1] & 0x80) !== 0) bytes.push(0x00);
+  if (bytes.length > 5) throw new Error('cap');
+  return bytes;
+}
+function refPushScriptBytes(bytes: Uint8Array): number[] {
+  const len = bytes.length;
+  if (len === 0) return [0x00];
+  if (len <= 75) return [len, ...bytes];
+  if (len <= 255) return [0x4c, len, ...bytes];
+  if (len <= 0xffff) return [0x4d, len & 0xff, (len >> 8) & 0xff, ...bytes];
+  throw new Error('too large');
+}
+function refPushCScriptNum(n: number | bigint): number[] {
+  const big = typeof n === 'bigint' ? n : BigInt(n);
+  if (big === 0n) return [0x00];
+  if (big <= 16n) return [0x50 + Number(big)];
+  return refPushScriptBytes(Uint8Array.from(refSerializeCScriptNum(big)));
+}
+
+describe('script encoders match the reference (hand-rolled) implementations', () => {
+  const nums = [0n, 1n, 15n, 16n, 17n, 100n, 127n, 128n, 255n, 256n, 850_000n, 65_535n, 65_536n, 2_147_483_647n];
+  it.each(nums.map(n => [n] as const))('serializeCScriptNum(%s)', n => {
+    expect(Array.from(serializeCScriptNum(n))).toEqual(refSerializeCScriptNum(n));
+  });
+  it.each(nums.map(n => [n] as const))('pushCScriptNum(%s)', n => {
+    expect(Array.from(pushCScriptNum(n))).toEqual(refPushCScriptNum(n));
+  });
+  it.each([0, 1, 16, 75, 76, 255, 256, 1000].map(len => [len] as const))(
+    'pushScriptBytes(%s bytes)',
+    len => {
+      const bytes = Uint8Array.from({ length: len }, (_, i) => i & 0xff);
+      expect(Array.from(pushScriptBytes(bytes))).toEqual(refPushScriptBytes(bytes));
+    }
+  );
+});
+
+describe('computeWshOutputScript', () => {
+  // Previous hand-rolled impl, kept as a reference oracle now that script.ts
+  // delegates to @scure/btc-signer's OutScript.
+  function refComputeP2wshOutputScript(script: Uint8Array): number[] {
+    const hash = sha256(script);
+    return [0x00, 0x20, ...hash];
+  }
+
   it('returns a 34-byte buffer starting with 0x00 0x20', () => {
-    const out = computeP2wshOutputScript(new Uint8Array([0x01, 0x02, 0x03]));
+    const out = computeWshOutputScript(new Uint8Array([0x01, 0x02, 0x03]));
     expect(out.length).toBe(34);
     expect(out[0]).toBe(0x00);
     expect(out[1]).toBe(0x20);
   });
+
+  it.each([0, 1, 3, 32, 100].map(len => [len] as const))(
+    'matches the reference impl (%s-byte script)',
+    len => {
+      const script = Uint8Array.from({ length: len }, (_, i) => i & 0xff);
+      expect(Array.from(computeWshOutputScript(script))).toEqual(
+        refComputeP2wshOutputScript(script)
+      );
+    }
+  );
 });
 
 describe('computeBitcoinTxid', () => {
