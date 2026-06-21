@@ -25,12 +25,9 @@ import type {
   StakerInfo,
 } from './types';
 
-// ---------------------------------------------------------------------------
-// Public fetch functions
-// ---------------------------------------------------------------------------
 
 /**
- * @ignore
+ * @internal
  * Encode the `bond-index (optional uint)` leg selector shared by every reward /
  * shares read-only: a present `bondIndex` selects the paired-BTC bond leg
  * (`some`), an omitted one selects the STX-only leg (`none`).
@@ -158,8 +155,6 @@ function decodeBondMembership(tuple: TupleCV): BondMembership {
  * the bond's unlock cycle has been reached — the contract collapses both
  * cases to `none`). Use {@link fetchProtocolBondMemberships} for the raw entry
  * that survives bond expiry.
- *
- * Tuple shape: `{ bond-index, amount-ustx, signer, is-l1-lock, amount-sats }`.
  */
 export async function fetchBondMembership(
   opts: { address: string } & NetworkClientParam
@@ -186,8 +181,6 @@ export async function fetchBondMembership(
  * Unlike {@link fetchBondMembership} (which goes through `get-bond-membership`),
  * this does NOT filter out expired memberships — it returns the entry as long
  * as it's present, matching the raw `map-get?` reads in `unstake-sbtc`.
- *
- * Mirrors the `protocol-bond-memberships` map value.
  */
 export async function fetchProtocolBondMemberships(
   opts: { address: string } & NetworkClientParam
@@ -306,8 +299,6 @@ export async function fetchProtocolBond(
  *
  * `bond-admin` is a private data-var with no read-only accessor, so this reads
  * the node's `/v2/data_var` endpoint directly.
- *
- * Mirrors the `bond-admin` data-var.
  */
 export async function fetchBondAdmin(opts: NetworkClientParam = {}): Promise<string> {
   const network = networkFrom(opts.network ?? 'mainnet');
@@ -319,13 +310,15 @@ export async function fetchBondAdmin(opts: NetworkClientParam = {}): Promise<str
 }
 
 /**
- * **Unstable / UI-experimental.** Classify a bond's {@link BondStatusName}
- * at the current burn height, fetching whatever isn't injected.
+ * Classify a bond's {@link BondStatusName} at the current burn height, fetching
+ * whatever isn't injected.
  *
  * Wraps the pure {@link bondStatus} helper: `poxInfo` and `isBondSetup` are
  * fetched (via {@link fetchPoxInfo} / {@link fetchProtocolBond}) when not
  * provided, so callers that already hold them avoid the network round-trips
  * (e.g. after {@link fetchProtocolBond}, pass `isBondSetup: bond !== undefined`).
+ *
+ * @experimental Status names are not finalized and may change.
  */
 export async function fetchBondStatus(
   opts: {
@@ -348,7 +341,7 @@ export async function fetchBondStatus(
   return bondStatus({ bondIndex: opts.bondIndex, poxInfo, isBondSetup });
 }
 
-/** @ignore */
+/** @internal */
 function decodeBondTuple(bondIndex: number, tuple: TupleCV): Bond {
   const targetRate = (tuple.value['target-rate'] as UIntCV).value;
   const stxValueRatio = (tuple.value['stx-value-ratio'] as UIntCV).value;
@@ -367,14 +360,12 @@ function decodeBondTuple(bondIndex: number, tuple: TupleCV): Bond {
 /**
  * Wraps the contract's `get-total-sbtc-staked-for-bond` read-only.
  *
- * Reads `protocol-bonds-total-staked`. The contract's only write site is
- * `register-for-bond`, which sets the entry to
- * `current(total-shares-staked-for-cycle for this bond) + new sats` — i.e.
- * a snapshot refreshed on every registration. The source `total-shares-staked-for-cycle`
- * IS decremented by `unstake-sbtc` and `announce-l1-early-exit`, so during
- * the D-7 → D0 window the snapshot can rebase off a lower value if exits
- * land between registrations. After D0, `ERR_BOND_ALREADY_STARTED` blocks
- * further `register-for-bond` calls and the value is frozen at the last
+ * Reads `protocol-bonds-total-staked`, written only by `register-for-bond` as
+ * a snapshot of `current(total-shares-staked-for-cycle) + new sats` on each
+ * registration. Surprising: because that source is decremented by
+ * `unstake-sbtc` / `announce-l1-early-exit`, the snapshot can rebase to a LOWER
+ * value when exits land between registrations. Once the bond starts
+ * (registrations blocked by `ERR_BOND_ALREADY_STARTED`) it's frozen at the last
  * registration's snapshot.
  *
  * For **currently-effective** shares (post-exits, post-unstakes), use
@@ -410,8 +401,7 @@ export async function fetchTotalSbtcStakedForBond(
  * `stake-update`, and `--`s it on `unstake-sbtc`, `announce-l1-early-exit`, and
  * `unstake`. The returned value is therefore the **currently-effective** total
  * — contrast with {@link fetchTotalSbtcStakedForBond}, which is a snapshot
- * refreshed on each `register-for-bond` and frozen once the registration
- * window closes at D0.
+ * refreshed on each `register-for-bond` and frozen once the bond starts.
  *
  * **Rewards denominator.** This is the denominator the contract uses in its
  * `rewards-per-token` math (`update-rewards` for STX cycles and paired-BTC
@@ -477,7 +467,7 @@ export async function fetchBondL1UnlockHeight(
   return BigInt((result as UIntCV).value);
 }
 
-/** @ignore Shared params for the two `construct-lockup-*` read-onlys. */
+/** @internal Shared params for the two `construct-lockup-*` read-onlys. */
 interface ConstructLockupParams {
   stxAddress: string;
   unlockHeight: number | bigint;
@@ -487,7 +477,7 @@ interface ConstructLockupParams {
   earlyUnlockBytes: Uint8Array | string;
 }
 
-/** @ignore */
+/** @internal */
 async function fetchConstructLockupRead(
   functionName: 'construct-lockup-script' | 'construct-lockup-output-script',
   opts: ConstructLockupParams & NetworkClientParam
@@ -541,21 +531,19 @@ export async function fetchConstructLockupOutputScript(
   return fetchConstructLockupRead('construct-lockup-output-script', opts);
 }
 
-// ---------------------------------------------------------------------------
 // On-chain SPV / script cross-checks
 //
 // These mirror pure helpers in `script.ts` / `proof.ts`. They exist so a test
 // or tool can assert the local implementation byte-for-byte matches the
 // deployed contract — fetch the on-chain result and compare against the local
 // one. They are NOT needed on a hot path; the local pure helpers are.
-// ---------------------------------------------------------------------------
 
-/** @ignore Accept a buffer arg as raw bytes or a hex string. */
+/** @internal Accept a buffer arg as raw bytes or a hex string. */
 function bufferArg(v: Uint8Array | string) {
   return typeof v === 'string' ? Cl.bufferFromHex(v) : Cl.buffer(v);
 }
 
-/** @ignore Run a read-only that returns a `(buff ...)` and decode to bytes. */
+/** @internal Run a read-only that returns a `(buff ...)` and decode to bytes. */
 async function fetchBufferRead(
   functionName: string,
   functionArgs: Parameters<typeof fetchCallReadOnlyFunction>[0]['functionArgs'],
@@ -787,9 +775,6 @@ export async function fetchBondAllowance(
   return BigInt(optional.value.value);
 }
 
-// ---------------------------------------------------------------------------
-// Reward / distribution reads
-// ---------------------------------------------------------------------------
 
 /**
  * **Intentionally not exposed.** Wraps the contract's
@@ -797,8 +782,8 @@ export async function fetchBondAllowance(
  *
  * The same value is derivable from `/v2/pox`'s
  * `current_burnchain_block_height` / `first_burnchain_block_height` /
- * `reward_cycle_length` — use the pure helper `currentDistributionCycle`
- * (re-exported from `cycles.ts`) instead of paying an extra round trip.
+ * `reward_cycle_length` — use the pure helper {@link currentDistributionCycle}
+ * instead of paying an extra round trip.
  *
  * Kept here for completeness and as a regression guard. Throws at runtime if
  * called.
@@ -854,13 +839,11 @@ export async function fetchSignerSharesStakedForCycle(
   return BigInt((result as UIntCV).value);
 }
 
-// ---------------------------------------------------------------------------
 // Earned-rewards reads
 //
 // Pending + accrued is exposed as `get-earned -> uint`, with the underlying
 // state split across `get-signer-rewards-per-token-settled-for-cycle` and
 // `get-signer-unclaimed-rewards-for-cycle`.
-// ---------------------------------------------------------------------------
 
 /**
  * Wraps the contract's `get-earned` read-only.
@@ -987,9 +970,6 @@ export async function fetchSignerRewardsPerTokenForCycle(
   return BigInt((result as UIntCV).value);
 }
 
-// ---------------------------------------------------------------------------
-// Staker-level earned-rewards reads
-// ---------------------------------------------------------------------------
 
 /**
  * Wraps the contract's `get-earned-staker-rewards` read-only.
@@ -1090,7 +1070,6 @@ export async function fetchStakerUnclaimedRewards(
   return BigInt((result as UIntCV).value);
 }
 
-// ---------------------------------------------------------------------------
 // Pool / accounting reads
 //
 // The undistributed-pool and per-cycle accounting state behind the rewards
@@ -1099,7 +1078,6 @@ export async function fetchStakerUnclaimedRewards(
 // `distributionCycleToBurnHeight(currentDistributionCycle) - 1`; once
 // `calculate-rewards` advances it, `fetchEarned` turns the pending pool into a
 // claimable per-leg figure.
-// ---------------------------------------------------------------------------
 
 /**
  * Wraps the contract's `get-last-reward-compute-height` read-only.
@@ -1299,13 +1277,11 @@ export async function fetchUstxDelegatedForCycle(
   return BigInt((result as UIntCV).value);
 }
 
-// ---------------------------------------------------------------------------
 // Signer-set reads
 //
 // Per-cycle membership of the signer set, stored as a doubly-linked list keyed
 // by cycle. Walk it with `fetchSignerSetFirstItem` →
 // `fetchSignerSetNextItem` until `undefined`.
-// ---------------------------------------------------------------------------
 
 /**
  * Wraps the contract's `get-signer-cycle-membership` read-only.
@@ -1354,7 +1330,7 @@ export async function fetchSignerSetContainsForCycle(
   return (result as BooleanCV).type === ClarityType.BoolTrue;
 }
 
-/** @ignore Resolve an `(optional principal)`-returning signer-set read. */
+/** @internal Resolve an `(optional principal)`-returning signer-set read. */
 async function fetchSignerSetPrincipal(
   functionName: string,
   functionArgs: Parameters<typeof fetchCallReadOnlyFunction>[0]['functionArgs'],
@@ -1464,9 +1440,6 @@ export async function fetchSignerSetItem(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Rollover preflight reads
-// ---------------------------------------------------------------------------
 
 /**
  * Wraps the contract's `get-staker-custodied-sbtc` read-only.
@@ -1549,9 +1522,6 @@ export async function fetchHasAnnouncedL1EarlyExit(
   return (result as BooleanCV).type === ClarityType.BoolTrue;
 }
 
-// ---------------------------------------------------------------------------
-// Signer-key grant reads
-// ---------------------------------------------------------------------------
 
 /**
  * Wraps the contract's `get-signer-info` read-only.
@@ -1618,8 +1588,6 @@ export async function fetchVerifySignerKeyGrant(
  * Reads the `used-signer-key-grants` map: whether a `(signerKey, signerManager,
  * authId)` grant triple has already been consumed (the `grant-signer-key`
  * replay guard).
- *
- * Mirrors the `used-signer-key-grants` map.
  */
 export async function fetchSignerKeyGrantUsed(
   opts: {
@@ -1683,8 +1651,8 @@ export async function fetchSignerGrantMessageHash(
  *
  * The same value is already on `/v2/pox` at
  * `contractVersions[].firstRewardCycleId` for the `pox-5` row — derive it
- * locally with the pure helper {@link firstPox5RewardCycle} (re-exported from
- * `cycles.ts`) instead of paying an extra round trip.
+ * locally with the pure helper {@link firstPox5RewardCycle} instead of paying
+ * an extra round trip.
  *
  * Kept here for completeness and as a regression guard. Throws at runtime if
  * called.

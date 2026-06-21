@@ -2,7 +2,7 @@ import * as btc from '@scure/btc-signer';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { concatBytes, hexToBytes } from '@stacks/common';
 import type { StacksNetwork, StacksNetworkName } from '@stacks/network';
-import { Address } from '@stacks/transactions';
+import { Cl, ClarityType, serializeCVBytes } from '@stacks/transactions';
 import {
   BOND_END_OFFSET_PERIODS,
   bondPeriodToRewardCycle,
@@ -20,10 +20,6 @@ const BTC_NETWORKS: Record<StacksNetworkName, typeof btc.NETWORK> = {
   devnet: REGTEST_NETWORK,
   mocknet: REGTEST_NETWORK,
 };
-
-// ---------------------------------------------------------------------------
-// Default unlock-script (the simplest "tail" — single sig)
-// ---------------------------------------------------------------------------
 
 /**
  * Build the default unlock script: `<compressedPubKey> OP_CHECKSIG`.
@@ -70,146 +66,75 @@ export function parseUnlockScript(unlockBytes: Uint8Array | string): Uint8Array 
   return undefined;
 }
 
-// ---------------------------------------------------------------------------
-// Low-level primitives that mirror the pox-5.clar helpers
-// ---------------------------------------------------------------------------
-
-/** Bitcoin opcodes used in lockup-script construction (from `@scure/btc-signer`). */
-const { OP } = btc;
-
 /**
- * The fixed preamble of the OP_ELSE (early-exit) branch:
- * `OP_SIZE OP_PUSHBYTES_1 0x20 OP_EQUALVERIFY OP_SHA256 OP_PUSHBYTES_32`.
- * Asserts the revealed witness item is 32 bytes, then sets up the `sha256`
- * comparison against the committed staker hash that follows. The `0x0120` and
- * trailing `0x20` are raw push-length bytes, which have no named opcodes.
- */
-const STAKER_COMMITMENT_PREFIX = hexToBytes('82012088a820');
-
-/**
- * @internal @ignore
- * Mirror of pox-5.clar `push-script-bytes`.
+ * @internal
+ * Mirrors `pox-5.push-script-bytes`: prefixes `bytes` with the right push
+ * opcode(s) — empty → `OP_0`, ≤75 → direct push, ≤255 → `OP_PUSHDATA1`, ≤65535
+ * → `OP_PUSHDATA2`. Encoding delegated to `@scure/btc-signer`'s `Script`.
  *
- * Encodes the Bitcoin script-push prefix for an arbitrary byte buffer:
- * - `[]` → `OP_0` (`0x00`)
- * - 1..=75 bytes → `<len>` then bytes
- * - 76..=255 bytes → `OP_PUSHDATA1 (0x4c)` + 1-byte length + bytes
- * - 256..=65535 bytes → `OP_PUSHDATA2 (0x4d)` + 2-byte LE length + bytes
- *
- * Throws for inputs longer than 65535 bytes (no OP_PUSHDATA4 in the contract
- * either).
+ * @throws for inputs longer than 65535 bytes (no `OP_PUSHDATA4`, like the contract).
  */
 export function pushScriptBytes(bytes: Uint8Array): Uint8Array {
-  const len = bytes.length;
-  if (len === 0) return new Uint8Array([OP.OP_0]);
-  if (len <= 75) {
-    const out = new Uint8Array(1 + len);
-    out[0] = len;
-    out.set(bytes, 1);
-    return out;
+  if (bytes.length > 0xffff) {
+    throw new Error(`pushScriptBytes: payload too large (${bytes.length} bytes; max 65535)`);
   }
-  if (len <= 255) {
-    const out = new Uint8Array(2 + len);
-    out[0] = OP.PUSHDATA1;
-    out[1] = len;
-    out.set(bytes, 2);
-    return out;
-  }
-  if (len <= 0xffff) {
-    const out = new Uint8Array(3 + len);
-    out[0] = OP.PUSHDATA2;
-    out[1] = len & 0xff;
-    out[2] = (len >> 8) & 0xff;
-    out.set(bytes, 3);
-    return out;
-  }
-  throw new Error(`pushScriptBytes: payload too large (${len} bytes; max 65535)`);
+  return btc.Script.encode([bytes]);
 }
 
 /**
- * @internal @ignore
- * Mirror of pox-5.clar `serialize-c-script-num`.
+ * @internal
+ * Mirrors `pox-5.serialize-c-script-num`: the minimal little-endian signed
+ * ScriptNum encoding of a non-negative integer (`0` → `[]`; a `0x00` sign byte
+ * is appended when the top byte's high bit is set, to keep the value positive).
+ * Encoding delegated to `@scure/btc-signer`'s `ScriptNum`.
  *
- * Minimal little-endian signed-magnitude encoding (standard Bitcoin ScriptNum)
- * for non-negative integers. If the top bit of the most-significant byte is
- * set, a `0x00` byte is appended to keep the number unsigned.
+ * The contract caps output at 5 bytes (`as-max-len? … u5`); we mirror that.
  *
- * - 0 → `[]`
- * - 1..=127 → 1 byte
- * - 128..=255 → 2 bytes (LE + `0x00` sign byte)
- * - 256..=32767 → 2 bytes (LE)
- * - 32768..=65535 → 3 bytes (LE + `0x00` sign byte)
- * - 65536..=2^31-1 → 3..=4 bytes (LE, with sign byte if needed)
- *
- * The contract restricts output to 5 bytes (`as-max-len? ... u5`), which is
- * enough for any conceivable burn height. We mirror that cap.
- *
- * @throws if `n` is negative, non-integer, or larger than the 5-byte cap.
+ * @throws if `n` is negative or its encoding exceeds the 5-byte cap.
  */
 export function serializeCScriptNum(n: number | bigint): Uint8Array {
   const big = typeof n === 'bigint' ? n : BigInt(n);
   if (big < 0n) throw new Error('serializeCScriptNum: negative values not supported');
-  if (big === 0n) return new Uint8Array(0);
-
-  // Strip to minimal LE byte representation.
-  const bytes: number[] = [];
-  let v = big;
-  while (v > 0n) {
-    bytes.push(Number(v & 0xffn));
-    v >>= 8n;
-  }
-  // If top bit of MSB is set, append a sign byte (0x00) to keep value positive.
-  if ((bytes[bytes.length - 1] & 0x80) !== 0) bytes.push(0x00);
-
+  const bytes = btc.ScriptNum().encode(big);
   if (bytes.length > 5) {
     throw new Error(
       `serializeCScriptNum: encoding exceeds 5-byte ScriptNum cap (got ${bytes.length})`
     );
   }
-  return Uint8Array.from(bytes);
+  return bytes;
 }
 
 /**
- * @internal @ignore
- * Mirror of pox-5.clar `push-c-script-num`.
+ * @internal
+ * Mirrors `pox-5.push-c-script-num`: pushes a ScriptNum, using the
+ * single-byte opcodes `OP_0` / `OP_1`..`OP_16` for `0`..`16` and a
+ * `push-script-bytes(serialize-c-script-num(n))` push otherwise. Delegated to
+ * `@scure/btc-signer`'s `Script`.
  *
- * Push a ScriptNum onto the stack. Uses single-byte opcodes (`OP_0`,
- * `OP_1`..`OP_16`) for small values and `push-script-bytes(serialize-c-script-num(n))`
- * otherwise.
+ * @throws if `n` is negative or its encoding exceeds the 5-byte cap.
  */
 export function pushCScriptNum(n: number | bigint): Uint8Array {
-  const big = typeof n === 'bigint' ? n : BigInt(n);
-  if (big === 0n) return new Uint8Array([OP.OP_0]);
-  if (big <= 16n) return new Uint8Array([0x50 + Number(big)]); // OP_1 = 0x51, ..., OP_16 = 0x60
-  return pushScriptBytes(serializeCScriptNum(big));
+  serializeCScriptNum(n); // validate: throws on negative / 5-byte-cap overflow
+  return btc.Script.encode([Number(n)]);
 }
 
 /**
- * @internal @ignore
- * Encode a standard-principal Stacks address as a Clarity consensus-buff prefix:
- * `0x05 || version(1B) || hash160(20B)` (22 bytes total).
+ * @internal
+ * Encode a standard-principal Stacks address as its Clarity consensus buffer
+ * (`0x05 || version(1B) || hash160(20B)`, 22 bytes), via the monorepo's
+ * {@link serializeCVBytes} — i.e. `to-consensus-buff?` for a standard principal.
  *
- * Mirrors `to-consensus-buff?` for a standard principal — the type tag is `0x05`.
- *
- * @throws if `addr` is a contract principal (those use `0x06` and append
- *   `name-length(1B) || name`; contract principals can't act as L1 stakers).
+ * @throws if `addr` is a contract principal (those serialize with a `0x06` tag
+ *   and trailing name; contract principals can't act as L1 stakers).
  */
-export function toConsensusBuffStandardPrincipal(addr: string): Uint8Array {
-  const parsed = Address.parse(addr) as {
-    version: number;
-    hash160: string;
-    contractName?: string;
-  };
-  if (parsed.contractName) {
+export function toConsensusBuff(addr: string): Uint8Array {
+  const cv = Cl.address(addr);
+  if (cv.type === ClarityType.PrincipalContract) {
     throw new Error(
-      `toConsensusBuffStandardPrincipal: expected a standard principal, got contract principal "${addr}"`
+      `toConsensusBuff: expected a standard principal, got contract principal "${addr}"`
     );
   }
-  const out = new Uint8Array(22);
-  out[0] = 0x05;
-  out[1] = parsed.version;
-  out.set(hexToBytes(parsed.hash160), 2);
-  return out;
+  return serializeCVBytes(cv);
 }
 
 /**
@@ -223,18 +148,12 @@ export function toConsensusBuffStandardPrincipal(addr: string): Uint8Array {
  * not need it.
  */
 export function computeRegisterPreimage(stxAddress: string): Uint8Array {
-  return sha256(toConsensusBuffStandardPrincipal(stxAddress));
+  return sha256(toConsensusBuff(stxAddress));
 }
-
-// ---------------------------------------------------------------------------
-// Lockup script construction (canonical)
-// ---------------------------------------------------------------------------
 
 /**
  * Build the canonical L1 lockup script that the pox-5 contract verifies.
- *
- * This is a byte-for-byte mirror of `construct-lockup-script(staker,
- * unlock-burn-height, staker-unlock-bytes, early-unlock-bytes)` from `pox-5.clar`:
+ * Byte-for-byte mirror of `pox-5.construct-lockup-script`:
  *
  * ```text
  * OP_IF
@@ -297,35 +216,43 @@ export function buildLockScript(opts: {
       ? hexToBytes(opts.earlyUnlockBytes)
       : opts.earlyUnlockBytes;
 
-  const heightPush = pushCScriptNum(opts.unlockHeight);
+  // Validate the height fits the contract's 5-byte ScriptNum cap before pushing.
+  serializeCScriptNum(opts.unlockHeight);
   // The committed staker hash <H> = sha256(sha256(consensus-buff(staker))).
   const stakerHash = sha256(computeRegisterPreimage(opts.stxAddress));
 
+  // The opcode scaffold, built via `Script.encode`. The two caller subscripts
+  // (`earlyUnlockBytes`, `unlockBytes`) are concatenated RAW between/after the
+  // scaffold segments — the contract splices them verbatim, so we must too.
   return concatBytes(
-    Uint8Array.of(OP.IF),
-    heightPush,
-    Uint8Array.of(OP.CHECKLOCKTIMEVERIFY, OP.ELSE),
-    STAKER_COMMITMENT_PREFIX, // OP_SIZE <32> OP_EQUALVERIFY OP_SHA256 OP_PUSHBYTES_32
-    stakerHash,
-    Uint8Array.of(OP.EQUALVERIFY),
-    earlyUnlockBytes,
-    Uint8Array.of(OP.ENDIF, OP.VERIFY),
-    unlockBytes
+    // IF: spendable at/after the CLTV `unlockHeight`.
+    // ELSE: early exit — the revealed 32-byte witness item must sha256 to <H>.
+    btc.Script.encode([
+      'IF',
+      Number(opts.unlockHeight),
+      'CHECKLOCKTIMEVERIFY',
+      'ELSE',
+      'SIZE',
+      32,
+      'EQUALVERIFY',
+      'SHA256',
+      stakerHash,
+      'EQUALVERIFY',
+    ]),
+    earlyUnlockBytes, // per-bond early-unlock subscript (ELSE branch)
+    btc.Script.encode(['ENDIF', 'VERIFY']),
+    unlockBytes // staker subscript — runs last in BOTH branches
   );
 }
 
 /**
- * @internal @ignore
+ * @internal
  * Compute the P2WSH `scriptPubKey` for a witness script: `0x00 0x20 || sha256(script)`
- * (34 bytes). Mirrors `construct-lockup-output-script` from the contract.
+ * (34 bytes), via `@scure/btc-signer`'s `OutScript`. Mirrors
+ * `pox-5.construct-lockup-output-script`.
  */
-export function computeP2wshOutputScript(script: Uint8Array): Uint8Array {
-  const hash = sha256(script);
-  const out = new Uint8Array(34);
-  out[0] = 0x00;
-  out[1] = 0x20;
-  out.set(hash, 2);
-  return out;
+export function computeWshOutputScript(script: Uint8Array): Uint8Array {
+  return btc.OutScript.encode({ type: 'wsh', hash: sha256(script) });
 }
 
 /**
@@ -333,7 +260,7 @@ export function computeP2wshOutputScript(script: Uint8Array): Uint8Array {
  * `expected-script-hash` the contract derives in `register-for-bond` and
  * asserts equal to each declared output's `scriptPubKey`.
  *
- * Equivalent to {@link computeP2wshOutputScript}({@link buildLockScript}(...)).
+ * Equivalent to {@link computeWshOutputScript}({@link buildLockScript}(...)).
  */
 export function buildLockOutputScript(opts: {
   stxAddress: string;
@@ -341,7 +268,7 @@ export function buildLockOutputScript(opts: {
   unlockBytes: Uint8Array | string;
   earlyUnlockBytes: Uint8Array | string;
 }): Uint8Array {
-  return computeP2wshOutputScript(buildLockScript(opts));
+  return computeWshOutputScript(buildLockScript(opts));
 }
 
 /**
@@ -400,7 +327,7 @@ export function buildLockAddress(opts: {
 }
 
 /**
- * @internal @ignore Derive the P2WSH Bitcoin address that commits to the given locking script.
+ * @internal Derive the P2WSH Bitcoin address that commits to the given locking script.
  *
  * Pure: no I/O. Useful when the caller already holds the script bytes (e.g. from
  * {@link buildLockScript}) and wants to fund the address out-of-band.
@@ -414,10 +341,6 @@ export function lockScriptToAddress(
   if (!result.address) throw new Error('Failed to derive P2WSH address');
   return result.address;
 }
-
-// ---------------------------------------------------------------------------
-// Unlock-height helpers
-// ---------------------------------------------------------------------------
 
 /**
  * Compute the deterministic L1 unlock height for a STAKER lock.
@@ -461,10 +384,6 @@ export function computeBondUnlockHeight(opts: { bondIndex: number; poxInfo: PoxI
   return endBurnHeight - Math.floor(opts.poxInfo.rewardCycleLength / 2);
 }
 
-// ---------------------------------------------------------------------------
-// Register-for-bond flow helpers
-// ---------------------------------------------------------------------------
-
 /**
  * Everything derivable for a paired-BTC `register-for-bond` *before* the
  * funding Bitcoin transaction exists. {@link buildRegisterMetadata} computes
@@ -486,7 +405,7 @@ export interface RegisterMetadata {
   /**
    * The P2WSH `scriptPubKey` (34 bytes) the funding output must carry — the
    * `expectedScript` the contract asserts. Equals
-   * `computeP2wshOutputScript(lockScript)`; exposed since it is derived along
+   * `computeWshOutputScript(lockScript)`; exposed since it is derived along
    * the way.
    */
   outputScript: Uint8Array;
@@ -504,7 +423,7 @@ export interface RegisterMetadata {
  * Derive every pre-funding artifact for a paired-BTC `register-for-bond`.
  *
  * Combines {@link computeBondUnlockHeight}, {@link buildUnlockScript},
- * {@link buildLockScript}, {@link computeP2wshOutputScript} and
+ * {@link buildLockScript}, {@link computeWshOutputScript} and
  * {@link lockScriptToAddress} so the registration flow is a single call instead
  * of five hand-wired steps. Pure — no I/O.
  *
@@ -553,7 +472,7 @@ export function buildRegisterMetadata(opts: {
   return {
     lockAddress: lockScriptToAddress(lockScript, networkNameFrom(opts.network)),
     lockScript,
-    outputScript: computeP2wshOutputScript(lockScript),
+    outputScript: computeWshOutputScript(lockScript),
     unlockBytes,
     unlockHeight,
   };

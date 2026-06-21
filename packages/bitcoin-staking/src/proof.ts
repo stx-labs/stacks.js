@@ -1,7 +1,7 @@
 import * as btc from '@scure/btc-signer';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, concatBytes, equals, hexToBytes } from '@stacks/common';
-import { computeP2wshOutputScript } from './script';
+import { computeWshOutputScript } from './script';
 import type { BondL1LockupOutput } from './types';
 
 // ---------------------------------------------------------------------------
@@ -120,7 +120,7 @@ export interface EsploraMerkleProof {
 /**
  * How to locate the lockup output: by the P2WSH `scriptPubKey` directly
  * (`expectedScript`, 34 bytes) or by the witness `lockScript` it commits to
- * (converted internally via {@link computeP2wshOutputScript}). Provide exactly
+ * (converted internally via {@link computeWshOutputScript}). Provide exactly
  * one. `lockScript` is what {@link buildRegisterMetadata} returns, so the
  * common path is `{ ...proof, lockScript: meta.lockScript }`.
  */
@@ -141,7 +141,7 @@ function resolveExpectedScript(input: {
   if (input.lockScript !== undefined) {
     const script =
       typeof input.lockScript === 'string' ? hexToBytes(input.lockScript) : input.lockScript;
-    return computeP2wshOutputScript(script);
+    return computeWshOutputScript(script);
   }
   throw new Error(
     'buildLockProof: provide either `expectedScript` (P2WSH scriptPubKey) or `lockScript` (witness script)'

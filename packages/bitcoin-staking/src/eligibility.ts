@@ -109,7 +109,6 @@ export async function fetchEligibleRegisterForBond(
   const firstRewardCycle = bondPeriodToRewardCycle({ bondIndex: opts.bondIndex, poxInfo });
   const bondStartHeight = bondPeriodToBurnHeight({ bondIndex: opts.bondIndex, poxInfo });
 
-  // Second stage: reads that depend on the first stage's results.
   const [grantActive, overlaps, l1UnlockHeight] = await Promise.all([
     signerInfo
       ? fetchVerifySignerKeyGrant({
@@ -130,7 +129,6 @@ export async function fetchEligibleRegisterForBond(
       : undefined,
   ]);
 
-  // Partial L1 SPV checks (u40 header, u46 duplicate outpoint); the rest are TODO.
   const headerValidity = opts.outputs?.length
     ? await Promise.all(
         opts.outputs.map(o =>
@@ -143,11 +141,8 @@ export async function fetchEligibleRegisterForBond(
       )
     : [];
 
-  // Mirror the contract's assert order, so `reasons[0]` matches the error a
-  // real `register-for-bond` would abort with.
   const reasons: Pox5ErrorCode[] = [];
 
-  // L1 SPV verification runs first in the contract (`sats-total` let-binding).
   if (opts.outputs?.length) {
     if (headerValidity.includes(false)) reasons.push(Pox5ErrorCode.InvalidBtcHeader);
     const outpoints = opts.outputs.map(
@@ -158,10 +153,7 @@ export async function fetchEligibleRegisterForBond(
     }
   }
 
-  // `(unwrap! (map-get? protocol-bonds ...))` / allowlist unwraps in the let-bindings
   if (!bond) reasons.push(Pox5ErrorCode.BondNotFound);
-  // No allowlist entry and an entry of `0` are indistinguishable here; both
-  // make any positive `satsTotal` fail, the former as NOT_ALLOWLISTED.
   if (allowance === 0n) reasons.push(Pox5ErrorCode.NotAllowlisted);
 
   if (isInPreparePhase({ burnHeight, poxInfo })) {
@@ -182,7 +174,6 @@ export async function fetchEligibleRegisterForBond(
 
   if (burnHeight >= bondStartHeight) reasons.push(Pox5ErrorCode.BondAlreadyStarted);
 
-  // Existing STX-only stake must end no later than this bond's first cycle
   if (
     stakerInfo.staked &&
     stakerInfo.details.firstRewardCycle + stakerInfo.details.numCycles > firstRewardCycle
@@ -192,7 +183,6 @@ export async function fetchEligibleRegisterForBond(
 
   if (opts.satsTotal > allowance) reasons.push(Pox5ErrorCode.TooMuchSats);
 
-  // total balance (locked + unlocked) >= amount-ustx
   if (account.balance + account.locked < opts.amountUstx) {
     if (!reasons.includes(Pox5ErrorCode.InsufficientStx)) {
       reasons.push(Pox5ErrorCode.InsufficientStx);
@@ -202,10 +192,8 @@ export async function fetchEligibleRegisterForBond(
   if (!signerInfo) reasons.push(Pox5ErrorCode.SignerNotFound);
   else if (!grantActive) reasons.push(Pox5ErrorCode.SignerKeyGrantNotFound);
 
-  // No overlapping bond membership (incl. re-registering the same bond)
   if (overlaps) reasons.push(Pox5ErrorCode.AlreadyRegistered);
 
-  // Rollover from a non-overlapping bond only in its L1 unlock window
   if (membership && !overlaps && l1UnlockHeight !== undefined && burnHeight < l1UnlockHeight) {
     reasons.push(Pox5ErrorCode.RolloverTooEarly);
   }
@@ -274,7 +262,6 @@ export async function fetchEligibleSetupBond(
   const bondStartHeight = bondPeriodToBurnHeight({ bondIndex: opts.bondIndex, poxInfo });
   const gap = BOND_GAP_CYCLES * poxInfo.rewardCycleLength;
 
-  // matches the contract's underflow guard on `bondStartHeight - gap`
   if (bondStartHeight >= gap && bondStartHeight - gap > burnHeight) {
     reasons.push(Pox5ErrorCode.CannotSetupBondTooSoon);
   }
@@ -631,8 +618,10 @@ export async function fetchEligibleCalculateRewards(
   const poxInfo = opts.poxInfo ?? (await fetchPoxInfo(networkClient));
 
   const calcHeight =
-    distributionCycleToBurnHeight({ distributionCycle: currentDistributionCycle(poxInfo), poxInfo }) -
-    1;
+    distributionCycleToBurnHeight({
+      distributionCycle: currentDistributionCycle(poxInfo),
+      poxInfo,
+    }) - 1;
 
   // Active-bond window the contract checks: indices `latest - 5 .. latest`.
   const calcCycle = burnHeightToRewardCycle({ burnHeight: calcHeight, poxInfo });
@@ -671,8 +660,7 @@ export async function fetchEligibleCalculateRewards(
     const prev = ratios[k - 1]!;
     return bond.stxValueRatio > prev.stxValueRatio
       ? true
-      : bond.stxValueRatio === prev.stxValueRatio &&
-          opts.bondIndices[k] <= opts.bondIndices[k - 1];
+      : bond.stxValueRatio === prev.stxValueRatio && opts.bondIndices[k] <= opts.bondIndices[k - 1];
   });
   if (misordered) reasons.push(Pox5ErrorCode.InvalidBondPeriodOrdering);
 
@@ -718,9 +706,7 @@ export async function fetchEligibleClaimRewards(
 
   const total = earned.reduce((sum, e) => sum + e, 0n);
 
-  return total > 0n
-    ? { ok: true }
-    : { ok: false, reasons: [Pox5ErrorCode.NoClaimableRewards] };
+  return total > 0n ? { ok: true } : { ok: false, reasons: [Pox5ErrorCode.NoClaimableRewards] };
 }
 
 /**
@@ -775,7 +761,11 @@ export async function fetchEligibleStake(
         })
       : false,
     membership
-      ? fetchBondOverlapsNewPosition({ membership, newFirstRewardCycle: firstRewardCycle, ...networkClient })
+      ? fetchBondOverlapsNewPosition({
+          membership,
+          newFirstRewardCycle: firstRewardCycle,
+          ...networkClient,
+        })
       : false,
     membership
       ? fetchBondL1UnlockHeight({ bondIndex: membership.bondIndex, ...networkClient })
@@ -790,7 +780,9 @@ export async function fetchEligibleStake(
   if (!signerInfo) reasons.push(Pox5ErrorCode.SignerNotFound);
   else if (!grantActive) reasons.push(Pox5ErrorCode.SignerKeyGrantNotFound);
 
-  if (burnHeightToRewardCycle({ burnHeight: opts.startBurnHt, poxInfo }) !== poxInfo.rewardCycleId) {
+  if (
+    burnHeightToRewardCycle({ burnHeight: opts.startBurnHt, poxInfo }) !== poxInfo.rewardCycleId
+  ) {
     reasons.push(Pox5ErrorCode.InvalidStartBurnHeight);
   }
 

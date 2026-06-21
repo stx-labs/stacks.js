@@ -106,14 +106,15 @@ export const POX5_ERROR_DESCRIPTIONS: Record<Pox5ErrorCode, string> = {
   [Pox5ErrorCode.Unauthorized]:
     'The caller is not authorized for this operation (generic authorization failure).',
   [Pox5ErrorCode.CannotSetupBondTooSoon]:
-    'Bond setup attempted before the registration window opened (more than `BOND_GAP_CYCLES` reward cycles before bond start).',
+    'Bond setup attempted before the setup window opened (more than `BOND_GAP_CYCLES` reward cycles before the bond start).',
   [Pox5ErrorCode.CannotSetupBondTooLate]:
-    'Bond setup attempted after the registration window closed.',
+    'Bond setup attempted at or after the bond start height (setup window closed).',
   [Pox5ErrorCode.BondAlreadySetup]: 'A bond has already been set up for this bond period.',
   [Pox5ErrorCode.StakerAlreadyAdded]: 'This staker has already been added to the bond.',
   [Pox5ErrorCode.BondNotFound]: 'No bond was found for the supplied bond index.',
   [Pox5ErrorCode.InsufficientStx]: 'The caller does not have enough STX for this operation.',
-  [Pox5ErrorCode.AlreadyRegistered]: 'The staker / signer is already registered.',
+  [Pox5ErrorCode.AlreadyRegistered]:
+    'The staker already has a bond membership that overlaps the new position.',
   [Pox5ErrorCode.TooMuchSats]: 'The supplied sats amount exceeds the allowed maximum.',
   [Pox5ErrorCode.NotAllowlisted]: 'The principal is not on the bond allowlist.',
   [Pox5ErrorCode.SignerKeyGrantUsed]: 'This signer-key grant has already been consumed.',
@@ -122,11 +123,12 @@ export const POX5_ERROR_DESCRIPTIONS: Record<Pox5ErrorCode, string> = {
   [Pox5ErrorCode.InvalidSignaturePubkey]:
     'The recovered public key does not match the expected signer key.',
   [Pox5ErrorCode.SignerKeyGrantNotFound]: 'No signer-key grant was found for this signer key.',
-  [Pox5ErrorCode.AlreadyStaked]: 'The principal has already staked in this bond period.',
+  [Pox5ErrorCode.AlreadyStaked]:
+    'The principal already has an active STX stake or an overlapping bond position.',
   [Pox5ErrorCode.InvalidNumCycles]: 'The requested number of cycles is outside the allowed range.',
   [Pox5ErrorCode.SignerNotFound]: 'No signer was found for the supplied principal.',
   [Pox5ErrorCode.InvalidStartBurnHeight]:
-    'The provided start burn height does not match the current burn block.',
+    'The provided start burn height does not resolve to the next reward cycle.',
   [Pox5ErrorCode.UnauthorizedSignerRegistration]:
     'The caller is not authorized to register this signer.',
   [Pox5ErrorCode.NotStaking]: 'The principal is not currently staking.',
@@ -145,7 +147,8 @@ export const POX5_ERROR_DESCRIPTIONS: Record<Pox5ErrorCode, string> = {
     "The argument provided does not match the staker's current signer.",
   [Pox5ErrorCode.InvalidUnstakeSbtcAmount]: 'The amount of sats provided to unstake is invalid.',
   [Pox5ErrorCode.CannotUnstakeSbtc]: 'The bond participant did not stake sBTC.',
-  [Pox5ErrorCode.ReadTxOutOfBounds]: 'A parse error occurred when reading a Bitcoin header.',
+  [Pox5ErrorCode.ReadTxOutOfBounds]:
+    'A read ran past the end of the Bitcoin tx/header buffer while parsing a lockup proof.',
   [Pox5ErrorCode.InvalidBtcHeader]:
     'An incorrect Bitcoin header was provided as part of a lockup proof.',
   [Pox5ErrorCode.InvalidMerkleProof]:
