@@ -4,7 +4,6 @@ import { sha512_256 } from '@noble/hashes/sha512';
 import { utils } from '@noble/secp256k1';
 import { bytesToHex, concatArray, concatBytes, utf8ToBytes } from '@stacks/common';
 import { c32addressDecode } from 'c32check';
-import lodashCloneDeep from 'lodash.clonedeep';
 import { ClarityValue, deserializeCV, serializeCV } from './clarity';
 import { ContractIdString } from './types';
 
@@ -30,17 +29,32 @@ export const rightPadHexToLength = (hexString: string, length: number): string =
 export const exceedsMaxLengthBytes = (string: string, maxLengthBytes: number): boolean =>
   string ? utf8ToBytes(string).length > maxLengthBytes : false;
 
-/** @internal @deprecated */
+/**
+ * @internal
+ * @deprecated Internal helper. Uses `structuredClone`, which throws on
+ * non-cloneable values such as functions — do not use on user-supplied option
+ * objects that may carry a custom `client.fetch`. Reserved for cloning pure
+ * data (transactions, post-conditions, Clarity values).
+ */
 export function cloneDeep<T>(obj: T): T {
-  return lodashCloneDeep(obj);
+  const cloned = structuredClone(obj);
+  // structuredClone strips prototypes; restore the top-level one so class
+  // instances (e.g. StacksTransactionWire) keep their methods.
+  if (obj !== null && typeof obj === 'object') {
+    Object.setPrototypeOf(cloned as object, Object.getPrototypeOf(obj));
+  }
+  return cloned;
 }
 
-// todo: remove this function and instead delete param without clone (if possible)?
-export function omit<T, K extends keyof any>(obj: T, prop: K): Omit<T, K> {
-  const clone = cloneDeep(obj);
-  // @ts-expect-error
-  delete clone[prop];
-  return clone;
+/**
+ * @internal
+ * @deprecated Internal helper. Shallow — returns a new top-level object with
+ * `prop` removed; nested values are shared by reference with `obj`. Callers
+ * must not mutate the result's nested fields.
+ */
+export function omit<T extends object, K extends keyof any>(obj: T, prop: K): Omit<T, K> {
+  const { [prop as keyof T]: _omitted, ...rest } = obj;
+  return rest as Omit<T, K>;
 }
 
 export const hash160 = (input: Uint8Array): Uint8Array => {
