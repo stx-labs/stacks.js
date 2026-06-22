@@ -127,6 +127,16 @@ export enum PostConditionType {
   STX = 0x00,
   Fungible = 0x01,
   NonFungible = 0x02,
+  /**
+   * `Staking` (SIP-044) — Guards staking STX (or modifying staked STX) for a principal.
+   * Mirrors the {@link PostConditionType.STX} shape (principal + {@link FungibleConditionCode} + amount).
+   */
+  Staking = 0x03,
+  /**
+   * `PoX` (SIP-044) — Guards PoX state changes that do not alter locking status.
+   * Carries a principal and a {@link PoxConditionCode}.
+   */
+  PoX = 0x04,
 }
 
 /**
@@ -206,6 +216,19 @@ export enum NonFungibleConditionCode {
    * @see [SIP-040](https://github.com/stacksgov/sips/pull/257/changes)
    */
   MaybeSent = 0x12,
+}
+
+/**
+ * The type of PoX post-condition comparison (SIP-044).
+ * Used for serializing PoX post-conditions.
+ */
+export enum PoxConditionCode {
+  /** `WillNotPerform` — The principal must not perform a gated PoX action. */
+  WillNotPerform = 0x30,
+  /** `MayPerform` — The principal may or may not perform a gated PoX action (always passes). */
+  MayPerform = 0x31,
+  /** `WillPerform` — The principal must perform a gated PoX action. */
+  WillPerform = 0x32,
 }
 
 /**

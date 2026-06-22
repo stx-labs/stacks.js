@@ -6,6 +6,8 @@ import {
   NonFungibleComparator,
   NonFungiblePostCondition,
   PostCondition,
+  PoxPostCondition,
+  StakingPostCondition,
   StxPostCondition,
 } from './postcondition-types';
 import { AddressString, AssetString, ContractIdString } from './types';
@@ -179,6 +181,48 @@ class PartialPcWithPrincipal {
   willMaybeSendAsset() {
     return new PartialPcNftWithCode(this.address, 'maybe-sent');
   }
+
+  /**
+   * ### PoX Post Condition (SIP-044)
+   * A post-condition asserting the principal will perform a gated PoX action
+   * (`PoxConditionCode.WillPerform`).
+   * @example
+   * ```
+   * import { Pc } from '@stacks/transactions';
+   * Pc.principal('STB44HYPYAT2BB2QE513NSP81HTMYWBJP02HPGK6').willPerformPox();
+   * ```
+   */
+  willPerformPox(): PoxPostCondition {
+    return { type: 'pox-postcondition', address: this.address, condition: 'will-perform' };
+  }
+
+  /**
+   * ### PoX Post Condition (SIP-044)
+   * A post-condition asserting the principal will not perform any gated PoX
+   * action (`PoxConditionCode.WillNotPerform`).
+   * @example
+   * ```
+   * import { Pc } from '@stacks/transactions';
+   * Pc.principal('STB44HYPYAT2BB2QE513NSP81HTMYWBJP02HPGK6').willNotPerformPox();
+   * ```
+   */
+  willNotPerformPox(): PoxPostCondition {
+    return { type: 'pox-postcondition', address: this.address, condition: 'will-not-perform' };
+  }
+
+  /**
+   * ### PoX Post Condition (SIP-044)
+   * A post-condition where the principal may or may not perform a gated PoX
+   * action (`PoxConditionCode.MayPerform`; always passes).
+   * @example
+   * ```
+   * import { Pc } from '@stacks/transactions';
+   * Pc.principal('STB44HYPYAT2BB2QE513NSP81HTMYWBJP02HPGK6').mayPerformPox();
+   * ```
+   */
+  mayPerformPox(): PoxPostCondition {
+    return { type: 'pox-postcondition', address: this.address, condition: 'may-perform' };
+  }
 }
 
 /**
@@ -223,6 +267,20 @@ class PartialPcFtWithCode {
       condition: this.code,
       amount: parsePostConditionAmount(this.amount).toString(),
       asset: `${contractId}::${tokenName}`,
+    };
+  }
+
+  /**
+   * ### Staking Post Condition (SIP-044)
+   * Guards staking STX (or modifying staked STX) for the principal.
+   * ⚠ Amount of STX is denoted in uSTX (micro-STX)
+   */
+  stake(): StakingPostCondition {
+    return {
+      type: 'staking-postcondition',
+      address: this.address,
+      condition: this.code,
+      amount: parsePostConditionAmount(this.amount).toString(),
     };
   }
 }

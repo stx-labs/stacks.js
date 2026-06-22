@@ -5,7 +5,9 @@ import {
   FungiblePostConditionWire,
   NonFungiblePostConditionWire,
   Pc,
+  PoxPostConditionWire,
   STXPostConditionWire,
+  StakingPostConditionWire,
   addressToString,
   deserializeTransaction,
 } from '../src';
@@ -31,6 +33,8 @@ import {
   StxPostCondition,
   FungiblePostCondition,
   NonFungiblePostCondition,
+  StakingPostCondition,
+  PoxPostCondition,
 } from '../src/postcondition-types';
 
 test('STX post condition serialization and deserialization', () => {
@@ -705,5 +709,137 @@ describe('SIP-040 stacks-core test vectors', () => {
     if (pc.type === 'nft-postcondition') {
       expect(pc.assetId).toEqual(Cl.uint(1));
     }
+  });
+});
+
+describe('Staking post-condition (SIP-044)', () => {
+  const address = 'SP2JXKMSH007NPYAQHKJPQMAQYAD90NQGTVJVQ02B';
+
+  test.each([
+    ['eq', FungibleConditionCode.Equal],
+    ['gt', FungibleConditionCode.Greater],
+    ['gte', FungibleConditionCode.GreaterEqual],
+    ['lt', FungibleConditionCode.Less],
+    ['lte', FungibleConditionCode.LessEqual],
+  ] as const)('serialization and deserialization (%s)', (condition, conditionCode) => {
+    const amount = 1000000;
+
+    const postCondition = postConditionToWire({
+      type: 'staking-postcondition',
+      address,
+      condition,
+      amount,
+    });
+
+    const deserialized = serializeDeserialize(
+      postCondition,
+      StacksWireType.PostCondition
+    ) as StakingPostConditionWire;
+    expect(deserialized.conditionType).toBe(PostConditionType.Staking);
+    expect(deserialized.principal.prefix).toBe(PostConditionPrincipalId.Standard);
+    if (!('address' in deserialized.principal)) throw TypeError;
+    expect(addressToString(deserialized.principal.address)).toBe(address);
+    expect(deserialized.conditionCode).toBe(conditionCode);
+    expect(deserialized.amount.toString()).toBe(amount.toString());
+  });
+
+  test('matches STX wire layout but for the type byte', () => {
+    const base = { address, condition: 'gte', amount: 1000000 } as const;
+    const stxHex = postConditionToHex({ type: 'stx-postcondition', ...base });
+    const stakingHex = postConditionToHex({ type: 'staking-postcondition', ...base });
+
+    expect(stxHex.slice(0, 2)).toBe('00');
+    expect(stakingHex.slice(0, 2)).toBe('03');
+    expect(stakingHex.slice(2)).toBe(stxHex.slice(2));
+  });
+
+  test('hex round-trip via Pc.fromHex', () => {
+    const pc: StakingPostCondition = {
+      type: 'staking-postcondition',
+      address,
+      condition: 'gte',
+      amount: '1000000',
+    };
+    expect(Pc.fromHex(postConditionToHex(pc))).toEqual(pc);
+  });
+});
+
+describe('PoX post-condition (SIP-044)', () => {
+  const address = 'SP2JXKMSH007NPYAQHKJPQMAQYAD90NQGTVJVQ02B';
+
+  test.each([
+    ['will-not-perform', 0x30],
+    ['may-perform', 0x31],
+    ['will-perform', 0x32],
+  ] as const)('serialization and deserialization (%s)', (condition, conditionCode) => {
+    const postCondition = postConditionToWire({
+      type: 'pox-postcondition',
+      address,
+      condition,
+    });
+
+    const deserialized = serializeDeserialize(
+      postCondition,
+      StacksWireType.PostCondition
+    ) as PoxPostConditionWire;
+    expect(deserialized.conditionType).toBe(PostConditionType.PoX);
+    expect(deserialized.principal.prefix).toBe(PostConditionPrincipalId.Standard);
+    if (!('address' in deserialized.principal)) throw TypeError;
+    expect(addressToString(deserialized.principal.address)).toBe(address);
+    expect(deserialized.conditionCode).toBe(conditionCode);
+  });
+
+  test('carries no amount (type byte + principal + 1-byte code)', () => {
+    const hex = postConditionToHex({
+      type: 'pox-postcondition',
+      address,
+      condition: 'may-perform',
+    });
+    // 0x04 type + 0x02 standard-principal + 1-byte version + 20-byte hash160 + 0x31 code = 24 bytes
+    expect(hexToBytes(hex)).toHaveLength(24);
+    expect(hex.slice(0, 2)).toBe('04');
+    expect(hex.slice(-2)).toBe('31');
+  });
+
+  test('hex round-trip via Pc.fromHex', () => {
+    const pc: PoxPostCondition = {
+      type: 'pox-postcondition',
+      address,
+      condition: 'will-perform',
+    };
+    expect(Pc.fromHex(postConditionToHex(pc))).toEqual(pc);
+  });
+});
+
+describe('Staking & PoX origin principal (SIP-044)', () => {
+  test('staking supports the origin principal', () => {
+    const pc: StakingPostCondition = {
+      type: 'staking-postcondition',
+      address: 'origin',
+      condition: 'gte',
+      amount: '1000000',
+    };
+    const wire = postConditionToWire(pc) as StakingPostConditionWire;
+    expect(wire.principal.prefix).toBe(PostConditionPrincipalId.Origin);
+
+    const hex = postConditionToHex(pc);
+    expect(hex.slice(0, 4)).toBe('0301'); // type 0x03 + origin principal 0x01
+    expect(Pc.fromHex(hex)).toEqual(pc);
+    expect(Pc.origin().willSendGte(1000000).stake()).toEqual(pc);
+  });
+
+  test('pox supports the origin principal', () => {
+    const pc: PoxPostCondition = {
+      type: 'pox-postcondition',
+      address: 'origin',
+      condition: 'may-perform',
+    };
+    const wire = postConditionToWire(pc) as PoxPostConditionWire;
+    expect(wire.principal.prefix).toBe(PostConditionPrincipalId.Origin);
+
+    // type 0x04 + origin principal 0x01 + code 0x31, nothing else
+    expect(postConditionToHex(pc)).toBe('040131');
+    expect(Pc.fromHex('040131')).toEqual(pc);
+    expect(Pc.origin().mayPerformPox()).toEqual(pc);
   });
 });

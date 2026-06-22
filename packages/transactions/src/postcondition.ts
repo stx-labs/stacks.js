@@ -5,12 +5,14 @@ import {
   PostConditionMode,
   PostConditionPrincipalId,
   PostConditionType,
+  PoxConditionCode,
 } from './constants';
 import {
   FungibleComparator,
   NonFungibleComparator,
   PostCondition,
   PostConditionModeName,
+  PoxComparator,
 } from './postcondition-types';
 import { AssetString } from './types';
 import {
@@ -50,6 +52,13 @@ enum PostConditionCodeWireType {
   'maybe-sent' = NonFungibleConditionCode.MaybeSent,
 }
 
+/** @internal */
+enum PoxConditionCodeWireType {
+  'will-not-perform' = PoxConditionCode.WillNotPerform,
+  'may-perform' = PoxConditionCode.MayPerform,
+  'will-perform' = PoxConditionCode.WillPerform,
+}
+
 export function postConditionToWire(postcondition: PostCondition): PostConditionWire {
   switch (postcondition.type) {
     case 'stx-postcondition':
@@ -87,6 +96,27 @@ export function postConditionToWire(postcondition: PostCondition): PostCondition
         asset: parseAssetString(postcondition.asset),
         assetName: postcondition.assetId,
       };
+    case 'staking-postcondition':
+      return {
+        type: StacksWireType.PostCondition,
+        conditionType: PostConditionType.Staking,
+        principal:
+          postcondition.address === 'origin'
+            ? { type: StacksWireType.Principal, prefix: PostConditionPrincipalId.Origin }
+            : parsePrincipalString(postcondition.address),
+        conditionCode: conditionTypeToByte(postcondition.condition) as FungibleConditionCode,
+        amount: parsePostConditionAmount(postcondition.amount),
+      };
+    case 'pox-postcondition':
+      return {
+        type: StacksWireType.PostCondition,
+        conditionType: PostConditionType.PoX,
+        principal:
+          postcondition.address === 'origin'
+            ? { type: StacksWireType.Principal, prefix: PostConditionPrincipalId.Origin }
+            : parsePrincipalString(postcondition.address),
+        conditionCode: poxConditionTypeToByte(postcondition.condition),
+      };
     default:
       throw new Error('Invalid post condition type');
   }
@@ -116,6 +146,19 @@ export function wireToPostCondition(wire: PostConditionWire): PostCondition {
         condition: conditionByteToType(wire.conditionCode),
         asset: assetWireToString(wire.asset),
         assetId: wire.assetName,
+      };
+    case PostConditionType.Staking:
+      return {
+        type: 'staking-postcondition',
+        address: principalWireToString(wire.principal),
+        condition: conditionByteToType(wire.conditionCode),
+        amount: wire.amount.toString(),
+      };
+    case PostConditionType.PoX:
+      return {
+        type: 'pox-postcondition',
+        address: principalWireToString(wire.principal),
+        condition: poxConditionByteToType(wire.conditionCode),
       };
     default: {
       const _exhaustiveCheck: never = wire;
@@ -147,6 +190,17 @@ export function conditionByteToType<T extends FungibleConditionCode | NonFungibl
       T extends FungibleConditionCode ? FungibleComparator : NonFungibleComparator
     >
   )[wireType];
+}
+
+/** @internal */
+export function poxConditionTypeToByte(condition: PoxComparator): PoxConditionCode {
+  return (PoxConditionCodeWireType as unknown as Record<PoxComparator, PoxConditionCode>)[condition];
+}
+
+/** @internal */
+export function poxConditionByteToType(wireType: PoxConditionCode): PoxComparator {
+  // numerical enums are bidirectional in TypeScript
+  return (PoxConditionCodeWireType as unknown as Record<PoxConditionCode, PoxComparator>)[wireType];
 }
 
 /**
