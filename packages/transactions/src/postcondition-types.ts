@@ -60,7 +60,7 @@ export type NonFungiblePostCondition = {
  */
 export interface StakingPostCondition {
   type: 'staking-postcondition';
-  /** Address staking the STX (principal `address` or `contract-id`) */
+  /** Address staking the STX (principal `address`, `contract-id`, or `'origin'`) */
   address: string;
   /** Comparator to check the amount to be staked (`eq`, `gt`, `gte`, `lt`, `lte`) */
   condition: `${FungibleComparator}`;
@@ -86,9 +86,9 @@ export type PoxComparator = 'will-not-perform' | 'may-perform' | 'will-perform';
  */
 export interface PoxPostCondition {
   type: 'pox-postcondition';
-  /** Address whose PoX actions are constrained (principal `address` or `contract-id`) */
+  /** Address whose PoX actions are constrained (principal `address`, `contract-id`, or `'origin'`) */
   address: string;
-  /** Comparator constraining PoX actions (`disallow`, `allow`, `require`) */
+  /** Comparator constraining PoX actions (`will-not-perform`, `may-perform`, `will-perform`) */
   condition: `${PoxComparator}`;
 }
 
