@@ -514,7 +514,7 @@ const stakingPostCondition = Pc.principal(
   'SP2ZD731ANQZT6J4K3F5N8A40ZXWXC1XFXHVVQFKE'
 )
   .willSendGte(1000000)
-  .stake();
+  .ustxToLock();
 ```
 
 ### PoX post condition (SIP-044)

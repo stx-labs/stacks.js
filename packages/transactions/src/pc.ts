@@ -275,7 +275,7 @@ class PartialPcFtWithCode {
    * Guards staking STX (or modifying staked STX) for the principal.
    * ⚠ Amount of STX is denoted in uSTX (micro-STX)
    */
-  stake(): StakingPostCondition {
+  ustxToLock(): StakingPostCondition {
     return {
       type: 'staking-postcondition',
       address: this.address,

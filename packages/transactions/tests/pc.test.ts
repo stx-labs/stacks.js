@@ -480,8 +480,8 @@ describe('pc -- post condition builder', () => {
 });
 
 describe('pc -- staking & pox post conditions (SIP-044)', () => {
-  test('.stake() builds a staking post condition', () => {
-    const pc = Pc.principal(STANDARD_ADDRESS).willSendGte(1000).stake();
+  test('.ustxToLock() builds a staking post condition', () => {
+    const pc = Pc.principal(STANDARD_ADDRESS).willSendGte(1000).ustxToLock();
     const expected: StakingPostCondition = {
       type: 'staking-postcondition',
       address: STANDARD_ADDRESS,
@@ -491,12 +491,12 @@ describe('pc -- staking & pox post conditions (SIP-044)', () => {
     expect(pc).toEqual(expected);
   });
 
-  test('.stake() supports all fungible comparators', () => {
-    expect(Pc.principal(STANDARD_ADDRESS).willSendEq(1).stake().condition).toBe('eq');
-    expect(Pc.principal(STANDARD_ADDRESS).willSendGt(1).stake().condition).toBe('gt');
-    expect(Pc.principal(STANDARD_ADDRESS).willSendGte(1).stake().condition).toBe('gte');
-    expect(Pc.principal(STANDARD_ADDRESS).willSendLt(1).stake().condition).toBe('lt');
-    expect(Pc.principal(STANDARD_ADDRESS).willSendLte(1).stake().condition).toBe('lte');
+  test('.ustxToLock() supports all fungible comparators', () => {
+    expect(Pc.principal(STANDARD_ADDRESS).willSendEq(1).ustxToLock().condition).toBe('eq');
+    expect(Pc.principal(STANDARD_ADDRESS).willSendGt(1).ustxToLock().condition).toBe('gt');
+    expect(Pc.principal(STANDARD_ADDRESS).willSendGte(1).ustxToLock().condition).toBe('gte');
+    expect(Pc.principal(STANDARD_ADDRESS).willSendLt(1).ustxToLock().condition).toBe('lt');
+    expect(Pc.principal(STANDARD_ADDRESS).willSendLte(1).ustxToLock().condition).toBe('lte');
   });
 
   test('pox builders cover all condition codes', () => {
@@ -518,7 +518,7 @@ describe('pc -- staking & pox post conditions (SIP-044)', () => {
   });
 
   test('staking and pox round-trip through hex', () => {
-    const staking = Pc.principal(STANDARD_ADDRESS).willSendEq(500).stake();
+    const staking = Pc.principal(STANDARD_ADDRESS).willSendEq(500).ustxToLock();
     expect(Pc.fromHex(postConditionToHex(staking))).toEqual(staking);
 
     const pox = Pc.principal(CONTRACT_ADDRESS + '.' + CONTRACT_NAME).willPerformPox();

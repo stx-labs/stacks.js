@@ -825,7 +825,7 @@ describe('Staking & PoX origin principal (SIP-044)', () => {
     const hex = postConditionToHex(pc);
     expect(hex.slice(0, 4)).toBe('0301'); // type 0x03 + origin principal 0x01
     expect(Pc.fromHex(hex)).toEqual(pc);
-    expect(Pc.origin().willSendGte(1000000).stake()).toEqual(pc);
+    expect(Pc.origin().willSendGte(1000000).ustxToLock()).toEqual(pc);
   });
 
   test('pox supports the origin principal', () => {
