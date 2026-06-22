@@ -51,6 +51,8 @@ export enum Pox5ErrorCode {
   ReentrantCall = 49,
   L1EarlyExitAlreadyAnnounced = 50,
   InsufficientReserveBalance = 51,
+  InvalidUnlockHeight = 52,
+  RewardsPaused = 53,
 }
 
 /** The on-chain Clarity constant name for each error (e.g. `ERR_BOND_NOT_FOUND`). */
@@ -99,6 +101,8 @@ export const POX5_ERROR_NAMES: Record<Pox5ErrorCode, string> = {
   [Pox5ErrorCode.ReentrantCall]: 'ERR_REENTRANT_CALL',
   [Pox5ErrorCode.L1EarlyExitAlreadyAnnounced]: 'ERR_L1_EARLY_EXIT_ALREADY_ANNOUNCED',
   [Pox5ErrorCode.InsufficientReserveBalance]: 'ERR_INSUFFICIENT_RESERVE_BALANCE',
+  [Pox5ErrorCode.InvalidUnlockHeight]: 'ERR_INVALID_UNLOCK_HEIGHT',
+  [Pox5ErrorCode.RewardsPaused]: 'ERR_REWARDS_PAUSED',
 };
 
 /** Human-readable descriptions per error code. */
@@ -171,6 +175,10 @@ export const POX5_ERROR_DESCRIPTIONS: Record<Pox5ErrorCode, string> = {
     'The staker already announced an L1 early exit for this bond period.',
   [Pox5ErrorCode.InsufficientReserveBalance]:
     'A reserve withdrawal was attempted with insufficient reserve balance.',
+  [Pox5ErrorCode.InvalidUnlockHeight]:
+    "An L1 lockup output's unlock-burn-height is lower than the bond's minimum unlock height.",
+  [Pox5ErrorCode.RewardsPaused]:
+    'Signer reward claims are permanently paused for this contract.',
 };
 
 /**

@@ -438,7 +438,11 @@ export interface RegisterMetadata {
  * });
  * const txid = await sendToAddress(meta.lockAddress, sats);
  * // ...wait for confirmation, fetch the proof inputs...
- * const output = buildLockProofFromBlock({ ...proof, lockScript: meta.lockScript });
+ * const output = buildLockProofFromBlock({
+ *   ...proof,
+ *   lockScript: meta.lockScript,
+ *   unlockHeight: meta.unlockHeight,
+ * });
  * await buildRegisterForBond({
  *   bondIndex, signerManager, amountUstx,
  *   lockup: { kind: 'btc', outputs: [output], unlockBytes: meta.unlockBytes },

@@ -130,7 +130,7 @@ describe('buildSetupBond', () => {
 });
 
 describe('buildRegisterForBond', () => {
-  it('encodes a BTC lockup as (ok ...) with kebab-case output tuples carrying all 8 fields', async () => {
+  it('encodes a BTC lockup as (ok ...) with kebab-case output tuples carrying all 9 fields', async () => {
     const tx = await buildRegisterForBond({
       bondIndex: 1,
       signerManager: SIGNER_MANAGER,
@@ -147,6 +147,7 @@ describe('buildRegisterForBond', () => {
             txCount: 100,
             txIndex: 7,
             amount: 50000n,
+            unlockBurnHeight: 850_000,
           },
         ],
         unlockBytes: new Uint8Array([0xde, 0xad]),
@@ -179,6 +180,7 @@ describe('buildRegisterForBond', () => {
       'tx-count',
       'tx-index',
       'amount',
+      'unlock-burn-height',
     ]) {
       expect(first[key]).toBeDefined();
     }

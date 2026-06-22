@@ -342,6 +342,7 @@ async function executeRegisterL1(artifact: LockArtifact): Promise<string> {
     header: headerHex,
     merkleProof,
     txCount,
+    unlockHeight,
     expectedScript,
   });
 

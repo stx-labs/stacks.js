@@ -11,6 +11,7 @@ import type {
   BuildGrantSignerKeyTxArgs,
   BuildRevokeSignerKeyTxArgs,
   BuildSetBondAdminArgs,
+  BuildSetPauseAdminArgs,
   TxParams,
 } from './types';
 import { networkFrom } from '@stacks/network';
@@ -82,6 +83,49 @@ export async function buildSetBondAdmin(
   args: BuildSetBondAdminArgs & TxParams
 ): Promise<StacksTransactionWire> {
   return callPox5('set-bond-admin', [Cl.address(args.newAdmin)], args);
+}
+
+/**
+ * Build an unsigned `set-pause-admin` transaction.
+ *
+ * Rotates the `pause-admin` data-var to a new principal. Only the current
+ * `pause-admin` may call (`ERR_UNAUTHORIZED` otherwise). The `pause-admin` is
+ * the sole role permitted to call {@link buildPauseRewards}.
+ *
+ * @example
+ * ```ts
+ * // Hand the pause-admin role to a multisig.
+ * const tx = await buildSetPauseAdmin({
+ *   newAdmin: 'SP2C2YFP12AJZB4MABJBAJ55XECVS7E4PMMZ89YZR',
+ *   publicKey,
+ *   fee, nonce, network: 'mainnet',
+ * });
+ * ```
+ */
+export async function buildSetPauseAdmin(
+  args: BuildSetPauseAdminArgs & TxParams
+): Promise<StacksTransactionWire> {
+  return callPox5('set-pause-admin', [Cl.address(args.newAdmin)], args);
+}
+
+/**
+ * Build an unsigned `pause-rewards` transaction.
+ *
+ * Permanently halts signer reward claims: once paused, every `claim-rewards`
+ * reverts with `ERR_REWARDS_PAUSED`. This is **one-way** — there is no unpause,
+ * rewards keep accruing in the contract, and recovery requires a hard fork.
+ * Only the current `pause-admin` may call (`ERR_UNAUTHORIZED` otherwise).
+ *
+ * @example
+ * ```ts
+ * const tx = await buildPauseRewards({
+ *   publicKey,
+ *   fee, nonce, network: 'mainnet',
+ * });
+ * ```
+ */
+export async function buildPauseRewards(args: TxParams): Promise<StacksTransactionWire> {
+  return callPox5('pause-rewards', [], args);
 }
 
 /**
@@ -256,6 +300,7 @@ function lockupToCV(lockup: BondLockup): ClarityValue {
             'tx-count': Cl.uint(o.txCount),
             'tx-index': Cl.uint(o.txIndex),
             amount: Cl.uint(o.amount),
+            'unlock-burn-height': Cl.uint(o.unlockBurnHeight),
           })
         )
       ),
@@ -582,7 +627,8 @@ export async function buildCalculateRewards(
  * STX-only leg keyed by `rewardCycle` plus one leg per `bondIndices` entry.
  * The per-bond breakdown is mirrored in the `print` event. Reverts with
  * `ERR_NO_CLAIMABLE_REWARDS` if every leg is empty — gate on {@link fetchEarned}
- * first.
+ * first. Reverts with `ERR_REWARDS_PAUSED` once `pause-rewards` has been called
+ * — a permanent, one-way state; gate on {@link fetchRewardsPaused}.
  *
  * The signer-manager contract must be the `contract-caller` (the contract
  * uses `contract-caller` as the signer address); for direct calls this

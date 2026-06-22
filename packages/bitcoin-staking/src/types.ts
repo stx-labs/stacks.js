@@ -205,6 +205,11 @@ export interface BuildSetBondAdminArgs {
   newAdmin: string;
 }
 
+export interface BuildSetPauseAdminArgs {
+  /** Principal to install as the new `pause-admin`. */
+  newAdmin: string;
+}
+
 /**
  * Inputs to the SIP-018 signer-key grant message hash.
  *
@@ -304,6 +309,14 @@ export interface BondL1LockupOutput {
   txIndex: number;
   /** Sats — must match the parsed output amount. */
   amount: bigint;
+  /**
+   * BTC absolute CLTV height the output's lockup script commits to — the
+   * `unlockHeight` passed to {@link buildLockOutputScript}. The contract
+   * re-derives the expected P2WSH script from this height and rejects the
+   * output unless it is at or above the bond's minimum unlock height
+   * (`ERR_INVALID_UNLOCK_HEIGHT`).
+   */
+  unlockBurnHeight: number;
 }
 
 /**

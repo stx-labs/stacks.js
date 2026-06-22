@@ -310,6 +310,38 @@ export async function fetchBondAdmin(opts: NetworkClientParam = {}): Promise<str
 }
 
 /**
+ * Read the current `pause-admin` principal.
+ *
+ * `pause-admin` is the only role allowed to call `pause-rewards`. Like
+ * `bond-admin` it is a private data-var with no read-only accessor, so this
+ * reads the node's `/v2/data_var` endpoint directly.
+ */
+export async function fetchPauseAdmin(opts: NetworkClientParam = {}): Promise<string> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const client = Object.assign({}, clientFromNetwork(network), opts.client);
+  const url = `${client.baseUrl}/v2/data_var/${network.bootAddress}/${POX5_CONTRACT_NAME}/pause-admin?proof=0`;
+  const response = await client.fetch(url);
+  const { data } = await response.json();
+  return cvToValue(Cl.deserialize(data)) as string;
+}
+
+/**
+ * Read the `rewards-paused` flag.
+ *
+ * `true` once `pause-rewards` has been called — a permanent, one-way state in
+ * which every `claim-rewards` reverts with `ERR_REWARDS_PAUSED`. Reads the
+ * node's `/v2/data_var` endpoint directly (no read-only accessor exists).
+ */
+export async function fetchRewardsPaused(opts: NetworkClientParam = {}): Promise<boolean> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const client = Object.assign({}, clientFromNetwork(network), opts.client);
+  const url = `${client.baseUrl}/v2/data_var/${network.bootAddress}/${POX5_CONTRACT_NAME}/rewards-paused?proof=0`;
+  const response = await client.fetch(url);
+  const { data } = await response.json();
+  return cvToValue(Cl.deserialize(data)) as boolean;
+}
+
+/**
  * Classify a bond's {@link BondStatusName} at the current burn height, fetching
  * whatever isn't injected.
  *

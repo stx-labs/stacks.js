@@ -112,6 +112,7 @@ export interface EsploraMerkleProof {
  *   header: await (await fetch(`${esplora}/block/${blockHash}/header`)).text(),
  *   merkleProof: await (await fetch(`${esplora}/tx/${txid}/merkle-proof`)).json(),
  *   txCount: (await (await fetch(`${esplora}/block/${blockHash}`)).json()).tx_count,
+ *   unlockHeight, // the CLTV height the lockup script commits to
  *   expectedScript, // or: lockScript: meta.lockScript (from buildRegisterMetadata)
  * });
  * // → buildRegisterForBond({ lockup: { kind: 'btc', outputs: [output], unlockBytes }, ... })
@@ -158,6 +159,14 @@ export function buildLockProof(
     merkleProof: EsploraMerkleProof;
     /** Total tx count in the block (`GET /block/:hash` → `tx_count`). */
     txCount: number;
+    /**
+     * Absolute CLTV height the lockup script commits to — the same
+     * `unlockHeight` passed to {@link buildLockOutputScript} when deriving the
+     * `expectedScript` / `lockScript`. Recorded in the output tuple so the
+     * contract can re-derive the expected script and enforce the bond's
+     * minimum unlock height.
+     */
+    unlockHeight: number | bigint;
   } & ExpectedScriptInput
 ): BondL1LockupOutput {
   const tx = btc.Transaction.fromRaw(hexToBytes(input.txHex), {
@@ -186,6 +195,7 @@ export function buildLockProof(
     txCount: input.txCount,
     txIndex: input.merkleProof.pos,
     amount: tx.getOutput(outputIndex).amount ?? 0n,
+    unlockBurnHeight: Number(input.unlockHeight),
   };
 }
 
@@ -243,6 +253,7 @@ export function computeMerkleBranch(txids: string[], pos: number): string[] {
  *   header: await rpc('getblockheader', [blockHash, false]),
  *   blockHeight: block.height,
  *   txids: block.tx,
+ *   unlockHeight,
  *   expectedScript: buildLockOutputScript({ ... }),
  * });
  * ```
@@ -257,6 +268,12 @@ export function buildLockProofFromBlock(
     blockHeight: number;
     /** Block's ordered txid list (display/big-endian hex), `getblock` v1 `tx`. */
     txids: string[];
+    /**
+     * Absolute CLTV height the lockup script commits to — the same
+     * `unlockHeight` passed to {@link buildLockOutputScript}. Forwarded to
+     * {@link buildLockProof} and recorded in the output tuple.
+     */
+    unlockHeight: number | bigint;
   } & ExpectedScriptInput
 ): BondL1LockupOutput {
   const tx = btc.Transaction.fromRaw(hexToBytes(input.txHex), {
@@ -273,6 +290,7 @@ export function buildLockProofFromBlock(
     txHex: input.txHex,
     header: input.header,
     txCount: input.txids.length,
+    unlockHeight: input.unlockHeight,
     // Resolve here so the lockScript/expectedScript overload is handled once.
     expectedScript: resolveExpectedScript(input),
     merkleProof: {

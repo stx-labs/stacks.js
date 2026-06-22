@@ -196,6 +196,7 @@ test.skip(`register-for-bond (real L1 BTC proof) for bond ${BOND_INDEX}`, async 
     header: artifact.headerHex,
     merkleProof: artifact.merkleProof,
     txCount: artifact.txCount,
+    unlockHeight: artifact.unlockHeight,
     expectedScript,
   });
 

@@ -213,6 +213,7 @@ describe('buildLockProof', () => {
       header: HEADER_HEX,
       merkleProof: MERKLE_PROOF,
       txCount: 3721,
+      unlockHeight: 850_000,
       expectedScript: OUTPUT_0_SCRIPT,
     });
 
@@ -220,6 +221,10 @@ describe('buildLockProof', () => {
     const out = proof();
     expect(out.outputIndex).toBe(0);
     expect(out.amount).toBe(OUTPUT_0_SATS);
+  });
+
+  it('records the supplied unlock height on the output tuple', () => {
+    expect(proof().unlockBurnHeight).toBe(850_000);
   });
 
   it('strips the witness so the stored tx bytes hash to the txid (not the wtxid)', () => {
@@ -273,6 +278,7 @@ describe('buildLockProof', () => {
         header: HEADER_HEX,
         merkleProof: MERKLE_PROOF,
         txCount: 3721,
+        unlockHeight: 850_000,
         expectedScript: '0020' + '00'.repeat(32),
       })
     ).toThrow(/no output matches/);

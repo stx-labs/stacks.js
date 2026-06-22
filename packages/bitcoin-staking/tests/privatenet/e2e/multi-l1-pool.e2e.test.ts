@@ -309,6 +309,7 @@ async function doL1LockupAndRegister(
     header: headerHex,
     merkleProof,
     txCount,
+    unlockHeight,
     expectedScript,
   });
 

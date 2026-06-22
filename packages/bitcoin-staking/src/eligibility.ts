@@ -24,6 +24,7 @@ import {
   fetchHasAnnouncedL1EarlyExit,
   fetchBondOverlapsNewPosition,
   fetchEarned,
+  fetchRewardsPaused,
   fetchLastRewardComputeHeight,
   fetchPoxInfo,
   fetchProtocolBond,
@@ -61,11 +62,12 @@ export type EligibilityResult =
  * Not covered:
  * - `signer-manager-validate-stake` — a public trait call on the signer
  *   manager contract; it may still reject the registration.
- * - L1 SPV proof (`verify-l1-lockups`): when `outputs` is provided, the block
- *   header validity (`ERR_INVALID_BTC_HEADER u40`) and duplicate-outpoint
- *   (`ERR_DUPLICATE_LOCKUP_OUTPOINT u46`) checks ARE run. The merkle proof
- *   (u41), output script (u42), amount (u45), and tx-parse (u39) checks are NOT
- *   yet covered — TODO — and are verified only on-chain. Pass the summed output
+ * - L1 SPV proof (`verify-l1-lockups`): when `outputs` is provided, the
+ *   unlock-height (`ERR_INVALID_UNLOCK_HEIGHT u52`), duplicate-outpoint
+ *   (`ERR_DUPLICATE_LOCKUP_OUTPOINT u46`), and block header validity
+ *   (`ERR_INVALID_BTC_HEADER u40`) checks ARE run. The merkle proof (u41),
+ *   output script (u42), amount (u45), and tx-parse (u39) checks are NOT yet
+ *   covered — TODO — and are verified only on-chain. Pass the summed output
  *   sats as `satsTotal` regardless.
  *
  * `poxInfo` is fetched when not provided, so callers that already hold it
@@ -109,7 +111,7 @@ export async function fetchEligibleRegisterForBond(
   const firstRewardCycle = bondPeriodToRewardCycle({ bondIndex: opts.bondIndex, poxInfo });
   const bondStartHeight = bondPeriodToBurnHeight({ bondIndex: opts.bondIndex, poxInfo });
 
-  const [grantActive, overlaps, l1UnlockHeight] = await Promise.all([
+  const [grantActive, overlaps, l1UnlockHeight, registrationL1UnlockHeight] = await Promise.all([
     signerInfo
       ? fetchVerifySignerKeyGrant({
           signerKey: signerInfo.signerKey,
@@ -126,6 +128,9 @@ export async function fetchEligibleRegisterForBond(
       : false,
     membership
       ? fetchBondL1UnlockHeight({ bondIndex: membership.bondIndex, ...networkClient })
+      : undefined,
+    opts.outputs?.length
+      ? fetchBondL1UnlockHeight({ bondIndex: opts.bondIndex, ...networkClient })
       : undefined,
   ]);
 
@@ -144,13 +149,21 @@ export async function fetchEligibleRegisterForBond(
   const reasons: Pox5ErrorCode[] = [];
 
   if (opts.outputs?.length) {
-    if (headerValidity.includes(false)) reasons.push(Pox5ErrorCode.InvalidBtcHeader);
+    // `validate-l1-lockup` folds each output through these asserts in order:
+    // unlock-height (u52) → duplicate outpoint (u46) → header (u40).
+    if (
+      registrationL1UnlockHeight !== undefined &&
+      opts.outputs.some(o => o.unlockBurnHeight < Number(registrationL1UnlockHeight))
+    ) {
+      reasons.push(Pox5ErrorCode.InvalidUnlockHeight);
+    }
     const outpoints = opts.outputs.map(
       o => `${bytesToHex(computeBitcoinTxid(serializeBitcoinTx(o.tx)))}:${o.outputIndex}`
     );
     if (new Set(outpoints).size !== outpoints.length) {
       reasons.push(Pox5ErrorCode.DuplicateLockupOutpoint);
     }
+    if (headerValidity.includes(false)) reasons.push(Pox5ErrorCode.InvalidBtcHeader);
   }
 
   if (!bond) reasons.push(Pox5ErrorCode.BondNotFound);
@@ -677,8 +690,9 @@ export async function fetchEligibleCalculateRewards(
  * Dry-run the checks of `claim-rewards` via read-only fetches, without
  * broadcasting anything.
  *
- * Only gate: total claimable rewards must be > 0 — the sum of the signer's
- * earned across the STX-only leg and one leg per `bondIndices` entry.
+ * Gates: rewards must not be permanently paused (`ERR_REWARDS_PAUSED`), and
+ * total claimable rewards must be > 0 — the sum of the signer's earned across
+ * the STX-only leg and one leg per `bondIndices` entry.
  *
  * The sBTC token transfer is not checked (the contract holds the accrued sBTC).
  * `rewardCycle` is a reward cycle, not a distribution-cycle index — passing the
@@ -697,16 +711,24 @@ export async function fetchEligibleClaimRewards(
   const networkClient = { network: opts.network, client: opts.client };
   const { signerManager, rewardCycle } = opts;
 
-  const earned = await Promise.all([
+  const [paused, ...earned] = await Promise.all([
+    fetchRewardsPaused(networkClient),
     fetchEarned({ signerManager, rewardCycle, ...networkClient }),
     ...opts.bondIndices.map(bondIndex =>
       fetchEarned({ signerManager, rewardCycle, bondIndex, ...networkClient })
     ),
   ]);
 
+  const reasons: Pox5ErrorCode[] = [];
+  // `update-claimable-rewards` asserts (not rewards-paused) before any reward
+  // math, so the pause aborts ahead of the empty-rewards check.
+  if (paused) reasons.push(Pox5ErrorCode.RewardsPaused);
   const total = earned.reduce((sum, e) => sum + e, 0n);
+  if (total <= 0n) reasons.push(Pox5ErrorCode.NoClaimableRewards);
 
-  return total > 0n ? { ok: true } : { ok: false, reasons: [Pox5ErrorCode.NoClaimableRewards] };
+  return reasons.length === 0
+    ? { ok: true }
+    : { ok: false, reasons: reasons as [Pox5ErrorCode, ...Pox5ErrorCode[]] };
 }
 
 /**

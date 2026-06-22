@@ -84,6 +84,7 @@ runIf('buildLockProof (Esplora): folds back to the block merkle root', async () 
     header,
     merkleProof,
     txCount: block.tx_count,
+    unlockHeight: 850_000,
     expectedScript,
   });
 

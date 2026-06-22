@@ -338,6 +338,7 @@ test.skip('single-staker BTC L1 register: account5 end-to-end', async () => {
     header: headerHex,
     merkleProof,
     txCount,
+    unlockHeight,
     expectedScript: p2wshOutputScript,
   });
 

@@ -119,6 +119,7 @@ describe('lockScript / expectedScript overload', () => {
     header: new Uint8Array(80), // length-checked only; hash is not verified here
     blockHeight: 800_000,
     txids: [txid],
+    unlockHeight: meta.unlockHeight,
   };
   const merkleProof: EsploraMerkleProof = { block_height: 800_000, merkle: [], pos: 0 };
   const expectedScript = buildLockOutputScript({
@@ -137,7 +138,7 @@ describe('lockScript / expectedScript overload', () => {
   });
 
   it('buildLockProof: lockScript and expectedScript yield identical output', () => {
-    const base = { txHex, header: block.header, merkleProof, txCount: 1 };
+    const base = { txHex, header: block.header, merkleProof, txCount: 1, unlockHeight: meta.unlockHeight };
     const viaLockScript = buildLockProof({ ...base, lockScript: meta.lockScript });
     const viaExpected = buildLockProof({ ...base, expectedScript });
     expect(viaLockScript).toEqual(viaExpected);

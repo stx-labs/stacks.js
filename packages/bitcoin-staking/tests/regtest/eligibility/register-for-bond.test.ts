@@ -174,6 +174,7 @@ test('DuplicateLockupOutpoint — same tx+outputIndex appears twice in outputs',
     txCount: 1,
     txIndex: 0,
     amount: 100n,
+    unlockBurnHeight: pox.currentBurnchainBlockHeight + 1_000_000,
   };
   const r = await fetchEligibleRegisterForBond({
     bondIndex,
@@ -207,6 +208,7 @@ test('InvalidBtcHeader — zeroed 80-byte header fails verify-block-header', asy
     txCount: 1,
     txIndex: 0,
     amount: 100n,
+    unlockBurnHeight: pox.currentBurnchainBlockHeight + 1_000_000,
   };
   const r = await fetchEligibleRegisterForBond({
     bondIndex,
