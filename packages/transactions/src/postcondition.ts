@@ -194,7 +194,9 @@ export function conditionByteToType<T extends FungibleConditionCode | NonFungibl
 
 /** @internal */
 export function poxConditionTypeToByte(condition: PoxComparator): PoxConditionCode {
-  return (PoxConditionCodeWireType as unknown as Record<PoxComparator, PoxConditionCode>)[condition];
+  return (PoxConditionCodeWireType as unknown as Record<PoxComparator, PoxConditionCode>)[
+    condition
+  ];
 }
 
 /** @internal */
