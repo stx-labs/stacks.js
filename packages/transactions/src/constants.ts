@@ -53,6 +53,12 @@ export enum ClarityVersion {
   Clarity3 = 3,
   Clarity4 = 4,
   Clarity5 = 5,
+  /**
+   * `Clarity6` enabled starting with Epoch 4.0
+   *
+   * @see [SIP-044](https://github.com/stacksgov/sips)
+   */
+  Clarity6 = 6,
 }
 
 /**
