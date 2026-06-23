@@ -150,7 +150,7 @@ export async function fetchEligibleRegisterForBond(
 
   if (opts.outputs?.length) {
     // `validate-l1-lockup` folds each output through these asserts in order:
-    // unlock-height (u52) → duplicate outpoint (u46) → header (u40).
+    // unlock-height (u52) -> duplicate outpoint (u46) -> header (u40).
     if (
       registrationL1UnlockHeight !== undefined &&
       opts.outputs.some(o => o.unlockBurnHeight < Number(registrationL1UnlockHeight))
@@ -488,7 +488,7 @@ export async function fetchEligibleUnstakeSbtc(
  * Not covered: the signer-manager `validate-stake!` trait call.
  *
  * The num-cycles gate is the tail-period guard: `num-cycles = firstRewardCycle +
- * numCycles + cyclesToExtend - currentCycle - 1`. A value ≤ 0 surfaces as
+ * numCycles + cyclesToExtend - currentCycle - 1`. A value <= 0 surfaces as
  * `INVALID_NUM_CYCLES` here, though on-chain a negative result is a uint
  * underflow (runtime abort) rather than that error code.
  *
