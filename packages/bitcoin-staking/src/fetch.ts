@@ -25,7 +25,6 @@ import type {
   StakerInfo,
 } from './types';
 
-
 /**
  * @internal
  * Encode the `bond-index (optional uint)` leg selector shared by every reward /
@@ -807,7 +806,6 @@ export async function fetchBondAllowance(
   return BigInt(optional.value.value);
 }
 
-
 /**
  * **Intentionally not exposed.** Wraps the contract's
  * `current-distribution-cycle` read-only.
@@ -1001,7 +999,6 @@ export async function fetchSignerRewardsPerTokenForCycle(
   });
   return BigInt((result as UIntCV).value);
 }
-
 
 /**
  * Wraps the contract's `get-earned-staker-rewards` read-only.
@@ -1472,7 +1469,6 @@ export async function fetchSignerSetItem(
   };
 }
 
-
 /**
  * Wraps the contract's `get-staker-custodied-sbtc` read-only.
  *
@@ -1554,7 +1550,6 @@ export async function fetchHasAnnouncedL1EarlyExit(
   return (result as BooleanCV).type === ClarityType.BoolTrue;
 }
 
-
 /**
  * Wraps the contract's `get-signer-info` read-only.
  *
@@ -1635,7 +1630,9 @@ export async function fetchSignerKeyGrantUsed(
     mapName: 'used-signer-key-grants',
     mapKey: Cl.tuple({
       'signer-key':
-        typeof opts.signerKey === 'string' ? Cl.bufferFromHex(opts.signerKey) : Cl.buffer(opts.signerKey),
+        typeof opts.signerKey === 'string'
+          ? Cl.bufferFromHex(opts.signerKey)
+          : Cl.buffer(opts.signerKey),
       'signer-manager': Cl.address(opts.signerManager),
       'auth-id': Cl.uint(opts.authId),
     }),

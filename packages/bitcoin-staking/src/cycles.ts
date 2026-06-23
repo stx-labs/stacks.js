@@ -312,7 +312,8 @@ export function bondRegisterRanges(opts: {
     const cycleStart = startBurnHeight - k * rewardCycleLength;
     const start = Math.max(cycleStart, firstBurnchainBlockHeight);
     const end = cycleStart + (rewardCycleLength - prepareCycleLength);
-    if (end > start) ranges.push({ startBurnHeight: start, length: end - start, endBurnHeight: end });
+    if (end > start)
+      ranges.push({ startBurnHeight: start, length: end - start, endBurnHeight: end });
   }
   return ranges;
 }
@@ -357,8 +358,11 @@ export function bondStatus(opts: {
   /** Whether `setup-bond` has been called for this bond (`get-protocol-bond` is `some`). */
   isBondSetup: boolean;
 }): BondStatusName {
-  const { currentBurnchainBlockHeight: burnHeight, rewardCycleLength, prepareCycleLength } =
-    opts.poxInfo;
+  const {
+    currentBurnchainBlockHeight: burnHeight,
+    rewardCycleLength,
+    prepareCycleLength,
+  } = opts.poxInfo;
   const startBurnHeight = bondPeriodToBurnHeight(opts);
   const registrationEnd = startBurnHeight - prepareCycleLength;
   const closeBurnHeight = startBurnHeight + BOND_LENGTH_CYCLES * rewardCycleLength;

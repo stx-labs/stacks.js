@@ -64,7 +64,9 @@ function decodeLockScript(script: Uint8Array): {
     (op): op is Uint8Array => op instanceof Uint8Array && op.length === 33
   );
   if (pushes33.length < 2) {
-    throw new Error('reclaim: lockScript does not contain the expected staker + cosigner public keys');
+    throw new Error(
+      'reclaim: lockScript does not contain the expected staker + cosigner public keys'
+    );
   }
   const cltvIdx = decoded.indexOf('CHECKLOCKTIMEVERIFY');
   const heightOp = cltvIdx > 0 ? decoded[cltvIdx - 1] : undefined;
@@ -175,7 +177,9 @@ export function buildReclaim(opts: BuildReclaimOpts): btc.Transaction {
   if (!earlyExit) {
     const height = opts.unlockHeight ?? scriptHeight;
     if (height == null) {
-      throw new Error('buildReclaim: the locktime path needs an unlockHeight (pass it, or a lockScript that encodes it)');
+      throw new Error(
+        'buildReclaim: the locktime path needs an unlockHeight (pass it, or a lockScript that encodes it)'
+      );
     }
     lockTime = Number(height);
   }
@@ -206,10 +210,13 @@ export function computeReclaimSighash(
   opts?: { witnessScript?: Uint8Array | string; amountSats?: bigint }
 ): Uint8Array {
   const input = tx.getInput(0);
-  const witnessScript = opts?.witnessScript != null ? toBytes(opts.witnessScript) : input.witnessScript;
+  const witnessScript =
+    opts?.witnessScript != null ? toBytes(opts.witnessScript) : input.witnessScript;
   const amount = opts?.amountSats ?? input.witnessUtxo?.amount;
   if (!witnessScript || amount == null) {
-    throw new Error('computeReclaimSighash: need witnessScript + amount (pass `opts` for a raw-hex tx)');
+    throw new Error(
+      'computeReclaimSighash: need witnessScript + amount (pass `opts` for a raw-hex tx)'
+    );
   }
   return tx.preimageWitnessV0(0, witnessScript, SIGHASH_ALL, amount);
 }
