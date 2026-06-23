@@ -241,7 +241,7 @@ async function doL1LockupAndRegister(
     earlyUnlockBytes,
   });
 
-  const expectedScript = buildLockOutputScript({
+  const outputScript = buildLockOutputScript({
     stxAddress: staker.account.address,
     unlockHeight,
     unlockBytes,
@@ -310,7 +310,7 @@ async function doL1LockupAndRegister(
     merkleProof,
     txCount,
     unlockHeight,
-    expectedScript,
+    outputScript,
   });
 
   // Compute minUstx

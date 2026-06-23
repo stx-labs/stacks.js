@@ -2,7 +2,7 @@ import { ClarityType, privateKeyToPublic, type TupleCV } from '@stacks/transacti
 import {
   buildSignerCalldata,
   computeSignerGrantHash,
-  decodeSignerCalldata,
+  parseSignerCalldata,
   signSignerGrant,
   buildSignerGrantMessage,
   verifySignerGrant,
@@ -130,7 +130,7 @@ describe('signer calldata', () => {
     'bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr', // P2TR
   ])('round-trips %s through encode/decode', addr => {
     const calldata = buildSignerCalldata({ poxAddress: addr, maxFeeSats: 1000n });
-    const decoded = decodeSignerCalldata(calldata);
+    const decoded = parseSignerCalldata(calldata);
     expect(decoded.maxFeeSats).toBe(1000n);
     expect(BtcAddress.stringify(decoded.poxAddress, 'mainnet')).toBe(addr);
   });
@@ -138,13 +138,13 @@ describe('signer calldata', () => {
   it('accepts pre-parsed address components and Uint8Array | hex calldata', () => {
     const parsed = BtcAddress.parse('bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4');
     const bytes = buildSignerCalldata({ poxAddress: parsed, maxFeeSats: 0n });
-    const fromHex = decodeSignerCalldata(Buffer.from(bytes).toString('hex'));
+    const fromHex = parseSignerCalldata(Buffer.from(bytes).toString('hex'));
     expect(fromHex.poxAddress).toEqual(parsed);
     expect(fromHex.maxFeeSats).toBe(0n);
   });
 
   it('throws on a non-tuple calldata blob', () => {
-    expect(() => decodeSignerCalldata('00')).toThrow();
+    expect(() => parseSignerCalldata('00')).toThrow();
   });
 });
 

@@ -329,7 +329,7 @@ async function executeRegisterL1(artifact: LockArtifact): Promise<string> {
   const earlyUnlockBytes = hexToBytes(earlyUnlockBytesHex);
 
   // Derive expected P2WSH output script
-  const expectedScript = buildLockOutputScript({
+  const outputScript = buildLockOutputScript({
     stxAddress: stakerStxAddress,
     unlockHeight,
     unlockBytes,
@@ -343,7 +343,7 @@ async function executeRegisterL1(artifact: LockArtifact): Promise<string> {
     merkleProof,
     txCount,
     unlockHeight,
-    expectedScript,
+    outputScript,
   });
 
   const amountSatsBig = BigInt(amountSats);

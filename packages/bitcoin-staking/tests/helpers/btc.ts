@@ -81,7 +81,7 @@ export const getBlockV1 = (blockHash: string) => bitcoinRpc<BlockV1>('getblock',
  * confirmed wallet tx: the raw `txHex` (segwit serialization — the SDK strips
  * the witness), the 80-byte `header`, the block's ordered `txids`, and its
  * `blockHeight`. Throws if the tx isn't mined yet. Feed the result straight in:
- * `buildLockProofFromBlock({ ...inputs, expectedScript })`.
+ * `buildLockProofFromBlock({ ...inputs, outputScript })`.
  */
 export async function getBtcTxProofInputs(
   txid: string,

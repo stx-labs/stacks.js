@@ -150,7 +150,7 @@ test('one bond, two participants: user A (L1) + user B (sBTC)', async () => {
     blockHeight: proof.blockHeight,
     txids: proof.txids,
     unlockHeight,
-    expectedScript: buildLockOutputScript(lockupArgs),
+    outputScript: buildLockOutputScript(lockupArgs),
   });
   const regA = await buildRegisterForBond({
     bondIndex,

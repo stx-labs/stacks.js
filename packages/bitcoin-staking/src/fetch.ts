@@ -1312,7 +1312,7 @@ export async function fetchUstxDelegatedForCycle(
 // Signer-set reads
 //
 // Per-cycle membership of the signer set, stored as a doubly-linked list keyed
-// by cycle. Walk it with `fetchSignerSetFirstItem` →
+// by cycle. Walk it with `fetchSignerSetFirstItem` ->
 // `fetchSignerSetNextItem` until `undefined`.
 
 /**

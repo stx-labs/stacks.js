@@ -122,7 +122,7 @@ test('l1 register-for-bond happy path: setup-bond → fund BTC → prove → reg
     blockHeight: proofInputs.blockHeight,
     txids: proofInputs.txids,
     unlockHeight,
-    expectedScript: buildLockOutputScript(lockupArgs),
+    outputScript: buildLockOutputScript(lockupArgs),
   });
   expect(output.amount).toBe(MAX_SATS);
 

@@ -4,7 +4,7 @@
  * replaces (computeBondUnlockHeight → buildUnlockScript → buildLockScript →
  * buildLockAddress / buildLockOutputScript), and that the `lockScript`
  * overload on `buildLockProof` / `buildLockProofFromBlock` is equivalent to
- * passing `expectedScript` directly.
+ * passing `outputScript` directly.
  *
  * Pure — no network. The proof path is exercised against a synthetic
  * single-output, single-tx block built in-memory.
@@ -104,7 +104,7 @@ describe('buildRegisterMetadata', () => {
   });
 });
 
-describe('lockScript / expectedScript overload', () => {
+describe('lockScript / outputScript overload', () => {
   const meta = buildRegisterMetadata(INPUT);
 
   // Synthetic single-tx block whose one output funds the lockup address.
@@ -122,32 +122,31 @@ describe('lockScript / expectedScript overload', () => {
     unlockHeight: meta.unlockHeight,
   };
   const merkleProof: EsploraMerkleProof = { block_height: 800_000, merkle: [], pos: 0 };
-  const expectedScript = buildLockOutputScript({
+  const outputScript = buildLockOutputScript({
     stxAddress: TEST_STX_ADDRESS,
     unlockHeight: meta.unlockHeight,
     unlockBytes: meta.unlockBytes,
     earlyUnlockBytes: TEST_EARLY_UNLOCK,
   });
 
-  it('buildLockProofFromBlock: lockScript and expectedScript yield identical output', () => {
+  it('buildLockProofFromBlock: lockScript and outputScript yield identical output', () => {
     const viaLockScript = buildLockProofFromBlock({ ...block, lockScript: meta.lockScript });
-    const viaExpected = buildLockProofFromBlock({ ...block, expectedScript });
+    const viaExpected = buildLockProofFromBlock({ ...block, outputScript });
     expect(viaLockScript).toEqual(viaExpected);
     expect(viaLockScript.outputIndex).toBe(0);
     expect(viaLockScript.amount).toBe(100_000n);
   });
 
-  it('buildLockProof: lockScript and expectedScript yield identical output', () => {
+  it('buildLockProof: lockScript and outputScript yield identical output', () => {
     const base = { txHex, header: block.header, merkleProof, txCount: 1, unlockHeight: meta.unlockHeight };
     const viaLockScript = buildLockProof({ ...base, lockScript: meta.lockScript });
-    const viaExpected = buildLockProof({ ...base, expectedScript });
+    const viaExpected = buildLockProof({ ...base, outputScript });
     expect(viaLockScript).toEqual(viaExpected);
     expect(viaLockScript.outputIndex).toBe(0);
   });
 
-  it('spreads RegisterMetadata in directly (the documented call shape)', () => {
-    // `{ ...block, ...meta }` carries lockScript (+ extra fields, ignored).
-    const output = buildLockProofFromBlock({ ...block, ...meta });
+  it('uses meta.lockScript (the documented call shape)', () => {
+    const output = buildLockProofFromBlock({ ...block, lockScript: meta.lockScript });
     expect(output.outputIndex).toBe(0);
     expect(output.amount).toBe(100_000n);
   });
@@ -157,8 +156,8 @@ describe('lockScript / expectedScript overload', () => {
     expect(output.outputIndex).toBe(0);
   });
 
-  it('throws when neither expectedScript nor lockScript is provided', () => {
-    // @ts-expect-error — exactly one of expectedScript / lockScript is required
-    expect(() => buildLockProofFromBlock({ ...block })).toThrow(/expectedScript.*lockScript/);
+  it('throws when neither outputScript nor lockScript is provided', () => {
+    // @ts-expect-error — exactly one of outputScript / lockScript is required
+    expect(() => buildLockProofFromBlock({ ...block })).toThrow(/outputScript.*lockScript/);
   });
 });

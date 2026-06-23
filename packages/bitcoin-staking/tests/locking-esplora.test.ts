@@ -77,7 +77,7 @@ runIf('buildLockProof (Esplora): folds back to the block merkle root', async () 
 
   // Use the tx's first output's real scriptPubKey as the "expected" lockup
   // script so buildLockProof locates it (the value/script come back out).
-  const expectedScript = tx.vout[0].scriptpubkey;
+  const outputScript = tx.vout[0].scriptpubkey;
 
   const output = buildLockProof({
     txHex,
@@ -85,7 +85,7 @@ runIf('buildLockProof (Esplora): folds back to the block merkle root', async () 
     merkleProof,
     txCount: block.tx_count,
     unlockHeight: 850_000,
-    expectedScript,
+    outputScript,
   });
 
   expect(output.height).toBe(merkleProof.block_height);

@@ -240,7 +240,7 @@ export function isBondActiveAtHeight(opts: {
  *   bond is configured yet requires an on-chain read (`get-protocol-bond`),
  *   which this pure helper deliberately doesn't do.
  * - `locked` — the final pre-start prepare phase plus the bond term:
- *   `bondPeriodToBurnHeight(bondIndex) - prepareCycleLength` →
+ *   `bondPeriodToBurnHeight(bondIndex) - prepareCycleLength` ->
  *   `unlocked` start.
  * - `unlocked` — last `rewardCycleLength / 2` blocks of the term. BTC unlocks
  *   on L1 (exact moment is the script CLTV expiry); STX still locked on L2.

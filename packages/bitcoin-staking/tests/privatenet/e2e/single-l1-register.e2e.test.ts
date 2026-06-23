@@ -339,7 +339,7 @@ test.skip('single-staker BTC L1 register: account5 end-to-end', async () => {
     merkleProof,
     txCount,
     unlockHeight,
-    expectedScript: p2wshOutputScript,
+    outputScript: p2wshOutputScript,
   });
 
   console.log('lockupOutput height:', lockupOutput.height);

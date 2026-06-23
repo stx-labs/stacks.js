@@ -4,15 +4,11 @@ import { bytesToHex, concatBytes, equals, hexToBytes } from '@stacks/common';
 import { computeWshOutputScript } from './script';
 import type { BondL1LockupOutput } from './types';
 
-// ---------------------------------------------------------------------------
-// BTC SPV proof normalization helpers
-// ---------------------------------------------------------------------------
-
 /** Hard cap from the contract: `(buff 100000)`. */
 const MAX_TX_BYTES = 100_000;
 
 /**
- * @internal @ignore
+ * @internal
  * Normalize a raw Bitcoin transaction to bytes. Accepts either hex or
  * `Uint8Array`. Enforces the contract's 100,000-byte cap.
  */
@@ -27,7 +23,7 @@ export function serializeBitcoinTx(tx: Uint8Array | string): Uint8Array {
 }
 
 /**
- * @internal @ignore
+ * @internal
  * Normalize an 80-byte Bitcoin block header. Accepts either hex or
  * `Uint8Array`. Throws if the length is not exactly 80.
  */
@@ -40,11 +36,11 @@ export function serializeBitcoinHeader(header: Uint8Array | string): Uint8Array 
 }
 
 /**
- * @internal @ignore
+ * @internal
  * Compute the Bitcoin txid in BIG-ENDIAN (display) order — i.e. the
  * double-sha256 of the raw tx, then byte-reversed.
  *
- * Mirrors `get-reversed-txid` in the contract (which returns the
+ * Mirrors `pox-5.get-reversed-txid` (which returns the
  * little-endian / "internal" form `sha256(sha256(tx))`); this helper returns
  * the reversed form because that's what block explorers and most external
  * tools expect. Reverse the result if you need the contract's
@@ -55,16 +51,11 @@ export function computeBitcoinTxid(rawTx: Uint8Array): Uint8Array {
   return reverse32(sha256(sha256(rawTx)));
 }
 
-/** @internal @ignore Byte-reverse a 32-byte hash (display ⇄ internal little-endian). */
+/** @internal Byte-reverse a 32-byte hash (display <-> internal little-endian). */
 function reverse32(bytes: Uint8Array): Uint8Array {
   const out = new Uint8Array(bytes.length);
   for (let i = 0; i < bytes.length; i++) out[i] = bytes[bytes.length - 1 - i];
   return out;
-}
-
-/** @internal @ignore `[0, 1, …, n-1]` (like Python's `range(n)`). */
-function range(n: number): number[] {
-  return Array.from({ length: n }, (_, i) => i);
 }
 
 /**
@@ -76,10 +67,46 @@ function range(n: number): number[] {
 export interface EsploraMerkleProof {
   /** BTC block height containing the tx. */
   block_height: number;
-  /** Sibling hashes (display/big-endian hex) along the path leaf → root, bottom-up. */
+  /** Sibling hashes (display/big-endian hex) along the path leaf -> root, bottom-up. */
   merkle: string[];
   /** 0-indexed position of the tx within the block. */
   pos: number;
+}
+
+/**
+ * How to locate the lockup output: by the P2WSH `scriptPubKey` directly
+ * (`outputScript`, 34 bytes) or by the witness `lockScript` it commits to
+ * (converted internally via {@link computeWshOutputScript}). Provide exactly
+ * one. `lockScript` is what {@link buildRegisterMetadata} returns, so the
+ * common path is `{ ...proof, lockScript: meta.lockScript }`.
+ */
+export type ExpectedScriptInput =
+  | { outputScript: Uint8Array | string; lockScript?: never }
+  | { lockScript: Uint8Array | string; outputScript?: never };
+
+/** @internal Resolve {@link ExpectedScriptInput} to the P2WSH scriptPubKey bytes. */
+function resolveExpectedScript(input: {
+  outputScript?: Uint8Array | string;
+  lockScript?: Uint8Array | string;
+}): Uint8Array {
+  if (input.outputScript !== undefined) {
+    return typeof input.outputScript === 'string'
+      ? hexToBytes(input.outputScript)
+      : input.outputScript;
+  }
+  if (input.lockScript !== undefined) {
+    const script =
+      typeof input.lockScript === 'string' ? hexToBytes(input.lockScript) : input.lockScript;
+    return computeWshOutputScript(script);
+  }
+  throw new Error(
+    'buildLockProof: provide either `outputScript` (P2WSH scriptPubKey) or `lockScript` (witness script)'
+  );
+}
+
+/** @internal `[0, 1, …, n-1]` (like Python's `range(n)`). */
+function range(n: number): number[] {
+  return Array.from({ length: n }, (_, i) => i);
 }
 
 /**
@@ -99,56 +126,35 @@ export interface EsploraMerkleProof {
  * 2. **Endianness.** Indexer sibling hashes are display/big-endian; the
  *    contract folds over internal little-endian hashes. Each is reversed.
  *
- * The lockup output is located by matching `expectedScript` (the P2WSH
+ * The lockup output is located by matching `outputScript` (the P2WSH
  * `scriptPubKey` from {@link buildLockOutputScript}) against the tx's
  * outputs — the same equality the contract asserts — and its sats `amount` is
  * read from the decoded output, so a stale caller-supplied amount can't drift.
  *
  * @example
  * ```ts
- * const expectedScript = buildLockOutputScript({ stxAddress, unlockHeight, unlockBytes, earlyUnlockBytes });
+ * // Happy path: locate the output via the witness `lockScript` that
+ * // `buildRegisterMetadata` already gave you.
  * const output = buildLockProof({
  *   txHex: await (await fetch(`${esplora}/tx/${txid}/hex`)).text(),
  *   header: await (await fetch(`${esplora}/block/${blockHash}/header`)).text(),
  *   merkleProof: await (await fetch(`${esplora}/tx/${txid}/merkle-proof`)).json(),
  *   txCount: (await (await fetch(`${esplora}/block/${blockHash}`)).json()).tx_count,
- *   unlockHeight, // the CLTV height the lockup script commits to
- *   expectedScript, // or: lockScript: meta.lockScript (from buildRegisterMetadata)
+ *   unlockHeight: meta.unlockHeight,
+ *   lockScript: meta.lockScript, // from buildRegisterMetadata
  * });
- * // → buildRegisterForBond({ lockup: { kind: 'btc', outputs: [output], unlockBytes }, ... })
+ * // -> buildRegisterForBond({ lockup: { kind: 'btc', outputs: [output], unlockBytes }, ... })
+ * ```
+ *
+ * @example
+ * ```ts
+ * // Alternative: locate the output via the P2WSH `outputScript` directly.
+ * const output = buildLockProof({
+ *   txHex, header, merkleProof, txCount, unlockHeight,
+ *   outputScript: buildLockOutputScript({ stxAddress, unlockHeight, unlockBytes, earlyUnlockBytes }),
+ * });
  * ```
  */
-/**
- * How to locate the lockup output: by the P2WSH `scriptPubKey` directly
- * (`expectedScript`, 34 bytes) or by the witness `lockScript` it commits to
- * (converted internally via {@link computeWshOutputScript}). Provide exactly
- * one. `lockScript` is what {@link buildRegisterMetadata} returns, so the
- * common path is `{ ...proof, lockScript: meta.lockScript }`.
- */
-export type ExpectedScriptInput =
-  | { expectedScript: Uint8Array | string; lockScript?: never }
-  | { lockScript: Uint8Array | string; expectedScript?: never };
-
-/** @internal @ignore Resolve {@link ExpectedScriptInput} to the P2WSH scriptPubKey bytes. */
-function resolveExpectedScript(input: {
-  expectedScript?: Uint8Array | string;
-  lockScript?: Uint8Array | string;
-}): Uint8Array {
-  if (input.expectedScript !== undefined) {
-    return typeof input.expectedScript === 'string'
-      ? hexToBytes(input.expectedScript)
-      : input.expectedScript;
-  }
-  if (input.lockScript !== undefined) {
-    const script =
-      typeof input.lockScript === 'string' ? hexToBytes(input.lockScript) : input.lockScript;
-    return computeWshOutputScript(script);
-  }
-  throw new Error(
-    'buildLockProof: provide either `expectedScript` (P2WSH scriptPubKey) or `lockScript` (witness script)'
-  );
-}
-
 export function buildLockProof(
   input: {
     /** Raw tx hex (`GET /tx/:txid/hex`). May be segwit-serialized; the witness is stripped. */
@@ -157,12 +163,12 @@ export function buildLockProof(
     header: Uint8Array | string;
     /** Esplora-compatible merkle-proof response (`GET /tx/:txid/merkle-proof`). */
     merkleProof: EsploraMerkleProof;
-    /** Total tx count in the block (`GET /block/:hash` → `tx_count`). */
+    /** Total tx count in the block (`GET /block/:hash` -> `tx_count`). */
     txCount: number;
     /**
      * Absolute CLTV height the lockup script commits to — the same
      * `unlockHeight` passed to {@link buildLockOutputScript} when deriving the
-     * `expectedScript` / `lockScript`. Recorded in the output tuple so the
+     * `outputScript` / `lockScript`. Recorded in the output tuple so the
      * contract can re-derive the expected script and enforce the bond's
      * minimum unlock height.
      */
@@ -173,7 +179,7 @@ export function buildLockProof(
     allowUnknownOutputs: true,
     disableScriptCheck: true,
   });
-  // (withScriptSig, withWitness=false) → legacy bytes that hash to the txid.
+  // (withScriptSig, withWitness=false) -> legacy bytes that hash to the txid.
   const legacy = tx.toBytes(true, false);
 
   const expectedScript = resolveExpectedScript(input);
@@ -200,8 +206,8 @@ export function buildLockProof(
 }
 
 /**
- * @internal @ignore
- * Compute the merkle branch — the sibling hashes from leaf → root, bottom-up —
+ * @internal
+ * Compute the merkle branch — the sibling hashes from leaf -> root, bottom-up —
  * for the tx at `pos` in a block whose ordered txid list is `txids` (display/
  * big-endian hex, e.g. bitcoind `getblock` verbosity 1's `tx` array). Returns
  * the siblings in **display order**, exactly the shape of
@@ -210,33 +216,36 @@ export function buildLockProof(
  *
  * Standard Bitcoin merkle construction, folded over internal little-endian
  * hashes (hence the reversals): odd rows duplicate their last node, and each
- * parent is `sha256(sha256(left ‖ right))`. The sibling encountered at each
+ * parent is `sha256(sha256(left || right))`. The sibling encountered at each
  * level along the path to the root *is* the proof.
  */
 export function computeMerkleBranch(txids: string[], pos: number): string[] {
   if (pos < 0 || pos >= txids.length) {
     throw new Error(`computeMerkleBranch: pos ${pos} out of range (0..${txids.length - 1})`);
   }
-  let level = txids.map(id => reverse32(hexToBytes(id))); // display → internal
-  let index = pos;
-  const siblings: Uint8Array[] = [];
-  while (level.length > 1) {
-    if (level.length % 2 === 1) level.push(level[level.length - 1]); // duplicate last
-    siblings.push(level[index ^ 1]);
-    const next: Uint8Array[] = [];
-    for (let i = 0; i < level.length; i += 2) {
-      next.push(sha256(sha256(concatBytes(level[i], level[i + 1]))));
-    }
-    level = next;
-    index = Math.floor(index / 2);
-  }
-  return siblings.map(s => bytesToHex(reverse32(s))); // internal → display
+  const leaves = txids.map(id => reverse32(hexToBytes(id))); // display -> internal
+  return merkleSiblings(leaves, pos).map(s => bytesToHex(reverse32(s))); // internal -> display
+}
+
+/**
+ * @internal Sibling hash at each level from leaf -> root for the node at
+ * `index`. Standard Bitcoin merkle climb: odd levels duplicate their last node,
+ * each parent is `sha256(sha256(left || right))`.
+ */
+function merkleSiblings(level: Uint8Array[], index: number): Uint8Array[] {
+  if (level.length <= 1) return [];
+  const padded = level.length % 2 === 1 ? [...level, level[level.length - 1]] : level;
+  const parents = range(padded.length / 2).map(i =>
+    // todo: maybe a functional chunk or similar, might be nice (optioanl)
+    sha256(sha256(concatBytes(padded[2 * i], padded[2 * i + 1])))
+  );
+  return [padded[index ^ 1], ...merkleSiblings(parents, index >> 1)];
 }
 
 /**
  * {@link buildLockProof} for callers WITHOUT an Esplora `/merkle-proof`
  * endpoint — e.g. driving bitcoind directly. Given the block's ordered txid
- * list (`getblock` verbosity 1 → `tx`), it derives the tx's position, rebuilds
+ * list (`getblock` verbosity 1 -> `tx`), it derives the tx's position, rebuilds
  * the merkle branch ({@link computeMerkleBranch}), and reads `txCount` from the
  * list, then delegates to {@link buildLockProof} (so witness-stripping,
  * output matching, and endianness are all the same single implementation).
@@ -247,14 +256,24 @@ export function computeMerkleBranch(txids: string[], pos: number): string[] {
  *
  * @example
  * ```ts
+ * // Happy path: locate the output via the witness `lockScript`.
  * const block = await rpc('getblock', [blockHash, 1]); // { height, tx, nTx }
  * const output = buildLockProofFromBlock({
  *   txHex: (await rpc('gettransaction', [txid, null, true])).hex,
  *   header: await rpc('getblockheader', [blockHash, false]),
  *   blockHeight: block.height,
  *   txids: block.tx,
- *   unlockHeight,
- *   expectedScript: buildLockOutputScript({ ... }),
+ *   unlockHeight: meta.unlockHeight,
+ *   lockScript: meta.lockScript, // from buildRegisterMetadata
+ * });
+ * ```
+ *
+ * @example
+ * ```ts
+ * // Alternative: locate the output via the P2WSH `outputScript` directly.
+ * const output = buildLockProofFromBlock({
+ *   txHex, header, blockHeight, txids, unlockHeight,
+ *   outputScript: buildLockOutputScript({ stxAddress, unlockHeight, unlockBytes, earlyUnlockBytes }),
  * });
  * ```
  */
@@ -291,8 +310,8 @@ export function buildLockProofFromBlock(
     header: input.header,
     txCount: input.txids.length,
     unlockHeight: input.unlockHeight,
-    // Resolve here so the lockScript/expectedScript overload is handled once.
-    expectedScript: resolveExpectedScript(input),
+    // Resolve here so the lockScript/outputScript overload is handled once.
+    outputScript: resolveExpectedScript(input),
     merkleProof: {
       block_height: input.blockHeight,
       merkle: computeMerkleBranch(input.txids, pos),

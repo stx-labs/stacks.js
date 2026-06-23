@@ -214,7 +214,7 @@ describe('buildLockProof', () => {
       merkleProof: MERKLE_PROOF,
       txCount: 3721,
       unlockHeight: 850_000,
-      expectedScript: OUTPUT_0_SCRIPT,
+      outputScript: OUTPUT_0_SCRIPT,
     });
 
   it('selects the output whose scriptPubKey matches and reads its amount', () => {
@@ -279,7 +279,7 @@ describe('buildLockProof', () => {
         merkleProof: MERKLE_PROOF,
         txCount: 3721,
         unlockHeight: 850_000,
-        expectedScript: '0020' + '00'.repeat(32),
+        outputScript: '0020' + '00'.repeat(32),
       })
     ).toThrow(/no output matches/);
   });

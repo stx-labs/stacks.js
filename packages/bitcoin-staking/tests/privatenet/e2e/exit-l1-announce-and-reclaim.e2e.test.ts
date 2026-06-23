@@ -442,7 +442,7 @@ test.skip('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5',
       merkleProof,
       txCount,
       unlockHeight,
-      expectedScript: p2wshOutputScript,
+      outputScript: p2wshOutputScript,
     });
     console.log('lockupOutput amount:', lockupOutput.amount.toString());
 

@@ -142,7 +142,7 @@ export async function buildPauseRewards(args: TxParams): Promise<StacksTransacti
  *   bondIndex: 0,
  *   targetRateBps: 500,        // 5% target APY
  *   stxValueRatio: 1_000_000n, // uSTX per 100 sats
- *   minUstxRatioBps: 8_000,    // ≥80% of the paired value must be STX
+ *   minUstxRatioBps: 8_000,    // >=80% of the paired value must be STX
  *   earlyUnlockBytes,
  *   allowlist: [
  *     { staker: 'SP2C2YFP12AJZB4MABJBAJ55XECVS7E4PMMZ89YZR', maxSats: 100_000_000n },
@@ -399,7 +399,7 @@ export async function buildAnnounceL1EarlyExit(
  * valid when the membership is sBTC-backed (`is-l1-lock = false`,
  * `ERR_CANNOT_UNSTAKE_SBTC`). The `signerManager` arg must match the
  * staker's current signer (`ERR_INVALID_OLD_SIGNER_MANAGER`).
- * `amountToWithdrawSats` must be ≤ the staker's current sBTC shares
+ * `amountToWithdrawSats` must be <= the staker's current sBTC shares
  * (`ERR_INVALID_UNSTAKE_SBTC_AMOUNT`). The sBTC is transferred to the staker
  * via `sbtc-token.transfer` from the contract.
  *
@@ -418,7 +418,7 @@ export async function buildUnstakeSbtc(
   args: {
     /** Contract address of the signer-manager currently bound to the staker. */
     signerManager: string;
-    /** sBTC sats to withdraw. Must be ≤ the staker's current sBTC shares. */
+    /** sBTC sats to withdraw. Must be <= the staker's current sBTC shares. */
     amountToWithdrawSats: IntegerType;
   } & TxParams
 ): Promise<StacksTransactionWire> {

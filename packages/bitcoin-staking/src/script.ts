@@ -78,8 +78,8 @@ export function parseUnlockScript(unlockBytes: Uint8Array | string): Uint8Array 
 /**
  * @internal
  * Mirrors `pox-5.push-script-bytes`: prefixes `bytes` with the right push
- * opcode(s) — empty → `OP_0`, ≤75 → direct push, ≤255 → `OP_PUSHDATA1`, ≤65535
- * → `OP_PUSHDATA2`. Encoding delegated to `@scure/btc-signer`'s `Script`.
+ * opcode(s) — empty -> `OP_0`, <=75 -> direct push, <=255 -> `OP_PUSHDATA1`, <=65535
+ * -> `OP_PUSHDATA2`. Encoding delegated to `@scure/btc-signer`'s `Script`.
  *
  * @throws for inputs longer than 65535 bytes (no `OP_PUSHDATA4`, like the contract).
  */
@@ -93,7 +93,7 @@ export function pushScriptBytes(bytes: Uint8Array): Uint8Array {
 /**
  * @internal
  * Mirrors `pox-5.serialize-c-script-num`: the minimal little-endian signed
- * ScriptNum encoding of a non-negative integer (`0` → `[]`; a `0x00` sign byte
+ * ScriptNum encoding of a non-negative integer (`0` -> `[]`; a `0x00` sign byte
  * is appended when the top byte's high bit is set, to keep the value positive).
  * Encoding delegated to `@scure/btc-signer`'s `ScriptNum`.
  *
@@ -396,11 +396,11 @@ export function computeBondUnlockHeight(opts: { bondIndex: number; poxInfo: PoxI
 /**
  * Everything derivable for a paired-BTC `register-for-bond` *before* the
  * funding Bitcoin transaction exists. {@link buildRegisterMetadata} computes
- * the whole chain (unlock height → unlock tail → lock script → address /
+ * the whole chain (unlock height -> unlock tail -> lock script -> address /
  * output script) in one call, so callers fund {@link RegisterMetadata.lockAddress}
  * and later pass {@link RegisterMetadata.lockScript} straight to `buildLockProof`
  * / `buildLockProofFromBlock` (both accept `lockScript` in place of
- * `expectedScript`).
+ * `outputScript`).
  */
 export interface RegisterMetadata {
   /** P2WSH Bitcoin address to fund — send the locked sats here. */
@@ -413,7 +413,7 @@ export interface RegisterMetadata {
   lockScript: Uint8Array;
   /**
    * The P2WSH `scriptPubKey` (34 bytes) the funding output must carry — the
-   * `expectedScript` the contract asserts. Equals
+   * `outputScript` the contract asserts. Equals
    * `computeWshOutputScript(lockScript)`; exposed since it is derived along
    * the way.
    */

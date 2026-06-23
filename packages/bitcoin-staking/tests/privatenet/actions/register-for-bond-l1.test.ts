@@ -164,13 +164,13 @@ test.skip(`register-for-bond (real L1 BTC proof) for bond ${BOND_INDEX}`, async 
   console.log('unlockBytes (hex):', artifact.unlockBytesHex);
 
   // ── 4. Derive expected P2WSH output script (the "expected script hash") ──
-  const expectedScript = buildLockOutputScript({
+  const outputScript = buildLockOutputScript({
     stxAddress: artifact.stakerStxAddress,
     unlockHeight: artifact.unlockHeight,
     unlockBytes,
     earlyUnlockBytes: artifact.earlyUnlockBytesHex,
   });
-  console.log('expectedP2wshScript (hex):', Buffer.from(expectedScript).toString('hex'));
+  console.log('expectedP2wshScript (hex):', Buffer.from(outputScript).toString('hex'));
 
   // ── 5. Assemble the full SPV proof tuple using assembleLockupProof ────────
   //
@@ -180,7 +180,7 @@ test.skip(`register-for-bond (real L1 BTC proof) for bond ${BOND_INDEX}`, async 
   //   b. Endianness: merkle[] hashes from Esplora are big-endian display form;
   //      assembleLockupProof reverses each to internal little-endian form.
   //
-  // It also locates the output by matching expectedScript, so outputIndex is
+  // It also locates the output by matching outputScript, so outputIndex is
   // cross-checked rather than blindly trusted.
 
   console.log('assembling SPV proof...');
@@ -197,7 +197,7 @@ test.skip(`register-for-bond (real L1 BTC proof) for bond ${BOND_INDEX}`, async 
     merkleProof: artifact.merkleProof,
     txCount: artifact.txCount,
     unlockHeight: artifact.unlockHeight,
-    expectedScript,
+    outputScript,
   });
 
   console.log('lockupOutput:', JSON.stringify({

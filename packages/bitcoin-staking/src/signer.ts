@@ -16,15 +16,11 @@ import { parse as parseBtcAddress, type BtcAddressRepr } from './btc-address';
 import type { PoXAddressVersion } from './constants';
 import type { SignerCalldataL1Payout, SignerKeyGrantOptions } from './types';
 
-// ---------------------------------------------------------------------------
-// SIP-018 message + domain builder (pure — exposed for tests / advanced use)
-// ---------------------------------------------------------------------------
-
 /**
  * Build the SIP-018 structured-data tuple and domain that authorize a
  * signer-key grant.
  *
- * Mirrors pox-5's `get-signer-grant-message-hash`, which hashes:
+ * Mirrors `pox-5.get-signer-grant-message-hash`, which hashes:
  *
  *   message: { topic: "grant-authorization",
  *              signer-manager: <principal>,
@@ -53,10 +49,6 @@ export function buildSignerGrantMessage(opts: SignerKeyGrantOptions): {
   return { message, domain };
 }
 
-// ---------------------------------------------------------------------------
-// SIP-018 message hash
-// ---------------------------------------------------------------------------
-
 /**
  * 32-byte SHA-256 over the SIP-018 envelope `prefix || domain-hash ||
  * message-hash`. Equivalent to `pox-5.get-signer-grant-message-hash` —
@@ -65,10 +57,6 @@ export function buildSignerGrantMessage(opts: SignerKeyGrantOptions): {
 export function computeSignerGrantHash(opts: SignerKeyGrantOptions): Uint8Array {
   return sha256(encodeStructuredDataBytes(buildSignerGrantMessage(opts)));
 }
-
-// ---------------------------------------------------------------------------
-// Sign
-// ---------------------------------------------------------------------------
 
 /**
  * Sign a signer-key grant. Returns a 65-byte recoverable signature in RSV
@@ -80,10 +68,6 @@ export function signSignerGrant(opts: SignerKeyGrantOptions & { privateKey: Priv
     privateKey: opts.privateKey,
   });
 }
-
-// ---------------------------------------------------------------------------
-// Verify
-// ---------------------------------------------------------------------------
 
 /**
  * Verify a signer-key grant signature locally. Recovers the public key from
@@ -141,13 +125,13 @@ export function buildSignerCalldata(opts: SignerCalldataL1Payout): Uint8Array {
  *
  * @example
  * ```ts
- * import { BtcAddress, decodeSignerCalldata } from '@stacks/bitcoin-staking';
+ * import { BtcAddress, parseSignerCalldata } from '@stacks/bitcoin-staking';
  *
- * const { poxAddress, maxFeeSats } = decodeSignerCalldata(signerCalldata);
+ * const { poxAddress, maxFeeSats } = parseSignerCalldata(signerCalldata);
  * BtcAddress.stringify(poxAddress, 'mainnet'); // 'bc1q...'
  * ```
  */
-export function decodeSignerCalldata(calldata: Uint8Array | string): {
+export function parseSignerCalldata(calldata: Uint8Array | string): {
   poxAddress: BtcAddressRepr;
   maxFeeSats: bigint;
 } {
