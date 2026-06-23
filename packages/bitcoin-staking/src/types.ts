@@ -261,7 +261,7 @@ export type BuildRevokeSignerKeyTxArgs = TxParams & {
 
 // NOTE: BTC SPV proof types used by `register-for-bond` live here, but the
 // helpers that *construct* them (parsing tx bytes, computing merkle paths,
-// etc.) live in `locking.ts`.
+// etc.) live in `script.ts` / `proof.ts`.
 
 /**
  * Per-output proof tuple required by `register-for-bond` when committing an
@@ -327,3 +327,20 @@ export interface BondL1LockupOutput {
 export type BondLockup =
   | { kind: 'btc'; outputs: BondL1LockupOutput[]; unlockBytes: Uint8Array | string }
   | { kind: 'sbtc'; sbtcSats: bigint };
+
+/**
+ * A confirmed Bitcoin UTXO, in the esplora / mempool.space shape (`txid` /
+ * `vout` / `value`). The value is sats as a `bigint`. `scriptPubKey` is optional
+ * and only used as a cross-check — the lockup reclaim re-derives the P2WSH from
+ * the lockup script.
+ */
+export interface Utxo {
+  /** Funding transaction id (display / big-endian hex). */
+  txid: string;
+  /** Output index within the funding transaction. */
+  vout: number;
+  /** Output value, in sats. */
+  value: bigint;
+  /** Output `scriptPubKey` bytes, if known. Optional — re-derived when omitted. */
+  scriptPubKey?: Uint8Array;
+}

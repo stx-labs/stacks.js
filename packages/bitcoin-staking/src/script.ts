@@ -22,6 +22,15 @@ const BTC_NETWORKS: Record<StacksNetworkName, typeof btc.NETWORK> = {
 };
 
 /**
+ * @internal Resolve a Stacks network to its `@scure/btc-signer` network params
+ * (address HRP / version bytes). Shared so tx builders and address derivation
+ * agree on the BTC network.
+ */
+export function btcNetworkFrom(network: StacksNetworkName | StacksNetwork): typeof btc.NETWORK {
+  return BTC_NETWORKS[networkNameFrom(network)];
+}
+
+/**
  * Build the default unlock script: `<compressedPubKey> OP_CHECKSIG`.
  *
  * This is the simplest spend condition — a single signature from the given
