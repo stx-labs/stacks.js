@@ -129,6 +129,10 @@ test.skip(`announce-l1-early-exit: bondIndex=${BOND_INDEX} staker=${STAKER_NAME}
     fee: FEE,
     nonce,
     network,
+    // announce settles rewards + decrements share totals — asset movements that
+    // default Deny mode reverts (abort_by_post_condition), silently undoing the
+    // announce. Allow asset transfers so the announce actually persists.
+    postConditionMode: 'allow',
   });
 
   console.log('transaction built — signing with STAKER key...');

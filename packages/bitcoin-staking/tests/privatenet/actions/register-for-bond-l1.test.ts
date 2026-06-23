@@ -242,6 +242,10 @@ test.skip(`register-for-bond (real L1 BTC proof) for bond ${BOND_INDEX}`, async 
     fee: FEE,
     nonce,
     network,
+    // register-for-bond LOCKS the staker's amountUstx STX — an asset movement.
+    // Default Deny mode (no covering post-condition) reverts it (abort_by_post_condition),
+    // so allow asset transfers for this enrollment tx.
+    postConditionMode: 'allow',
   });
 
   console.log('transaction built — signing...');

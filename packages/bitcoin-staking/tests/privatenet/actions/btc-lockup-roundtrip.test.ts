@@ -6,19 +6,22 @@
  *
  * Builds TWO self-contained P2WSH lockups funded from a freshly-derived P2WPKH
  * address (so it never collides with other tests), then sweeps each back, proving
- * BOTH spend branches of the canonical `buildLockingScript` layout:
+ * BOTH spend branches of the canonical `buildLockScript` layout (mirror of
+ * pox-5 `construct-lockup-script`):
  *
- *   <stakerConsensusBuff> OP_DROP OP_IF
- *     <unlockHeight> OP_CLTV OP_DROP
- *     <unlockBytes>            ← <stakerPub> OP_CHECKSIG     (ROUNDTRIP_PRIV)
+ *   OP_IF
+ *     <unlockHeight> OP_CHECKLOCKTIMEVERIFY
  *   OP_ELSE
+ *     OP_SIZE 32 OP_EQUALVERIFY OP_SHA256 <H> OP_EQUALVERIFY   (H = sha256(sha256(consensus-buff(staker))))
  *     <earlyUnlockBytes>       ← <adminPub>  OP_CHECKSIG (account7) — leaves 1 for OP_VERIFY
- *     <unlockBytes>            ← <stakerPub> OP_CHECKSIG     (ROUNDTRIP_PRIV)
  *   OP_ENDIF
+ *   OP_VERIFY
+ *   <unlockBytes>              ← <stakerPub> OP_CHECKSIG (runs in BOTH branches, final result)
  *
  * TEST 1 — EARLY branch (OP_ELSE). unlockHeight = burn + 100 (far future → CLTV
- *   branch NOT spendable → forces the early branch).
- *     Witness: [ staker_sig, admin_sig, <empty→ELSE>, witnessScript ]
+ *   branch NOT spendable → forces the early branch). The ELSE branch reveals the
+ *   32-byte preimage = sha256(consensus-buff(staker)).
+ *     Witness: [ staker_sig, admin_sig, preimage, <empty→ELSE>, witnessScript ]
  *
  * TEST 2 — TIMELOCK branch (OP_IF / CLTV). unlockHeight = burn - 10 (already past
  *   → CLTV satisfiable now, no waiting).
@@ -203,9 +206,9 @@ test.skip('EARLY-branch (OP_ELSE) P2WSH lockup round trip', async () => {
   // Stack at script start (top = rightmost): empty | preimage | admin_sig | staker_sig
   // OP_IF pops empty → falsy → ELSE branch
   // ELSE: OP_SIZE 32 OP_EQUALVERIFY OP_SHA256 <H> OP_EQUALVERIFY → verifies preimage
-  //       <adminPub> OP_CHECKSIGVERIFY → verifies admin_sig
-  // OP_ENDIF OP_VERIFY (result of CHECKSIGVERIFY = true, VERIFY passes)
-  // <stakerPub> OP_CHECKSIG → verifies staker_sig
+  //       <adminPub> OP_CHECKSIG → verifies admin_sig, leaves 1 on the stack
+  // OP_ENDIF OP_VERIFY (consumes the ELSE branch's 1)
+  // <stakerPub> OP_CHECKSIG → verifies staker_sig (final result, both branches)
   const witnessItems = [stakerSig, adminSig, stakerPreimage, new Uint8Array(0), witnessScript];
   sweepTx.updateInput(0, { finalScriptWitness: witnessItems }, true);
   expect(sweepTx.isFinal).toBe(true);
