@@ -2,7 +2,7 @@ import * as btc from '@scure/btc-signer';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { concatBytes, hexToBytes } from '@stacks/common';
 import type { StacksNetwork, StacksNetworkName } from '@stacks/network';
-import { Cl, ClarityType, serializeCVBytes } from '@stacks/transactions';
+import { Cl, serializeCVBytes } from '@stacks/transactions';
 import {
   BOND_END_OFFSET_PERIODS,
   bondPeriodToRewardCycle,
@@ -129,21 +129,14 @@ export function pushCScriptNum(n: number | bigint): Uint8Array {
 
 /**
  * @internal
- * Encode a standard-principal Stacks address as its Clarity consensus buffer
- * (`0x05 || version(1B) || hash160(20B)`, 22 bytes), via the monorepo's
- * {@link serializeCVBytes} — i.e. `to-consensus-buff?` for a standard principal.
- *
- * @throws if `addr` is a contract principal (those serialize with a `0x06` tag
- *   and trailing name; contract principals can't act as L1 stakers).
+ * Encode a Stacks principal as its Clarity consensus buffer, via the monorepo's
+ * {@link serializeCVBytes} — i.e. `to-consensus-buff?` for a principal. Handles
+ * both standard principals (`0x05 || version(1B) || hash160(20B)`, 22 bytes) and
+ * contract principals (`0x06 || version(1B) || hash160(20B) || name-len(1B) ||
+ * name`), matching pox-5, which accepts contract principals as stakers.
  */
 export function toConsensusBuff(addr: string): Uint8Array {
-  const cv = Cl.address(addr);
-  if (cv.type === ClarityType.PrincipalContract) {
-    throw new Error(
-      `toConsensusBuff: expected a standard principal, got contract principal "${addr}"`
-    );
-  }
-  return serializeCVBytes(cv);
+  return serializeCVBytes(Cl.address(addr));
 }
 
 /**
@@ -201,11 +194,11 @@ export function computeRegisterPreimage(stxAddress: string): Uint8Array {
  * configuration on-chain; the SDK does not synthesize them — callers fetch them
  * via `fetchBond(...)` and pass them through.
  *
- * Only standard principals are accepted as `staker` (contract principals
- * cannot stake on L1).
+ * `staker` may be a standard or a contract address — both are serialized by
+ * their Clarity consensus buffer, matching pox-5.
  */
 export function buildLockScript(opts: {
-  /** Stacks standard principal of the staker. */
+  /** Stacks address of the staker (standard or contract address). */
   stxAddress: string;
   /** Burn-block height at which the OP_CLTV branch becomes spendable. */
   unlockHeight: number | bigint;
@@ -464,7 +457,7 @@ export function buildRegisterMetadata(opts: {
   poxInfo: PoxInfo;
   /** Compressed (33-byte) public key the staker signs the unlock with. */
   bitcoinPublicKey: Uint8Array | string;
-  /** Stacks standard principal of the staker. */
+  /** Stacks address of the staker (standard or contract address). */
   stxAddress: string;
   /** Per-bond early-unlock subscript, from `fetchBond(...)`. */
   earlyUnlockBytes: Uint8Array | string;

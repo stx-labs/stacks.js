@@ -52,11 +52,20 @@ describe('toConsensusBuff matches the reference (hand-rolled) implementation', (
       hash160: string;
       contractName?: string;
     };
-    if (parsed.contractName) throw new Error('contract principal');
-    const out = new Uint8Array(22);
-    out[0] = 0x05;
-    out[1] = parsed.version;
-    out.set(hexToBytes(parsed.hash160), 2);
+    const head = new Uint8Array(22);
+    head[1] = parsed.version;
+    head.set(hexToBytes(parsed.hash160), 2);
+    if (!parsed.contractName) {
+      head[0] = 0x05; // standard principal
+      return head;
+    }
+    // contract principal: 0x06 || version || hash160 || name-len(1B) || name
+    head[0] = 0x06;
+    const name = new TextEncoder().encode(parsed.contractName);
+    const out = new Uint8Array(head.length + 1 + name.length);
+    out.set(head, 0);
+    out[head.length] = name.length;
+    out.set(name, head.length + 1);
     return out;
   }
 
@@ -71,10 +80,13 @@ describe('toConsensusBuff matches the reference (hand-rolled) implementation', (
     expect(bytesToHex(out)).toBe(bytesToHex(refToConsensusBuff(addr)));
   });
 
-  it('rejects contract principals', () => {
-    expect(() =>
-      toConsensusBuff('SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7.my-contract')
-    ).toThrow();
+  it.each([
+    'SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7.my-contract',
+    'ST000000000000000000002AMW42H.pox-5',
+  ])('encodes contract principal %s (0x06 tag, matches reference)', addr => {
+    const out = toConsensusBuff(addr);
+    expect(out[0]).toBe(0x06);
+    expect(bytesToHex(out)).toBe(bytesToHex(refToConsensusBuff(addr)));
   });
 });
 
@@ -244,7 +256,7 @@ describe('buildLockScript', () => {
     expect(bytesToHex(fromBytes)).toBe(bytesToHex(fromHex));
   });
 
-  it('rejects contract principals as stxAddress', () => {
+  it('accepts contract principals as stxAddress', () => {
     expect(() =>
       buildLockScript({
         stxAddress: `${TEST_STX_ADDRESS}.some-contract`,
@@ -252,7 +264,7 @@ describe('buildLockScript', () => {
         unlockBytes,
         earlyUnlockBytes: TEST_EARLY_UNLOCK,
       })
-    ).toThrow();
+    ).not.toThrow();
   });
 });
 
