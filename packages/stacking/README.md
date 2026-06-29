@@ -438,7 +438,7 @@ These are the methods for creating the required transactions for delegated stack
 - [Stacking in a pool](#stacking-in-a-pool)
   - [`.delegateStx` Delegate STX](#delegate-stx)
   - [`.revokeDelegateStx` Revoke delegation](#revoke-delegation)
-- [Operating a pool](#operating-a-pool)
+- [Operating a pool](#operating-a-pool--stacking-for-others)
   - [`.delegateStackStx` Stack delegated STX](#stack-delegated-stx)
   - [`.stackAggregationCommitIndexed` Commit to stacking](#commit-to-stacking)
 
