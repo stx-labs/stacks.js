@@ -58,9 +58,7 @@ on:
         default: ''
 
 permissions:
-  contents: write
-  pull-requests: write
-  id-token: write # npm OIDC trusted publishing
+  contents: read
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
@@ -68,6 +66,9 @@ jobs:
   pre-run:
     uses: ./.github/workflows/pre-run.yml
     secrets: inherit
+    permissions:
+      contents: read
+      actions: write # cancel-previous-runs
 
   # Classify the dispatch `target` input into a `kind`:
   #   release  — empty target (manual production publish)
@@ -113,6 +114,9 @@ jobs:
   release:
     runs-on: ubuntu-latest
     needs: [pre-run, validate-dispatch]
+    permissions:
+      contents: write # push git tags + create GitHub Releases
+      id-token: write # npm OIDC trusted publishing
     # `!failure() && !cancelled()` lets this job run when `validate-dispatch`
     # is `skipped` (push trigger), but still blocks on a real failure of
     # `pre-run` or `validate-dispatch`. `ref_name == 'main'` keeps manual
@@ -149,6 +153,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [pre-run, validate-dispatch]
     if: "needs.pre-run.outputs.is-not-fork == 'true' && needs.validate-dispatch.outputs.kind == 'snapshot'"
+    permissions:
+      contents: read
+      id-token: write # npm OIDC trusted publishing
     steps:
       # Map target → (ref to publish from, dist-tag to publish under).
       # `main` is the canonical beta channel, so it gets the `beta` tag.
@@ -212,6 +219,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: [pre-run, validate-dispatch]
     if: "needs.pre-run.outputs.is-not-fork == 'true' && needs.validate-dispatch.outputs.kind == 'pr'"
+    permissions:
+      contents: read
+      id-token: write # npm OIDC trusted publishing
+      pull-requests: write # update PR sticky header
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
