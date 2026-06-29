@@ -16,6 +16,7 @@ import {
 } from '@stacks/transactions';
 import { POX5_CONTRACT_NAME } from './constants';
 import { type BondStatusName, bondStatus } from './cycles';
+import { describePox5Error } from './errors';
 import type {
   AccountStatus,
   Bond,
@@ -508,6 +509,25 @@ interface ConstructLockupParams {
   earlyUnlockBytes: Uint8Array | string;
 }
 
+/**
+ * @internal Decode a `(response (buff ...) uint)` read-only result to bytes,
+ * throwing a descriptive error on the `(err uN)` branch.
+ */
+function unwrapResponseBuffer(
+  result: Awaited<ReturnType<typeof fetchCallReadOnlyFunction>>,
+  functionName: string
+): Uint8Array {
+  if (result.type === ClarityType.ResponseErr) {
+    const code = Number((result.value as UIntCV).value);
+    const info = describePox5Error(code);
+    throw new Error(
+      `${functionName} returned (err u${code})` +
+        (info ? ` — ${info.name}: ${info.description}` : '')
+    );
+  }
+  return hexToBytes(((result as { value: BufferCV }).value).value as string);
+}
+
 /** @internal */
 async function fetchConstructLockupRead(
   functionName: 'construct-lockup-script' | 'construct-lockup-output-script',
@@ -530,7 +550,9 @@ async function fetchConstructLockupRead(
     network: opts.network,
     client: opts.client,
   });
-  return hexToBytes((result as BufferCV).value as string);
+  // `construct-lockup-*` now return `(response (buff ...) uint)` — an
+  // out-of-range `unlockHeight` (>= 2^39) yields `(err ERR_INVALID_UNLOCK_HEIGHT)`.
+  return unwrapResponseBuffer(result, functionName);
 }
 
 /**
@@ -541,6 +563,7 @@ async function fetchConstructLockupRead(
  * this to cross-check the locally-built script before funding BTC — a mismatch
  * means the SDK and the deployed contract disagree, and `register-for-bond`
  * would fail (`ERR_INVALID_LOCKUP_SCRIPT`), stranding the funds in the timelock.
+ * Throws `ERR_INVALID_UNLOCK_HEIGHT` for an `unlockHeight >= 2^39`.
  */
 export async function fetchConstructLockupScript(
   opts: ConstructLockupParams & NetworkClientParam
@@ -555,6 +578,7 @@ export async function fetchConstructLockupScript(
  * sha256(script)`) the contract re-derives in `register-for-bond` and matches
  * against each declared output. Mirrors the local, pure
  * {@link buildLockOutputScript}; fetch this to cross-check before funding BTC.
+ * Throws `ERR_INVALID_UNLOCK_HEIGHT` for an `unlockHeight >= 2^39`.
  */
 export async function fetchConstructLockupOutputScript(
   opts: ConstructLockupParams & NetworkClientParam
@@ -594,6 +618,28 @@ async function fetchBufferRead(
 }
 
 /**
+ * @internal Run a read-only that returns a `(response (buff ...) uint)` and
+ * decode the `ok` buffer to bytes, throwing on the `(err uN)` branch.
+ */
+async function fetchResponseBufferRead(
+  functionName: string,
+  functionArgs: Parameters<typeof fetchCallReadOnlyFunction>[0]['functionArgs'],
+  opts: NetworkClientParam
+): Promise<Uint8Array> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const result = await fetchCallReadOnlyFunction({
+    contractAddress: network.bootAddress,
+    contractName: POX5_CONTRACT_NAME,
+    functionName,
+    functionArgs,
+    senderAddress: network.bootAddress,
+    network: opts.network,
+    client: opts.client,
+  });
+  return unwrapResponseBuffer(result, functionName);
+}
+
+/**
  * Wraps the contract's `push-script-bytes` read-only.
  *
  * Returns `bytes` prefixed with its Bitcoin-Script push opcode(s). Mirrors the
@@ -608,13 +654,15 @@ export async function fetchPushScriptBytes(
 /**
  * Wraps the contract's `serialize-c-script-num` read-only.
  *
- * Returns the minimal little-endian CScriptNum encoding of `n`. Mirrors the
- * local, pure {@link serializeCScriptNum} — fetch to cross-check.
+ * Returns the minimal little-endian CScriptNum encoding of `n` (1–5 bytes).
+ * Mirrors the local, pure {@link serializeCScriptNum} — fetch to cross-check.
+ * Throws `ERR_INVALID_UNLOCK_HEIGHT` for `n >= 2^39`, which a 5-byte
+ * minimally-encoded CScriptNum cannot represent.
  */
 export async function fetchSerializeCScriptNum(
   opts: { n: number | bigint } & NetworkClientParam
 ): Promise<Uint8Array> {
-  return fetchBufferRead('serialize-c-script-num', [Cl.uint(opts.n)], opts);
+  return fetchResponseBufferRead('serialize-c-script-num', [Cl.uint(opts.n)], opts);
 }
 
 /**
@@ -622,12 +670,13 @@ export async function fetchSerializeCScriptNum(
  *
  * Returns the script-push encoding of the number `n` (OP_0 / OP_1..OP_16 small
  * forms, else a pushed CScriptNum). Mirrors the local, pure
- * {@link pushCScriptNum} — fetch to cross-check.
+ * {@link pushCScriptNum} — fetch to cross-check. Throws
+ * `ERR_INVALID_UNLOCK_HEIGHT` for `n >= 2^39`.
  */
 export async function fetchPushCScriptNum(
   opts: { n: number | bigint } & NetworkClientParam
 ): Promise<Uint8Array> {
-  return fetchBufferRead('push-c-script-num', [Cl.uint(opts.n)], opts);
+  return fetchResponseBufferRead('push-c-script-num', [Cl.uint(opts.n)], opts);
 }
 
 /**

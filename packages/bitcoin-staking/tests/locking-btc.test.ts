@@ -1,6 +1,7 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, hexToBytes } from '@stacks/common';
 import {
+  C_SCRIPT_NUM_MAX,
   buildLockProof,
   computeBitcoinTxid,
   computeWshOutputScript,
@@ -30,6 +31,13 @@ describe('serializeCScriptNum', () => {
 
   it('rejects negative values', () => {
     expect(() => serializeCScriptNum(-1n)).toThrow();
+  });
+
+  it('accepts just below the C_SCRIPT_NUM_MAX (2^39) border but rejects at/above it', () => {
+    // Border is C_SCRIPT_NUM_MAX (2^39); test one below (accepted) and at/above (rejected).
+    expect(serializeCScriptNum(C_SCRIPT_NUM_MAX - 1n).length).toBe(5);
+    expect(() => serializeCScriptNum(C_SCRIPT_NUM_MAX)).toThrow();
+    expect(() => serializeCScriptNum(C_SCRIPT_NUM_MAX + 1n)).toThrow();
   });
 });
 
@@ -96,7 +104,14 @@ function refPushCScriptNum(n: number | bigint): number[] {
 }
 
 describe('script encoders match the reference (hand-rolled) implementations', () => {
-  const nums = [0n, 1n, 15n, 16n, 17n, 100n, 127n, 128n, 255n, 256n, 850_000n, 65_535n, 65_536n, 2_147_483_647n];
+  const nums = [
+    0n, 1n, 15n, 16n, 17n, 100n, 127n, 128n, 255n, 256n, 850_000n, 65_535n, 65_536n,
+    // 4- and 5-byte boundaries (the cscriptnum-serializing fix range), each
+    // computed (not hand-typed) and probed just below/at the power of two.
+    2n ** 23n - 1n, 2n ** 23n, 2n ** 24n - 1n, 2n ** 24n,
+    2n ** 31n - 1n, 2n ** 31n, 2n ** 32n - 1n, 2n ** 32n,
+    C_SCRIPT_NUM_MAX - 1n, // largest value the contract accepts
+  ];
   it.each(nums.map(n => [n] as const))('serializeCScriptNum(%s)', n => {
     expect(Array.from(serializeCScriptNum(n))).toEqual(refSerializeCScriptNum(n));
   });

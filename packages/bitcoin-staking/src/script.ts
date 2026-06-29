@@ -97,20 +97,23 @@ export function pushScriptBytes(bytes: Uint8Array): Uint8Array {
  * is appended when the top byte's high bit is set, to keep the value positive).
  * Encoding delegated to `@scure/btc-signer`'s `ScriptNum`.
  *
- * The contract caps output at 5 bytes (`as-max-len? … u5`); we mirror that.
+ * The contract rejects `n >= 2^39` with `ERR_INVALID_UNLOCK_HEIGHT` — the
+ * ceiling of what a 5-byte minimally-encoded ScriptNum can represent (a higher
+ * value needs a 6th sign byte). We mirror that bound.
  *
- * @throws if `n` is negative or its encoding exceeds the 5-byte cap.
+ * @throws if `n` is negative or `n >= 2^39` (`ERR_INVALID_UNLOCK_HEIGHT`).
  */
+export const C_SCRIPT_NUM_MAX = 549755813888n; // 2^39
+
 export function serializeCScriptNum(n: number | bigint): Uint8Array {
   const big = typeof n === 'bigint' ? n : BigInt(n);
   if (big < 0n) throw new Error('serializeCScriptNum: negative values not supported');
-  const bytes = btc.ScriptNum().encode(big);
-  if (bytes.length > 5) {
+  if (big >= C_SCRIPT_NUM_MAX) {
     throw new Error(
-      `serializeCScriptNum: encoding exceeds 5-byte ScriptNum cap (got ${bytes.length})`
+      `serializeCScriptNum: n >= 2^39 is rejected by the contract (ERR_INVALID_UNLOCK_HEIGHT)`
     );
   }
-  return bytes;
+  return btc.ScriptNum().encode(big);
 }
 
 /**
@@ -120,10 +123,10 @@ export function serializeCScriptNum(n: number | bigint): Uint8Array {
  * `push-script-bytes(serialize-c-script-num(n))` push otherwise. Delegated to
  * `@scure/btc-signer`'s `Script`.
  *
- * @throws if `n` is negative or its encoding exceeds the 5-byte cap.
+ * @throws if `n` is negative or `n >= 2^39` (`ERR_INVALID_UNLOCK_HEIGHT`).
  */
 export function pushCScriptNum(n: number | bigint): Uint8Array {
-  serializeCScriptNum(n); // validate: throws on negative / 5-byte-cap overflow
+  serializeCScriptNum(n); // validate: throws on negative / out-of-range (>= 2^39)
   return btc.Script.encode([Number(n)]);
 }
 
