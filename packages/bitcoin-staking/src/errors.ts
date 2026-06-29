@@ -176,7 +176,7 @@ export const POX5_ERROR_DESCRIPTIONS: Record<Pox5ErrorCode, string> = {
   [Pox5ErrorCode.InsufficientReserveBalance]:
     'A reserve withdrawal was attempted with insufficient reserve balance.',
   [Pox5ErrorCode.InvalidUnlockHeight]:
-    "An L1 lockup output's unlock-burn-height is lower than the bond's minimum unlock height.",
+    "An L1 lockup output's unlock-burn-height is below the bond's minimum unlock height (also returned when a height is too large to encode as a 5-byte ScriptNum).",
   [Pox5ErrorCode.RewardsPaused]: 'Signer reward claims are permanently paused for this contract.',
 };
 
