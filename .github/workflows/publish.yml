@@ -190,6 +190,8 @@ jobs:
           fi
 
       - run: npx changeset version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: node .github/scripts/snapshot-version.mjs ${{ steps.target.outputs.tag }}
 
       - name: Build packages
@@ -236,6 +238,8 @@ jobs:
           fi
 
       - run: npx changeset version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - id: snapshot
         run: node .github/scripts/snapshot-version.mjs pr --pr ${{ inputs.target }}
 
