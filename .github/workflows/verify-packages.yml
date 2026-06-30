@@ -1,0 +1,65 @@
+name: Verify Package Builds
+
+on:
+  push:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install tsx globally
+        run: npm install -g tsx
+
+      - name: Get tags older than 6 months
+        id: get_tags
+        run: |
+          TAGS=$(git for-each-ref --sort=-taggerdate --format '%(refname:short) %(taggerdate:iso8601)' refs/tags | \
+            awk -v date="$(date -d '6 months ago' +%Y-%m-%d)" '$2 < date {print $1}')
+          echo "tags<<EOF" >> $GITHUB_OUTPUT
+          echo "$TAGS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Verify packages for each tag
+        id: verify_tags
+        run: |
+          set -e
+          mkdir -p results
+          echo "| Tag | Result | Differing Packages |" > results/summary.md
+          echo "|-----|--------|--------------------|" >> results/summary.md
+          echo "Tags to check:"
+          echo "${{ steps.get_tags.outputs.tags }}"
+          for TAG in ${{ steps.get_tags.outputs.tags }}; do
+            echo "\nProcessing tag: $TAG"
+            echo "Checking out $TAG"
+            git checkout $TAG
+            npm ci || { echo "| $TAG | npm ci failed | - |" >> results/summary.md; continue; }
+            echo "Running build-packages.ts for tag: $TAG"
+            DIFFERS_JSON=$(TAG=$TAG npx tsx ./build-packages.ts)
+            echo "build-packages.ts output for $TAG: $DIFFERS_JSON"
+            if [ "$DIFFERS_JSON" != "[]" ]; then
+              # Remove brackets and quotes for markdown table
+              DIFFERS_LIST=$(echo $DIFFERS_JSON | jq -r '. | join(", ")')
+              echo "| $TAG | ❌ Mismatch | $DIFFERS_LIST |" >> results/summary.md
+            else
+              echo "| $TAG | ✅ Match | - |" >> results/summary.md
+            fi
+          done
+          git checkout $GITHUB_SHA # Return to original commit
+
+      - name: Print summary table
+        run: |
+          cat results/summary.md
+
+# continue: check github action status !!!
