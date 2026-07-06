@@ -11,7 +11,6 @@
  * No Bitcoin transactions. No `set-bond-admin` calls. No new deployments.
  * Safe senders: bond-admin (account4 equivalent), account5, account6, account7.
  *
- * ─────────────────────────────────────────────────────────────────────────────
  * PROBE A — register-for-bond (sBTC) against an OPEN bond in reward phase
  *   Discovers the LOWEST existing bond index (opened earliest, most likely OPEN
  *   or ACTIVE). Uses account5 (allowlisted on most bonds). Expects primary code
@@ -32,7 +31,6 @@
  *   fires (also acceptable). Every probe asserts: abort_by_response OR success,
  *   and logs the code + describePox5Error.
  *
- * ─────────────────────────────────────────────────────────────────────────────
  * Run with:
  *   NETWORK=testnet NETWORK_ID=256 STACKS_API=https://api.private-1.hiro.so RECORD=1 \
  *     POLL_INTERVAL=10000 RETRY_INTERVAL=10000 \
@@ -87,8 +85,6 @@ let admin: Awaited<ReturnType<typeof getBondAdminAccount>>;
 let lowestExistingBondIndex: number | undefined;
 let signerManager: string;
 
-// ─── helpers ────────────────────────────────────────────────────────────────
-
 /** Parse the raw `(err uN)` repr string and return N, or undefined. */
 function parseErrCode(repr: string | undefined): number | undefined {
   if (!repr) return undefined;
@@ -111,7 +107,7 @@ async function findLowestExistingBondIndex(
         return i;
       }
     } catch {
-      // network errors → skip
+      // network errors -> skip
     }
   }
   return undefined;
@@ -119,7 +115,7 @@ async function findLowestExistingBondIndex(
 
 /**
  * Compute the soonest settable bondIndex from the live chain state, then
- * return it offset by `offset`. Offsets ≥ 1 target future-future indices that
+ * return it offset by `offset`. Offsets >= 1 target future-future indices that
  * the contract may reject with ERR_CANNOT_SETUP_BOND_TOO_SOON (u2) — that's
  * fine and logged. Using distinct offsets per fuzz probe avoids index collisions.
  */
@@ -185,8 +181,6 @@ async function assertTolerableResult(
   return undefined;
 }
 
-// ─── setup ───────────────────────────────────────────────────────────────────
-
 beforeAll(async () => {
   admin = await getBondAdminAccount();
   await ensurePox5();
@@ -200,16 +194,16 @@ beforeAll(async () => {
   console.log("signerManager:", signerManager);
 }, 20 * 60_000);
 
-// ─── PROBE A: register-for-bond (sBTC) against an OPEN bond ──────────────────
+// PROBE A: register-for-bond (sBTC) against an OPEN bond
 //
 // Primary expected code: ERR_BOND_ALREADY_STARTED (u43)
 // Tolerant set: u43 (primary), u47 (StakeInPreparePhase), u11 (NotAllowlisted), u1 (Unauthorized)
 //
-// Guard ordering in pox-5.clar register-for-bond:
-//   1. prepare-phase guard  → (err u47)  if in prepare phase
-//   2. allowlist guard      → (err u11)  if not allowlisted
-//   3. already-started guard→ (err u43)  if bond's start cycle ≤ current cycle
-//   4. lock-sbtc            → (err u1)   if caller has 0 sBTC (transfer fails)
+// Guard ordering in pox-5.register-for-bond:
+//   1. prepare-phase guard  -> (err u47)  if in prepare phase
+//   2. allowlist guard      -> (err u11)  if not allowlisted
+//   3. already-started guard-> (err u43)  if bond's start cycle <= current cycle
+//   4. lock-sbtc            -> (err u1)   if caller has 0 sBTC (transfer fails)
 // account5 IS allowlisted on most bonds, so guard #2 is passed. Guard #1 and #3
 // depend on timing. All four codes are acceptable discoveries.
 
@@ -274,7 +268,7 @@ test.skip("adversarial-2-A: register-for-bond against an open/active bond (accou
   }
 });
 
-// ─── PROBE B: register-for-bond with amountUstx = 0 ─────────────────────────
+// PROBE B: register-for-bond with amountUstx = 0
 //
 // Exploratory — documents whatever code fires when amountUstx=0.
 // Expected candidates: ERR_INSUFFICIENT_STX (u8), ERR_INVALID_LOCKUP_AMOUNT (u45),
@@ -322,14 +316,14 @@ test.skip("adversarial-2-B: register-for-bond with amountUstx = 0 (sBTC path, ac
   // No hard assertion on the code — purely exploratory
 });
 
-// ─── PROBE C-1: setup-bond fuzz — minUstxRatioBps = 20000 (> 100%) ───────────
+// PROBE C-1: setup-bond fuzz — minUstxRatioBps = 20000 (> 100%)
 //
-// The contract likely validates that minUstxRatioBps ≤ 10000. Expected: some
+// The contract likely validates that minUstxRatioBps <= 10000. Expected: some
 // validation abort. Unknown code — log and accept abort OR success.
 
 test.skip("adversarial-2-C1: setup-bond fuzz — minUstxRatioBps = 20000 (> 100%)", async () => {
   const { bondIndex, anchorCycle, currentCycle } =
-    await computeNextBondIndex(1); // offset 1 → next+1 bond
+    await computeNextBondIndex(1); // offset 1 -> next+1 bond
   console.log("probe-C1 bondIndex:", bondIndex, { anchorCycle, currentCycle });
 
   const unsigned = await buildSetupBond({
@@ -357,14 +351,14 @@ test.skip("adversarial-2-C1: setup-bond fuzz — minUstxRatioBps = 20000 (> 100%
   );
 });
 
-// ─── PROBE C-2: setup-bond fuzz — stxValueRatio = 0 ─────────────────────────
+// PROBE C-2: setup-bond fuzz — stxValueRatio = 0
 //
 // A zero ratio would make min-ustx-for-sats-amount return 0, but the contract
 // may validate ratio > 0 upfront. Exploratory.
 
 test.skip("adversarial-2-C2: setup-bond fuzz — stxValueRatio = 0", async () => {
   const { bondIndex, anchorCycle, currentCycle } =
-    await computeNextBondIndex(2); // offset 2 → distinct index
+    await computeNextBondIndex(2); // offset 2 -> distinct index
   console.log("probe-C2 bondIndex:", bondIndex, { anchorCycle, currentCycle });
 
   const unsigned = await buildSetupBond({
@@ -392,7 +386,7 @@ test.skip("adversarial-2-C2: setup-bond fuzz — stxValueRatio = 0", async () =>
   );
 });
 
-// ─── PROBE C-3: setup-bond fuzz — empty allowlist [] ─────────────────────────
+// PROBE C-3: setup-bond fuzz — empty allowlist []
 //
 // A bond with no allowlisted stakers is technically useless but may not be
 // invalid per contract. Exploratory — could succeed (creating an un-enterable
@@ -400,7 +394,7 @@ test.skip("adversarial-2-C2: setup-bond fuzz — stxValueRatio = 0", async () =>
 
 test.skip("adversarial-2-C3: setup-bond fuzz — empty allowlist []", async () => {
   const { bondIndex, anchorCycle, currentCycle } =
-    await computeNextBondIndex(3); // offset 3 → distinct index
+    await computeNextBondIndex(3); // offset 3 -> distinct index
   console.log("probe-C3 bondIndex:", bondIndex, { anchorCycle, currentCycle });
 
   const unsigned = await buildSetupBond({
@@ -428,14 +422,14 @@ test.skip("adversarial-2-C3: setup-bond fuzz — empty allowlist []", async () =
   );
 });
 
-// ─── PROBE C-4: setup-bond fuzz — allowlist entry with maxSats = 0 ───────────
+// PROBE C-4: setup-bond fuzz — allowlist entry with maxSats = 0
 //
 // maxSats=0 means the staker's cap is zero — they could never deposit any BTC.
 // Unknown whether the contract validates this at setup time or at registration.
 
 test.skip("adversarial-2-C4: setup-bond fuzz — allowlist entry with maxSats = 0", async () => {
   const { bondIndex, anchorCycle, currentCycle } =
-    await computeNextBondIndex(4); // offset 4 → distinct index
+    await computeNextBondIndex(4); // offset 4 -> distinct index
   console.log("probe-C4 bondIndex:", bondIndex, { anchorCycle, currentCycle });
 
   const unsigned = await buildSetupBond({
@@ -463,7 +457,7 @@ test.skip("adversarial-2-C4: setup-bond fuzz — allowlist entry with maxSats = 
   );
 });
 
-// ─── PROBE C-5: setup-bond fuzz — earlyUnlockBytes oversized (700 bytes) ─────
+// PROBE C-5: setup-bond fuzz — earlyUnlockBytes oversized (700 bytes)
 //
 // The contract declares earlyUnlockBytes as `(buff 683)`. Passing 700 bytes
 // (1400 hex chars) should be rejected at the serialization/Clarity level. The
@@ -477,7 +471,7 @@ test.skip("adversarial-2-C4: setup-bond fuzz — allowlist entry with maxSats = 
 
 test.skip("adversarial-2-C5: setup-bond fuzz — earlyUnlockBytes oversized (700 bytes > 683)", async () => {
   const { bondIndex, anchorCycle, currentCycle } =
-    await computeNextBondIndex(5); // offset 5 → distinct index
+    await computeNextBondIndex(5); // offset 5 -> distinct index
   console.log("probe-C5 bondIndex:", bondIndex, { anchorCycle, currentCycle });
 
   // 1400 hex chars = 700 bytes, exceeds the (buff 683) constraint

@@ -12,7 +12,6 @@ import {
   type Utxo,
 } from '../src';
 
-// ── Fixtures ──────────────────────────────────────────────────────────────────
 // Deterministic raw BTC keys (32-byte) for the staker and the early-unlock cosigner.
 const STAKER_PRIV = hexToBytes('cb3df38053d132895220b9ce471f6b676db5b9bf0b4adefb55f2118ece2478df');
 const COSIGNER_PRIV = hexToBytes('5b8303150239eceaba43892af7cdd1fa7fc26eda5182ebaaa568e3341d54a4d0');

@@ -73,7 +73,7 @@ beforeAll(async () => {
   await ensurePox5();
 }, 60_000);
 
-// ── (A) Indirect coverage: daemon bootstrap already ran register-signer ─────
+// (A) Indirect coverage: daemon bootstrap already ran register-signer
 
 test.skip('register-signer (indirect): daemon signer-manager has a registered signer key', async () => {
   useFixtures('e2e-register-signer');
@@ -92,7 +92,7 @@ test.skip('register-signer (indirect): daemon signer-manager has a registered si
   console.log(`\n=== CONFIRMED: register-signer was invoked for ${SIGNER_MANAGER} (signerKey=${info!.signerKey}) ✓ ===`);
 }, 30_000);
 
-// ── (B) Direct-call abort: EOA → pox-5 register-signer ─────────────────────
+// (B) Direct-call abort: EOA -> pox-5 register-signer
 // No SDK builder exists for register-signer; we use makeUnsignedContractCall
 // directly (the same mechanism callPox5 uses internally).
 

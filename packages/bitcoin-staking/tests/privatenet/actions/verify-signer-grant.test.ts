@@ -8,11 +8,11 @@
  * Goal: prove our off-chain grant-message construction + secp256k1 signature
  * match what the pox-5 contract expects, without ever calling `grant-signer-key`.
  *
- * Two contract read-onlys exist (see pox-5.clar):
+ * Two contract read-onlys exist (see pox-5):
  *   - get-signer-grant-message-hash (signer-manager principal) (auth-id uint)
- *       → (sha256 (concat SIP018_MSG_PREFIX domain-hash message-hash))
+ *       -> (sha256 (concat SIP018_MSG_PREFIX domain-hash message-hash))
  *   - verify-signer-key-grant (signer-manager principal) (signer-key (buff 33))
- *       → only checks the `signer-key-grants` MAP (set by a prior broadcast).
+ *       -> only checks the `signer-key-grants` MAP (set by a prior broadcast).
  *         It does NOT verify a signature, so we can't use it for acceptance
  *         without a state-changing `grant-signer-key` call (forbidden here).
  *
@@ -94,7 +94,7 @@ describe.skip("SIP-018 signer-key-grant verification (read-only)", () => {
   });
 
   // (b) SIGNATURE ACCEPTANCE: replicate the contract's `secp256k1-recover?`
-  // predicate against the ON-CHAIN hash. recovered pubkey === signer-key ⇒
+  // predicate against the ON-CHAIN hash. recovered pubkey === signer-key =>
   // `grant-signer-key` would accept this signature.
   test("valid signature recovers to the signer-key against the on-chain hash", async () => {
     const onChain = await fetchSignerGrantMessageHash({
@@ -123,7 +123,7 @@ describe.skip("SIP-018 signer-key-grant verification (read-only)", () => {
     expect(recovered).toBe(signerKey);
   });
 
-  // (c) NEGATIVE: flipped signature byte ⇒ recovers to a DIFFERENT pubkey.
+  // (c) NEGATIVE: flipped signature byte => recovers to a DIFFERENT pubkey.
   test("tampered signature does NOT recover to the signer-key", async () => {
     const onChain = await fetchSignerGrantMessageHash({
       signerManager,
@@ -159,7 +159,7 @@ describe.skip("SIP-018 signer-key-grant verification (read-only)", () => {
     expect(recovered).not.toBe(signerKey);
   });
 
-  // (c) NEGATIVE: a different signer key ⇒ recovered pubkey ≠ expected.
+  // (c) NEGATIVE: a different signer key => recovered pubkey != expected.
   test("a different signer's signature does NOT recover to the signer-key", async () => {
     const onChain = await fetchSignerGrantMessageHash({
       signerManager,
@@ -186,7 +186,7 @@ describe.skip("SIP-018 signer-key-grant verification (read-only)", () => {
     expect(recovered).not.toBe(signerKey);
   });
 
-  // (c) NEGATIVE: wrong auth-id ⇒ the on-chain hash for a different auth-id
+  // (c) NEGATIVE: wrong auth-id => the on-chain hash for a different auth-id
   // does NOT match a signature bound to our auth-id, so recovery against it
   // yields the wrong pubkey (the contract would compute THIS hash and reject).
   test("wrong auth-id: signature bound to authId does not recover under a different auth-id hash", async () => {
@@ -213,7 +213,7 @@ describe.skip("SIP-018 signer-key-grant verification (read-only)", () => {
       privateKey: signerPrivateKey,
     });
 
-    // Contract would recover against the wrong-auth-id hash → wrong pubkey.
+    // Contract would recover against the wrong-auth-id hash -> wrong pubkey.
     const recovered = publicKeyFromSignatureRsv(onChainWrong, signature);
 
     console.log("negative: wrong auth-id", {

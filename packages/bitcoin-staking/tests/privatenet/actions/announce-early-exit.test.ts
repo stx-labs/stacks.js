@@ -4,14 +4,14 @@
  *
  * Calls `announce-l1-early-exit` on pox-5, signed by the STAKER THEMSELVES.
  * The deployed contract enforces `(is-eq contract-caller tx-sender)` AND
- * `(is-eq contract-caller staker)` → ERR_UNAUTHORIZED otherwise. This is NOT a
+ * `(is-eq contract-caller staker)` -> ERR_UNAUTHORIZED otherwise. This is NOT a
  * bond-admin operation. On success the staker's bond shares are zeroed and the
  * signer's totals decremented, enabling the staker to spend via the BTC ELSE branch.
  *
  * Preconditions:
- *   • The staker must be enrolled in the bond with isL1Lock === true.
- *   • `oldSignerManager` must match the staker's currently bound signer-manager.
- *   • The tx origin MUST be the staker (not the early-unlock-admin).
+ *   - The staker must be enrolled in the bond with isL1Lock === true.
+ *   - `oldSignerManager` must match the staker's currently bound signer-manager.
+ *   - The tx origin MUST be the staker (not the early-unlock-admin).
  *
  * Composable via ENV:
  *   BOND_INDEX        bond index (required — no default; set explicitly)
@@ -52,8 +52,6 @@ fetchMock.disableMocks();
 
 jest.setTimeout(30 * 60_000);
 
-// ─── Config ──────────────────────────────────────────────────────────────────
-
 // Default matches the sibling actions (btc-lock/register-for-bond record their
 // artifacts/fixtures against bond 4); override with BOND_INDEX for other bonds.
 const BOND_INDEX = Number(process.env.BOND_INDEX ?? 4);
@@ -66,8 +64,6 @@ const SIGNER_MANAGER =
 
 const FEE = 10_000n;
 
-// ─── Staker resolution ───────────────────────────────────────────────────────
-//
 // STAKER env selects whose L1 early exit is being announced.
 // Defaults to "account5" so the action is a no-op for the existing happy path
 // (account5 is on bond 65; for early-unlock testing use STAKER=account7).
@@ -84,8 +80,6 @@ if (!(ALLOWED_STAKERS as readonly string[]).includes(STAKER_NAME)) {
 
 const stakerAccount = getAccount(REGTEST_KEYS[STAKER_NAME]);
 
-// ─── Setup ────────────────────────────────────────────────────────────────────
-
 const network = getNetwork();
 let bondAdmin: Awaited<ReturnType<typeof getBondAdminAccount>>;
 
@@ -94,26 +88,22 @@ beforeAll(async () => {
   await ensurePox5();
 }, 30 * 60_000);
 
-// ─── Test ─────────────────────────────────────────────────────────────────────
-
 test.skip(`announce-l1-early-exit: bondIndex=${BOND_INDEX} staker=${STAKER_NAME}`, async () => {
   console.log(`\n=== ANNOUNCE-EARLY-EXIT ACTION: bondIndex=${BOND_INDEX} staker=${STAKER_NAME} ===`);
   console.log('staker principal:', stakerAccount.address);
   console.log('bond admin (early-unlock-admin):', bondAdmin.address);
   console.log('oldSignerManager:', SIGNER_MANAGER);
 
-  // ── Build unsigned announce-l1-early-exit tx ──────────────────────────────
-  //
   // buildAnnounceL1EarlyExit signature:
   //   args: { staker: string; oldSignerManager: string } & TxParams
   //
-  // • staker          — the STX principal whose L1 early exit is announced.
-  // • oldSignerManager — must equal the contract's stored signer for the staker;
+  // - staker          — the STX principal whose L1 early exit is announced.
+  // - oldSignerManager — must equal the contract's stored signer for the staker;
   //                      any mismatch aborts with ERR_INVALID_OLD_SIGNER_MANAGER.
   //                      On the private testnet the daemon registers
   //                      ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager.
-  // • publicKey       — bond-admin's compressed secp256k1 public key (origin).
-  // • fee, nonce, network — standard TxParams fields.
+  // - publicKey       — bond-admin's compressed secp256k1 public key (origin).
+  // - fee, nonce, network — standard TxParams fields.
 
   // NOTE: the deployed pox-5 requires the STAKER themselves to call
   // announce-l1-early-exit — `(asserts! (and (is-eq contract-caller tx-sender)
@@ -142,7 +132,7 @@ test.skip(`announce-l1-early-exit: bondIndex=${BOND_INDEX} staker=${STAKER_NAME}
   const txid = await broadcastAndWait(tx, stakerAccount.address, network);
   console.log('\n=== BROADCAST TXID:', txid, '===');
 
-  // ── Best-effort result check via /extended ────────────────────────────────
+  // Best-effort result check via /extended.
   await new Promise(r => setTimeout(r, 5_000));
   const record = await getTransaction(txid);
 

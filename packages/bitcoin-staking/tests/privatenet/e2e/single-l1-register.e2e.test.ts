@@ -4,8 +4,8 @@
  *
  * Dynamically discovers a bond with registration runway, then does the full
  * BTC L1 flow for account5:
- *   faucet-fund → build/broadcast P2WSH lockup → wait confirm →
- *   buildLockProof → register-for-bond (kind: btc) → assert membership.
+ *   faucet-fund -> build/broadcast P2WSH lockup -> wait confirm ->
+ *   buildLockProof -> register-for-bond (kind: btc) -> assert membership.
  *
  * Self-contained: BTC mempool helpers are inlined from btc-lock.test.ts.
  *
@@ -48,8 +48,6 @@ import { waitForBondWithRunway } from '../../helpers/bond';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 const AMOUNT_SATS = BigInt(process.env.AMOUNT_SATS ?? 30_000);
 const FEE_SATS = BigInt(process.env.FEE_SATS ?? 500);
 const FEE_USTX = BigInt(process.env.FEE_USTX ?? 10_000);
@@ -62,7 +60,7 @@ const SIGNER_MANAGER =
 const STAKER_PRIV_HEX = 'cb3df38053d132895220b9ce471f6b676db5b9bf0b4adefb55f2118ece2478df';
 const staker = getAccount(REGTEST_KEYS.account5);
 
-// ─── BTC network params (regtest) ─────────────────────────────────────────────
+// BTC network params (regtest)
 
 const REGTEST_BTC: typeof btc.NETWORK = {
   bech32: 'bcrt',
@@ -74,7 +72,7 @@ const REGTEST_BTC: typeof btc.NETWORK = {
 const MEMPOOL_BASE = 'https://mempool.bitcoin.private-1.hiro.so/api';
 const FAUCET_URL = 'https://api.private-1.hiro.so/extended/v1/faucets/btc';
 
-// ─── Inlined BTC helpers (from btc-lock.test.ts) ─────────────────────────────
+// Inlined BTC helpers (from btc-lock.test.ts)
 
 interface Utxo {
   txid: string;
@@ -215,8 +213,6 @@ async function fetchRawTxHex(txid: string): Promise<string> {
   return bytesToHex(legacyBytes);
 }
 
-// ─── Test ─────────────────────────────────────────────────────────────────────
-
 beforeAll(async () => {
   useFixtures('e2e-single-l1-register');
   await ensurePox5();
@@ -229,7 +225,7 @@ test.skip('single-staker BTC L1 register: account5 end-to-end', async () => {
   console.log('\n=== E2E: single-l1-register ===');
   console.log('staker:', staker.address);
 
-  // ── 1. Dynamic bond discovery ─────────────────────────────────────────────
+  // 1. Dynamic bond discovery
   console.log('discovering bond with registration runway...');
   // First fetch pox info to compute runway, then discover bond
   const { bondIndex, bondStartHeight, poxInfo } = await waitForBondWithRunway();
@@ -237,13 +233,13 @@ test.skip('single-staker BTC L1 register: account5 end-to-end', async () => {
   console.log(`discovered bondIndex=${bondIndex} bondStartHeight=${bondStartHeight}`);
   console.log('currentBurnHeight:', poxInfo.currentBurnchainBlockHeight);
 
-  // ── 2. Fetch bond params ──────────────────────────────────────────────────
+  // 2. Fetch bond params
   const bond = await fetchBond({ bondIndex, network });
   if (!bond) throw new Error(`bond ${bondIndex} not found on-chain`);
   console.log('bond stxValueRatio:', bond.stxValueRatio.toString());
   console.log('bond earlyUnlockBytes:', bond.earlyUnlockBytes);
 
-  // ── 3. Derive unlock height + lockup scripts ──────────────────────────────
+  // 3. Derive unlock height + lockup scripts
   const unlockHeightBig = await fetchBondL1UnlockHeight({ bondIndex, network });
   const unlockHeight = Number(unlockHeightBig);
   console.log('unlockHeight:', unlockHeight);
@@ -272,7 +268,7 @@ test.skip('single-staker BTC L1 register: account5 end-to-end', async () => {
   const p2wshAddress = p2wshObj.address!;
   console.log('P2WSH address:', p2wshAddress);
 
-  // ── 4. Get / fund a confirmed UTXO ────────────────────────────────────────
+  // 4. Get / fund a confirmed UTXO
   const p2wpkhObj = btc.p2wpkh(stakerBtcPub, REGTEST_BTC);
   const senderAddr = p2wpkhObj.address!;
   const senderScriptHex = bytesToHex(p2wpkhObj.script);
@@ -299,7 +295,7 @@ test.skip('single-staker BTC L1 register: account5 end-to-end', async () => {
   const changeSats = utxo.value - AMOUNT_SATS - FEE_SATS;
   expect(changeSats).toBeGreaterThan(0n);
 
-  // ── 5. Build, sign, broadcast P2WSH funding tx ───────────────────────────
+  // 5. Build, sign, broadcast P2WSH funding tx
   const fundingTx = new btc.Transaction();
   fundingTx.addInput({
     txid: utxo.txid,
@@ -316,12 +312,12 @@ test.skip('single-staker BTC L1 register: account5 end-to-end', async () => {
   expect(btcTxid).toMatch(/^[0-9a-f]{64}$/);
   useFixtures('e2e-single-l1-register-btc-confirmed');
 
-  // ── 6. Wait for BTC confirmation ──────────────────────────────────────────
+  // 6. Wait for BTC confirmation
   console.log('waiting for BTC confirmation...');
   const { blockHash, blockHeight } = await waitForBtcConfirmation(btcTxid);
   console.log('confirmed in block:', blockHash, 'height:', blockHeight);
 
-  // ── 7. Fetch SPV proof components ─────────────────────────────────────────
+  // 7. Fetch SPV proof components
   const headerHex = await fetchBlockHeader(blockHash);
   expect(headerHex.length).toBe(160);
   const merkleProof = await fetchMerkleProof(btcTxid, blockHash, blockHeight);
@@ -332,7 +328,7 @@ test.skip('single-staker BTC L1 register: account5 end-to-end', async () => {
   console.log('merkleProof:', JSON.stringify(merkleProof));
   console.log('txCount:', txCount);
 
-  // ── 8. Assemble SPV proof ─────────────────────────────────────────────────
+  // 8. Assemble SPV proof
   const lockupOutput = buildLockProof({
     txHex: legacyHex,
     header: headerHex,
@@ -345,7 +341,7 @@ test.skip('single-staker BTC L1 register: account5 end-to-end', async () => {
   console.log('lockupOutput height:', lockupOutput.height);
   console.log('lockupOutput amount:', lockupOutput.amount.toString());
 
-  // ── 9. Compute minUstx and register ───────────────────────────────────────
+  // 9. Compute minUstx and register
   const minUstx = minUstxForSatsAmount({
     sats: AMOUNT_SATS,
     stxValueRatio: bond.stxValueRatio,
@@ -405,7 +401,7 @@ test.skip('single-staker BTC L1 register: account5 end-to-end', async () => {
     }
   }
 
-  // ── 10. Assert membership ─────────────────────────────────────────────────
+  // 10. Assert membership
   let membership = await fetchBondMembership({ address: staker.address, network });
   const deadline = Date.now() + 2 * 60_000;
   while (!membership && Date.now() < deadline) {

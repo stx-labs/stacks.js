@@ -119,7 +119,7 @@ test('sbtc unstake: register → unstake-sbtc → sBTC returned, total falls bac
   expect(await fetchTotalSbtcStaked({ network })).toBe(totalBefore + MAX_SATS);
 
   // UNSTAKE
-  // PC covers the contract → staker sBTC transfer (the sender is the staker).
+  // PC covers the contract -> staker sBTC transfer (the sender is the staker).
   const unstakeUnsigned = await buildUnstakeSbtc({
     signerManager,
     amountToWithdrawSats: MAX_SATS,

@@ -19,7 +19,7 @@ liveTest('deploy pox-5 signer-manager contract', async () => {
   // The SM3VDX… `deployer` placeholder is the sbtc-token/-registry OWNER
   // (ACCOUNTS.sbtcDeployer), NOT the account deploying this contract. Passing
   // the test deployer makes the contract reference <test-addr>.sbtc-token,
-  // which doesn't exist → analysis abort → the deploy never lands.
+  // which doesn't exist -> analysis abort -> the deploy never lands.
   const source = loadContractSource('stacking/contracts/pox-5-signer.clar', {
     bootAddress: network.bootAddress,
     deployer: ACCOUNTS.sbtcDeployer.address,

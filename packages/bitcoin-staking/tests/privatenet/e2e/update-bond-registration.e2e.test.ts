@@ -13,7 +13,7 @@
  *   2. Record the current `signer` (oldSignerManager) from the membership.
  *   3. Determine the new signer-manager (must differ from current; both
  *      daemon-registered: SIGNER_MANAGER and SIGNER_MANAGER_2 from regtest.ts).
- *   4. Broadcast `update-bond-registration` (new → old).
+ *   4. Broadcast `update-bond-registration` (new -> old).
  *   5. Wait for confirmation; assert `fetchBondMembership` reflects the new signer.
  *
  * Note on SIGNER_MANAGER_2: it is the signer-manager deployed by STACKING_KEYS[1]
@@ -47,7 +47,7 @@ import {
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
 
-// ─── Candidate accounts ───────────────────────────────────────────────────────
+// Candidate accounts.
 // account5 (STB44…) and account6 (STEH2J3…) are funded L1 stakers.
 // account7 (STT8D…) is a funded STX staker.
 const CANDIDATES = [
@@ -63,14 +63,10 @@ function parseErrCode(repr: string | undefined): number | undefined {
   return m ? Number(m[1]) : undefined;
 }
 
-// ─── Setup ────────────────────────────────────────────────────────────────────
-
 beforeAll(async () => {
   useFixtures('e2e-update-bond-registration');
   await ensurePox5();
 }, 60_000);
-
-// ─── Test ─────────────────────────────────────────────────────────────────────
 
 test.skip('update-bond-registration: rotate signer-manager on an existing membership', async () => {
   useFixtures('e2e-update-bond-registration');
@@ -78,12 +74,12 @@ test.skip('update-bond-registration: rotate signer-manager on an existing member
 
   console.log('\n=== E2E: update-bond-registration ===');
 
-  // ── 1. Read pox info ──────────────────────────────────────────────────────
+  // 1. Read pox info
   const poxInfo = await getPoxInfo();
   console.log('currentCycle:', poxInfo.rewardCycleId);
   console.log('currentBurnHt:', poxInfo.currentBurnchainBlockHeight);
 
-  // ── 2. Find a candidate with an active bond membership ────────────────────
+  // 2. Find a candidate with an active bond membership
   console.log('\n--- Searching for a candidate with active bond membership ---');
   let stakerAccount: ReturnType<typeof getAccount> | undefined;
   let membership: Awaited<ReturnType<typeof fetchBondMembership>>;
@@ -121,7 +117,7 @@ test.skip('update-bond-registration: rotate signer-manager on an existing member
   const oldSignerManager = membership.signer;
   console.log('oldSignerManager (current):', oldSignerManager);
 
-  // ── 3. Decide the new signer-manager ─────────────────────────────────────
+  // 3. Decide the new signer-manager.
   // Must differ from current. Both SIGNER_MANAGER and SIGNER_MANAGER_2 are
   // daemon-registered on this chain.
   const newSignerManager =
@@ -130,7 +126,7 @@ test.skip('update-bond-registration: rotate signer-manager on an existing member
       : SIGNER_MANAGER;
   console.log('newSignerManager (target):', newSignerManager);
 
-  // ── 4. Broadcast update-bond-registration ────────────────────────────────
+  // 4. Broadcast update-bond-registration
   console.log('\n--- Step 4: build + sign + broadcast update-bond-registration ---');
   const nonce = await getNextNonce(stakerAccount.address);
   console.log('staker nonce:', nonce);
@@ -178,7 +174,7 @@ test.skip('update-bond-registration: rotate signer-manager on an existing member
   }
   console.log('=== update-bond-registration succeeded ✓ ===');
 
-  // ── 5. Assert membership reflects the new signer-manager ─────────────────
+  // 5. Assert membership reflects the new signer-manager
   console.log('\n--- Step 5: assert membership.signer updated ---');
   const updatedMembership = await waitForFulfilled(async () => {
     const m = await fetchBondMembership({ address: stakerAccount!.address, network });

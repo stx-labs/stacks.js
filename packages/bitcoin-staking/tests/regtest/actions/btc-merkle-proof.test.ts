@@ -23,7 +23,7 @@ import { useFixtures } from '../../helpers/mock';
 
 jest.setTimeout(60_000);
 
-// bitcoind-only; record→fixtures-btc-merkle-proof.json / replay→install mocks.
+// bitcoind-only; record->fixtures-btc-merkle-proof.json / replay->install mocks.
 beforeAll(() => useFixtures('btc-merkle-proof'));
 
 const dsha256 = (b: Uint8Array): Uint8Array => sha256(sha256(b));

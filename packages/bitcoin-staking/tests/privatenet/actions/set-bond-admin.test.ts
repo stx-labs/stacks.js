@@ -63,7 +63,7 @@ test.skip("set-bond-admin: rotate bond-admin to NEW_ADMIN", async () => {
   await ensurePox5();
 
   if (MULTISIG_SEED) {
-    // ── Multisig current admin (e.g. revert SN26 → shared admin) ──
+    // Multisig current admin (e.g. revert SN26 -> shared admin).
     const { keys, pubs } = await deriveMultisig(MULTISIG_SEED);
     console.log("set-bond-admin (multisig)", {
       from: MULTISIG_ADDRESS,
@@ -97,7 +97,7 @@ test.skip("set-bond-admin: rotate bond-admin to NEW_ADMIN", async () => {
     return;
   }
 
-  // ── Single-sig current admin (.env BOND_ADMIN_KEY) ──
+  // Single-sig current admin (.env BOND_ADMIN_KEY).
   const admin = await getBondAdminAccount();
   console.log("set-bond-admin (single-sig)", {
     currentAdmin: admin.address,

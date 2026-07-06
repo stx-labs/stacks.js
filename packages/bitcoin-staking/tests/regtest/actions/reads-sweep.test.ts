@@ -69,7 +69,7 @@ import { bitcoinRpc } from '../../helpers/btc';
 jest.setTimeout(5 * 60_000);
 
 const network = getNetwork();
-const staker = ACCOUNTS.sbtcDeployer.address; // daemon-staked → non-empty read state
+const staker = ACCOUNTS.sbtcDeployer.address; // daemon-staked -> non-empty read state
 const cleanAccount = getAccount(REGTEST_KEYS.account4);
 const signerManager = SIGNER_MANAGER;
 

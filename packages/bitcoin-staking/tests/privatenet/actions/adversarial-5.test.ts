@@ -72,8 +72,6 @@ const SIGNER_MANAGER =
 // A syntactically-valid but UNREGISTERED signer-manager principal (bogus rotate target).
 const BOGUS_SIGNER_MANAGER = 'ST000000000000000000002AMW42H.not-a-signer-manager';
 
-// ─── fresh adversarial accounts ──────────────────────────────────────────────
-
 const fresh = JSON.parse(
   readFileSync(join(__dirname, '..', 'fresh-accounts.json'), 'utf8')
 ) as { accounts: Array<{ id: string; rawKey: string; stxKey: string; stxAddr: string }> };
@@ -92,8 +90,6 @@ function freshAccount(id: string) {
 
 const f0 = freshAccount('f0');
 const f1 = freshAccount('f1');
-
-// ─── helpers ──────────────────────────────────────────────────────────────────
 
 function parseErrCode(repr: string | undefined): number | undefined {
   if (!repr) return undefined;
@@ -146,7 +142,7 @@ type Outcome =
   | { kind: 'pending'; txid: string };
 
 /**
- * Build → sign → broadcast a probe, manage the sender's nonce, classify the
+ * Build -> sign -> broadcast a probe, manage the sender's nonce, classify the
  * outcome. `build` receives the nonce+fee to embed; we retry on broadcast
  * rejection / drop by bumping the fee at the SAME nonce (so a deliberately
  * non-mineable param doesn't poison the rest of the section).
@@ -338,9 +334,7 @@ function unstakeProbe(
   );
 }
 
-// ════════════════════════════════════════════════════════════════════════════
 // SECTION A — STAKE PARAM FUZZ (f1, fresh; sequential, nonce-managed)
-// ════════════════════════════════════════════════════════════════════════════
 //
 // Each probe records the OUTCOME. A `dropped_*` / `rejected` outcome means the
 // NODE refused the tx as non-mineable BEFORE it reached the contract runtime —
@@ -454,9 +448,7 @@ test.skip('A7: stake with garbage signerCalldata', async () => {
   expect(true).toBe(true);
 });
 
-// ════════════════════════════════════════════════════════════════════════════
 // SECTION B — BASELINE STAKE on f0 (legit) + STAKE-UPDATE abuse
-// ════════════════════════════════════════════════════════════════════════════
 
 test.skip('B0: f0 baseline stake (40k STX, 2 cycles)', async () => {
   const existing = await logStakerInfo('B0-pre', f0.address);
@@ -550,9 +542,7 @@ test.skip('B5: stake-update on a NON-staking account expects u27 NotStaking', as
   expect(true).toBe(true);
 });
 
-// ════════════════════════════════════════════════════════════════════════════
 // SECTION C — DOUBLE / RACE
-// ════════════════════════════════════════════════════════════════════════════
 
 test.skip('C1: re-stake f0 while already staked expects u19 AlreadyStaked', async () => {
   const info = await fetchStakerInfo({ address: f0.address, network }).catch(() => undefined);
@@ -627,9 +617,7 @@ test.skip('C2: two stakes from f1 at the SAME nonce — only one lands', async (
   if (f1info?.staked && !isInPreparePhaseLocal(poxInfo2)) await unstakeProbe('C2-cleanup-unstake', f1, {});
 });
 
-// ════════════════════════════════════════════════════════════════════════════
 // SECTION D — UNSTAKE
-// ════════════════════════════════════════════════════════════════════════════
 
 test.skip('D1: unstake f0 wrong oldSignerManager expects u36 InvalidOldSignerManager', async () => {
   const info = await fetchStakerInfo({ address: f0.address, network }).catch(() => undefined);
@@ -660,9 +648,7 @@ test.skip('D2: unstake a NON-staking account expects u27 NotStaking (or u28 in p
   expect(true).toBe(true);
 });
 
-// ════════════════════════════════════════════════════════════════════════════
 // SECTION E — READ-ONLY INVARIANTS (post-attack consistency)
-// ════════════════════════════════════════════════════════════════════════════
 
 test.skip('E1: post-attack invariants — delegated >= 0, no f0 bond membership, unlock-cycle sane', async () => {
   const poxInfo = await getPoxInfo();

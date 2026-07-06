@@ -35,7 +35,7 @@ describe('BOND_END_OFFSET_PERIODS', () => {
 describe('isInPreparePhase', () => {
   // For currentCycle=10:
   // - reward-cycle-to-burn-height(11) = 666050 + 11 * 2100 = 689_150
-  // - boundary = 689_150 - 100 = 689_050 → first burn-height in prepare phase.
+  // - boundary = 689_150 - 100 = 689_050 -> first burn-height in prepare phase.
   const BOUNDARY = 666_050 + 11 * 2100 - 100; // 689_050
 
   it('returns true at the boundary (next-cycle BURN-height minus prepareCycleLength)', () => {
@@ -58,7 +58,7 @@ describe('isInPreparePhase', () => {
 
 describe('isBondActiveAtHeight', () => {
   // firstBondPeriodCycle = 50 (derived from POX_INFO.contractVersions[0].firstRewardCycleId),
-  // bondIndex = 0 ⇒ bondStartCycle = 50.
+  // bondIndex = 0 -> bondStartCycle = 50.
   // bondStartBurn = 666050 + 50 * 2100 = 771_050
   // bondEndCycle = 50 + 6*BOND_GAP_CYCLES (=12) = 62
   // bondEndBurn = 666050 + 62 * 2100 = 796_250

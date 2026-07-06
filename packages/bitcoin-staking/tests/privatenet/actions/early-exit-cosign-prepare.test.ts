@@ -15,7 +15,7 @@
  * tests/privatenet/e2e/exit-l1-announce-and-reclaim.e2e.test.ts and
  * tests/privatenet/actions/btc-lockup-roundtrip.test.ts (TEST 1, EARLY branch):
  *   sighash = tx.preimageWitnessV0(0, witnessScript, SIGHASH_ALL, amount)
- *   witness = [ stakerSig, cosignerSig, preimage, <empty→ELSE>, witnessScript ]
+ *   witness = [ stakerSig, cosignerSig, preimage, <empty-> ELSE>, witnessScript ]
  *
  * Precondition guard (honest skip — no fake pass): the staker (default account5,
  * override via STAKER) must be L1-enrolled in a bond whose earlyUnlockBytes is
@@ -96,7 +96,7 @@ test.skip('cosigner-initiated: prepare a cosigner-signed early-exit partial', as
   const expectedEarlyUnlockHex = bytesToHex(buildUnlockScript(cosignerBtcPub));
   console.log('expected cosigner earlyUnlockBytes:', expectedEarlyUnlockHex);
 
-  // ── PRECONDITION GUARD (honest skip) ────────────────────────────────────────
+  // PRECONDITION GUARD (honest skip).
   const membership = await fetchBondMembership({ address: staker.address, network });
   if (!membership || !membership.isL1Lock) {
     console.warn(`SKIP: staker ${staker.address} is not L1-enrolled in any bond.`);
@@ -133,7 +133,7 @@ test.skip('cosigner-initiated: prepare a cosigner-signed early-exit partial', as
   }
   console.log('precondition: cosigner-enabled bond + L1-enrolled + announced ✓');
 
-  // ── Locate the staker's funded P2WSH lockup UTXO ────────────────────────────
+  // Locate the staker's funded P2WSH lockup UTXO.
   const earlyUnlockBytes = hexToBytes(bond.earlyUnlockBytes);
   const unlockHeight = Number(await fetchBondL1UnlockHeight({ bondIndex, network }));
   const unlockBytes = buildUnlockScript(stakerBtcPub);
@@ -157,7 +157,7 @@ test.skip('cosigner-initiated: prepare a cosigner-signed early-exit partial', as
   }
   console.log(`lockup UTXO ${utxo.txid}:${utxo.vout} (${utxo.value} sats)`);
 
-  // ── OUR (cosigner) STEP: build reclaim, sign with account6, emit partial ────
+  // OUR (cosigner) STEP: build reclaim, sign with account6, emit partial.
   const { tx, partial } = buildReclaimPartial({
     witnessScript,
     lockupTxid: utxo.txid,
@@ -182,7 +182,7 @@ test.skip('cosigner-initiated: prepare a cosigner-signed early-exit partial', as
   console.log(`partial prepared (cosigner-signed); written to ${artifactPath}`);
   console.log('partial prepared (cosigner-signed); hand to staker to add their sig + broadcast.');
 
-  // ── Assert the partial is well-formed ───────────────────────────────────────
+  // Assert the partial is well-formed.
   expect(partial.cosignerSig).toBeDefined();
   expect(partial.stakerSig).toBeUndefined();
   expect(partial.preimageHex.length).toBe(64); // 32 bytes
@@ -202,7 +202,7 @@ test.skip('cosigner-initiated: prepare a cosigner-signed early-exit partial', as
     console.warn('cosigner sig local sanity-verify skipped:', String(e).slice(0, 80));
   }
 
-  // ── PROVE finalizable: simulate the staker completing + broadcasting ────────
+  // PROVE finalizable: simulate the staker completing + broadcasting.
   // In production the STAKER does this on their own machine with their key; here
   // we simulate it to prove the cosigner-prepared partial is finalizable e2e.
   console.log('\n--- simulating staker completing the partial (their machine) ---');

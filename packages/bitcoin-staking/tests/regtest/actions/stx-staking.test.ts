@@ -1,5 +1,5 @@
 /**
- * STX-only staking lifecycle: stake → stake-update (extend + top-up) → unstake.
+ * STX-only staking lifecycle: stake -> stake-update (extend + top-up) -> unstake.
  * Exercises `buildStake` / `buildStakeUpdate` / `buildUnstake` — the direct pox-5
  * staking product, parallel to the paired-BTC bonds.
  *
@@ -34,7 +34,7 @@ jest.setTimeout(5 * 60_000);
 
 const network = getNetwork();
 const admin = ACCOUNTS.admin; // funder (clean nonce, no daemon drives it)
-const staker = getAccount(REGTEST_KEYS.account8); // funded in-test → always clean
+const staker = getAccount(REGTEST_KEYS.account8); // funded in-test -> always clean
 const signerManager = SIGNER_MANAGER; // daemon-registered, staked signer-manager
 
 const FEE = 10_000n;
@@ -120,7 +120,7 @@ test('stx staking lifecycle: stake → extend + top-up → unstake', async () =>
 
   useFixtures('stx-staking-unstaked');
   const unstaked = await fetchStakerInfo({ address: staker.address, network });
-  // unstake rewrites num-cycles so the lock ends next cycle → either fully
+  // unstake rewrites num-cycles so the lock ends next cycle -> either fully
   // unlocked or its numCycles drops below the extended value.
   expect(!unstaked.staked || unstaked.details.numCycles < NUM_CYCLES + EXTEND).toBe(true);
 });

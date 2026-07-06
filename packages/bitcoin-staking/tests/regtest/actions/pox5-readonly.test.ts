@@ -13,7 +13,7 @@ const network = getNetwork();
 beforeAll(async () => {
   useFixtures('pox5-readonly');
   if (isMocking) return; // replay: fixtures provide both phases, no Docker
-  await networkReset(); // NETWORK_WIPE_CMD + NETWORK_UP_CMD → fresh chain
+  await networkReset(); // NETWORK_WIPE_CMD + NETWORK_UP_CMD -> fresh chain
   await waitForNetwork(); // node + pox endpoint responsive (still pre-pox-5)
 }, BOOT);
 

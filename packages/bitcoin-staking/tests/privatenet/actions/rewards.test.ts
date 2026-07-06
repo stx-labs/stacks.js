@@ -10,7 +10,6 @@
  * account5 is allowlisted on several bonds (indices 4-24) but was NEVER
  * enrolled. account6 was never allowlisted nor enrolled.
  *
- * ─────────────────────────────────────────────────────────────────────────────
  * PROBE 1 — calculate-rewards  (anyone-callable, settles distribution waterfall)
  *   Calls buildCalculateRewards with bondIndices [4, 12, 19] from account5.
  *   Expected: success (waterfall settled / no-op) OR
@@ -29,7 +28,6 @@
  * PROBE 3 — claim-rewards, account6 (never allowlisted, never enrolled)
  *   Same args as probe 2 from a completely unrelated account.
  *   Expected abort: u34 NotBondParticipant OR u32 NoClaimableRewards.
- * ─────────────────────────────────────────────────────────────────────────────
  *
  * Run with:
  *   NETWORK=testnet NETWORK_ID=256 STACKS_API=https://api.private-1.hiro.so RECORD=1 \
@@ -75,9 +73,7 @@ const SIGNER_MANAGER = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager
 const PROBE_BOND_INDICES = [4, 12, 19];
 const CLAIM_BOND_INDICES = [4, 12];
 
-// ─── helpers ────────────────────────────────────────────────────────────────
-
-/** Parse `(err uN)` repr → N, or undefined. */
+/** Parse `(err uN)` repr -> N, or undefined. */
 function parseErrCode(repr: string | undefined): number | undefined {
   if (!repr) return undefined;
   const m = repr.match(/^\(err u(\d+)\)$/);
@@ -130,13 +126,11 @@ async function assertTolerableResult(
   return undefined;
 }
 
-// ─── setup ───────────────────────────────────────────────────────────────────
-
 beforeAll(async () => {
   await ensurePox5();
 }, 20 * 60_000);
 
-// ─── PROBE 1: calculate-rewards (anyone-callable) ────────────────────────────
+// PROBE 1: calculate-rewards (anyone-callable).
 //
 // Targets reward codes:
 //   u30 DistributionAlreadyComputed  — already settled this distribution period
@@ -201,10 +195,10 @@ test.skip('rewards-probe-1: calculate-rewards from account5 (bond indices [4,12,
   }
 });
 
-// ─── PROBE 2: claim-rewards, account5 (allowlisted, never enrolled) ──────────
+// PROBE 2: claim-rewards, account5 (allowlisted, never enrolled).
 //
 // Targets reward codes:
-//   u32 NoClaimableRewards    — legs are empty (no enrollment → no rewards)
+//   u32 NoClaimableRewards    — legs are empty (no enrollment -> no rewards)
 //   u34 NotBondParticipant    — account5 is not actively staking in these bonds
 //
 // Also checks STX balance before/after — no increase expected (tolerant).
@@ -284,7 +278,7 @@ test.skip('rewards-probe-2: claim-rewards from account5 (allowlisted but never e
   }
 });
 
-// ─── PROBE 3: claim-rewards, account6 (never allowlisted, never enrolled) ────
+// PROBE 3: claim-rewards, account6 (never allowlisted, never enrolled).
 //
 // account6 has no connection to any bond — never allowlisted, never registered.
 // This probes the outer "not a participant" guard.
@@ -340,7 +334,7 @@ test.skip('rewards-probe-3: claim-rewards from account6 (not allowlisted, never 
   }
 });
 
-// ─── PROBE 4: STX-only leg vs bond legs — distinct structures ────────────────
+// PROBE 4: STX-only leg vs bond legs — distinct structures.
 //
 // The pox-5 reward model is two-tier (see src/build.ts calculate-rewards):
 //   - bond legs: paired stakers paid up to target APY, keyed by BOND-INDEX

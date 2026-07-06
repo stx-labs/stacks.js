@@ -18,7 +18,7 @@
  * tests/privatenet/e2e/exit-l1-announce-and-reclaim.e2e.test.ts and
  * tests/privatenet/actions/btc-lockup-roundtrip.test.ts (TEST 1, EARLY branch):
  *   sighash = tx.preimageWitnessV0(0, witnessScript, SIGHASH_ALL, amount)
- *   witness = [ stakerSig, cosignerSig, preimage, <empty→ELSE>, witnessScript ]
+ *   witness = [ stakerSig, cosignerSig, preimage, <empty-> ELSE>, witnessScript ]
  *
  * Precondition guard (honest skip — no fake pass): same as cosign-prepare —
  * staker (default account5, override via STAKER) L1-enrolled in a cosigner-
@@ -99,7 +99,7 @@ test.skip('staker-initiated: cosign + broadcast a staker-signed partial', async 
   const expectedEarlyUnlockHex = bytesToHex(buildUnlockScript(cosignerBtcPub));
   console.log('expected cosigner earlyUnlockBytes:', expectedEarlyUnlockHex);
 
-  // ── PRECONDITION GUARD (honest skip) ────────────────────────────────────────
+  // PRECONDITION GUARD (honest skip).
   const membership = await fetchBondMembership({ address: staker.address, network });
   if (!membership || !membership.isL1Lock) {
     console.warn(`SKIP: staker ${staker.address} is not L1-enrolled in any bond.`);
@@ -136,7 +136,7 @@ test.skip('staker-initiated: cosign + broadcast a staker-signed partial', async 
   }
   console.log('precondition: cosigner-enabled bond + L1-enrolled + announced ✓');
 
-  // ── Locate the staker's funded P2WSH lockup UTXO ────────────────────────────
+  // Locate the staker's funded P2WSH lockup UTXO.
   const earlyUnlockBytes = hexToBytes(bond.earlyUnlockBytes);
   const unlockHeight = Number(await fetchBondL1UnlockHeight({ bondIndex, network }));
   const unlockBytes = buildUnlockScript(stakerBtcPub);
@@ -160,7 +160,7 @@ test.skip('staker-initiated: cosign + broadcast a staker-signed partial', async 
   }
   console.log(`lockup UTXO ${utxo.txid}:${utxo.vout} (${utxo.value} sats)`);
 
-  // ── SIMULATE RECEIVING a STAKER-signed partial ──────────────────────────────
+  // SIMULATE RECEIVING a STAKER-signed partial.
   // In production the staker builds + signs this on their own machine and hands
   // us the JSON; here we reproduce it so the test is self-contained.
   console.log('\n--- simulating staker building + signing the partial (their machine) ---');
@@ -182,7 +182,7 @@ test.skip('staker-initiated: cosign + broadcast a staker-signed partial', async 
   partial.stakerSig = bytesToHex(stakerSig);
   // cosignerSig deliberately UNSET — this is what the staker hands us.
 
-  // ── OUR (cosigner) STEP: load partial, add cosigner sig, finalize, broadcast ─
+  // OUR (cosigner) STEP: load partial, add cosigner sig, finalize, broadcast.
   const received: EarlyExitPartial = JSON.parse(JSON.stringify(partial));
   expect(received.stakerSig).toBeDefined();
   expect(received.cosignerSig).toBeUndefined();

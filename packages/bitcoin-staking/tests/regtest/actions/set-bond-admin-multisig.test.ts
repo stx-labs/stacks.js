@@ -6,7 +6,7 @@
  *  1. assert `bond-admin` is the env's single-key admin (`ACCOUNTS.admin`).
  *  2. derive a fresh wallet (`@stacks/wallet-sdk`) from a pinned random seed,
  *     take its first 3 accounts, form a 2-of-3 P2SH multisig, fund it for fees.
- *  3. the single-key admin rotates `bond-admin` → the multisig.
+ *  3. the single-key admin rotates `bond-admin` -> the multisig.
  *  4. NEGATIVE: the old admin is now powerless — its `set-bond-admin` and
  *     `setup-bond` are mined but revert (admin unchanged, no bond created).
  *  5. the MULTISIG acts as admin (2 sigs + 1 appended key): it creates a bond
@@ -118,7 +118,7 @@ const setupBondParams = (bondIndex: number, staker: string) => ({
  * `poxInfo` with the real bond schedule patched in. This env's `/v2/pox` omits
  * the pox-5 `contract_versions[]` row, so `firstPox5RewardCycle` can't read the
  * first bond cycle (its fallback guesses the *current* cycle, which is wrong for
- * bond-period math → setup-bond always "too late"). Read the contract's
+ * bond-period math -> setup-bond always "too late"). Read the contract's
  * `first-bond-period-cycle` data-var and inject a synthetic pox-5 entry so the
  * `cycles.ts` bond-math helpers compute correct heights.
  */
@@ -200,7 +200,7 @@ test('bond-admin can be a 2-of-3 multisig that acts as admin', async () => {
   expect(await fetchBondAdmin()).toBe(multisig);
 
   // 4. NEGATIVE — the old admin is powerless now.
-  //   a) its set-bond-admin reverts → role stays with the multisig.
+  //   a) its set-bond-admin reverts -> role stays with the multisig.
   await broadcastAndWait(
     signTransaction(
       await buildSetBondAdmin({
@@ -223,7 +223,7 @@ test('bond-admin can be a 2-of-3 multisig that acts as admin', async () => {
   console.log('multisig bond test', { bondIndex, multisig });
 
   //   b) the old admin's setup-bond reverts (unauthorized, before any timing
-  //      check) → no bond is created.
+  //      check) -> no bond is created.
   await broadcastAndWait(
     signTransaction(
       await buildSetupBond({

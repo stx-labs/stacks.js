@@ -2,7 +2,7 @@
 /**
  * E2E — claim-staker-rewards-for-signer: happy-path (ok ...) coverage.
  *
- * CONTRACT TRUTH (pox-5.clar):
+ * CONTRACT TRUTH (pox-5.fn):
  *   `claim-staker-rewards-for-signer` has NO auth assertion — an EOA call
  *   SUCCEEDS. When there are no accrued rewards it returns
  *   `(ok {earned: u0, ...})`.
@@ -45,7 +45,7 @@ import { useFixtures } from '../../helpers/mock';
 const network = getNetwork();
 const FEE = 10_000n;
 
-// Broadcaster (override via CALLER env). Default account1 → shares Lane A with the
+// Broadcaster (override via CALLER env). Default account1 -> shares Lane A with the
 // other account1 signer tests, so it never collides with a parallel lane.
 const caller = resolveAccount('CALLER', 'account1');
 
@@ -66,21 +66,21 @@ test.skip('claim-staker-rewards-for-signer succeeds with (ok ...) from an EOA (S
   console.log('Expected: success, result is (ok {...}) (earned 0 is fine — no rewards on this chain)');
   console.log('CONTRACT TRUTH: claim-staker-rewards-for-signer has no auth guard — EOA call succeeds');
 
-  // ── 1. Discover current reward cycle ─────────────────────────────────────
+  // 1. Discover current reward cycle
   const poxInfo = await getPoxInfo();
   // Use currentCycle - 1 as the claim target (most recent completed cycle).
   const rewardCycle = Math.max(0, poxInfo.rewardCycleId - 1);
   console.log('currentCycle:', poxInfo.rewardCycleId);
   console.log('claimRewardCycle:', rewardCycle);
 
-  // ── 2. Build claim-staker-rewards-for-signer using SDK builder ────────────
+  // 2. Build claim-staker-rewards-for-signer using SDK builder
   const nonce = await getNextNonce(caller.address);
   console.log('caller nonce:', nonce);
 
   const unsigned = await buildClaimStakerRewardsForSigner({
     staker: staker.address,
     rewardCycle,
-    // bondIndex omitted → targets the STX-only leg
+    // bondIndex omitted -> targets the STX-only leg
     publicKey: caller.publicKey,
     fee: FEE,
     nonce,
@@ -90,7 +90,7 @@ test.skip('claim-staker-rewards-for-signer succeeds with (ok ...) from an EOA (S
   console.log('claim-staker-rewards-for-signer tx built via buildClaimStakerRewardsForSigner ✓');
   console.log('(STX-only leg; bondIndex omitted → Cl.none())');
 
-  // ── 3. Sign and broadcast ─────────────────────────────────────────────────
+  // 3. Sign and broadcast
   const tx = signTransaction(unsigned, caller.key);
   const res = await broadcastTransaction({ transaction: tx, network });
 
@@ -99,7 +99,7 @@ test.skip('claim-staker-rewards-for-signer succeeds with (ok ...) from an EOA (S
   }
   console.log('claim-staker-rewards-for-signer txid:', res.txid);
 
-  // ── 4. Wait for on-chain result ───────────────────────────────────────────
+  // 4. Wait for on-chain result
   const txRecord = await waitForFulfilled(async () => {
     const t = await getTransaction(res.txid);
     if (!t || t.tx_status === 'pending') throw new Error('tx still pending');
@@ -113,7 +113,7 @@ test.skip('claim-staker-rewards-for-signer succeeds with (ok ...) from an EOA (S
     burn_block_height: txRecord.burn_block_height,
   });
 
-  // ── 5. Assert success + (ok ...) tuple ────────────────────────────────────
+  // 5. Assert success + (ok ...) tuple
   expect(txRecord.tx_status).toBe('success');
   expect(txRecord.tx_result?.repr).toMatch(/^\(ok /);
 
@@ -126,7 +126,7 @@ test.skip('claim-staker-rewards-for-signer with bond index: also succeeds with (
   console.log('caller:', caller.address);
   console.log('staker (account1):', staker.address);
 
-  // ── 1. Discover current reward cycle + bond index ─────────────────────────
+  // 1. Discover current reward cycle + bond index
   const poxInfo = await getPoxInfo();
   const rewardCycle = Math.max(0, poxInfo.rewardCycleId - 1);
 
@@ -134,7 +134,7 @@ test.skip('claim-staker-rewards-for-signer with bond index: also succeeds with (
   const bondIndex = 1;
   console.log('rewardCycle:', rewardCycle, '  bondIndex:', bondIndex);
 
-  // ── 2. Build via SDK builder (bondIndex present → Cl.some(Cl.uint(1))) ────
+  // 2. Build via SDK builder (bondIndex present -> Cl.some(Cl.uint(1)))
   const nonce = await getNextNonce(caller.address);
 
   const unsigned = await buildClaimStakerRewardsForSigner({
@@ -149,7 +149,7 @@ test.skip('claim-staker-rewards-for-signer with bond index: also succeeds with (
 
   console.log('claim-staker-rewards-for-signer (bond leg) tx built ✓  [bondIndex=1 → Cl.some(Cl.uint(1))]');
 
-  // ── 3. Sign and broadcast ─────────────────────────────────────────────────
+  // 3. Sign and broadcast
   const tx = signTransaction(unsigned, caller.key);
   const res = await broadcastTransaction({ transaction: tx, network });
 
@@ -158,7 +158,7 @@ test.skip('claim-staker-rewards-for-signer with bond index: also succeeds with (
   }
   console.log('txid:', res.txid);
 
-  // ── 4. Wait and assert ────────────────────────────────────────────────────
+  // 4. Wait and assert
   const txRecord = await waitForFulfilled(async () => {
     const t = await getTransaction(res.txid);
     if (!t || t.tx_status === 'pending') throw new Error('tx still pending');

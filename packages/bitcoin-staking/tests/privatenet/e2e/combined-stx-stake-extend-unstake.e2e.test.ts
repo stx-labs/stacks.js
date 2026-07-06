@@ -1,6 +1,6 @@
 // TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
- * E2E — Combined STX lifecycle: stake → stake-update (extend +cycle, +amount) → unstake (early exit).
+ * E2E — Combined STX lifecycle: stake -> stake-update (extend +cycle, +amount) -> unstake (early exit).
  *
  * ONE account (account2, rich ~10B STX) runs the full STX-only lifecycle in
  * a single sequential test. Each transition asserts fetchStakerInfo changed
@@ -49,8 +49,6 @@ import {
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
 
-// ─── Config ───────────────────────────────────────────────────────────────────
-
 const SIGNER_MANAGER = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 const FEE = 10_000n;
 // Stake 10_000 STX so it's well above any floor but won't saturate a shared signer.
@@ -87,15 +85,11 @@ async function ensureRewardPhase(): Promise<Awaited<ReturnType<typeof getPoxInfo
   return pox;
 }
 
-// ─── Setup ────────────────────────────────────────────────────────────────────
-
 beforeAll(async () => {
   useFixtures('e2e-combined-stx');
   await ensurePox5();
   staker = await freshFundedStxAccount({ network, amountUstx: FUND_USTX });
 }, 4 * 180_000);
-
-// ─── Test ─────────────────────────────────────────────────────────────────────
 
 test.skip('account2: full STX lifecycle — stake → extend → unstake (early exit)', async () => {
   useFixtures('e2e-combined-stx');
@@ -103,7 +97,7 @@ test.skip('account2: full STX lifecycle — stake → extend → unstake (early 
   console.log('\n=== E2E: combined-stx-stake-extend-unstake ===');
   console.log('staker:', staker.address);
 
-  // ── Phase 0: assert account2 is NOT currently staking ────────────────────
+  // Phase 0: assert account2 is NOT currently staking
   const initial = await fetchStakerInfo({ address: staker.address, network });
   console.log('INITIAL staker-info:', initial.staked
     ? { amountUstx: initial.details.amountUstx.toString(), numCycles: initial.details.numCycles }
@@ -119,9 +113,7 @@ test.skip('account2: full STX lifecycle — stake → extend → unstake (early 
     return;
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
   // PHASE 1: STAKE
-  // ═══════════════════════════════════════════════════════════════════════════
   console.log('\n─── PHASE 1: STAKE ───');
 
   let pox = await ensureRewardPhase();
@@ -183,9 +175,7 @@ test.skip('account2: full STX lifecycle — stake → extend → unstake (early 
 
   useFixtures('e2e-combined-stx');
 
-  // ═══════════════════════════════════════════════════════════════════════════
   // PHASE 2: EXTEND (stake-update)
-  // ═══════════════════════════════════════════════════════════════════════════
   console.log('\n─── PHASE 2: EXTEND (stake-update) ───');
 
   pox = await ensureRewardPhase();
@@ -250,9 +240,7 @@ test.skip('account2: full STX lifecycle — stake → extend → unstake (early 
 
   useFixtures('e2e-combined-stx-extended');
 
-  // ═══════════════════════════════════════════════════════════════════════════
   // PHASE 3: UNSTAKE (early exit)
-  // ═══════════════════════════════════════════════════════════════════════════
   console.log('\n─── PHASE 3: UNSTAKE (early exit) ───');
 
   pox = await ensureRewardPhase();
@@ -312,7 +300,7 @@ test.skip('account2: full STX lifecycle — stake → extend → unstake (early 
     expect(afterUnstake.details.numCycles).toBeLessThanOrEqual(afterExtend.details.numCycles);
     // amount is still locked
     expect(afterUnstake.details.amountUstx).toBe(afterExtend.details.amountUstx);
-    // unlock cycle ≤ expectedUnlockCycle+1
+    // unlock cycle <= expectedUnlockCycle+1
     const unlockCycle = afterUnstake.details.firstRewardCycle + afterUnstake.details.numCycles;
     expect(unlockCycle).toBeLessThanOrEqual(expectedUnlockCycle + 1);
     console.log(

@@ -1,14 +1,14 @@
 // TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
- * Privatenet STX-only stake → SIGNER-SET INCLUSION probe.
+ * Privatenet STX-only stake -> SIGNER-SET INCLUSION probe.
  *
- * pox-5.clar gates signer-set membership on the signer's *aggregate* delegated
+ * pox-5 gates signer-set membership on the signer's *aggregate* delegated
  * uSTX, not the individual staker's stake:
  *
  *   (define-constant SIGNER_SET_MIN_USTX u50000000000) ;; 50k STX
  *   ...
  *   (if (>= new-delegated SIGNER_SET_MIN_USTX)
- *       ... add-signer-to-set-for-cycle ...        ;; crosses up → in the set
+ *       ... add-signer-to-set-for-cycle ...        ;; crosses up -> in the set
  *       ... )                                       (add-staker-to-signer-cycles, ~L1587)
  *
  * where `new-delegated = cur-delegated-for-signer + amount`. So a single STX-only
@@ -73,7 +73,7 @@ const SIGNER = signerManager; // contract-of(signer-manager)
 const staker = getAccount(REGTEST_KEYS[STAKER as keyof typeof REGTEST_KEYS]);
 const bootAddress = network.bootAddress;
 
-// ─── read-only helpers not yet wrapped in src/fetch.ts ───────────────────────
+// read-only helpers not yet wrapped in src/fetch.ts
 
 async function getAmountDelegatedForSigner(signer: string, cycle: number): Promise<bigint> {
   const r = await fetchCallReadOnlyFunction({
@@ -118,7 +118,7 @@ beforeAll(async () => {
 test.skip('stake >= SIGNER_SET_MIN_USTX (50k STX) makes the signer count toward the set', async () => {
   let poxInfo = await getPoxInfo();
 
-  // stake reverts in the prepare phase (verify-not-prepare-phase → u47). The tx
+  // stake reverts in the prepare phase (verify-not-prepare-phase -> u47). The tx
   // mines ~1 block after broadcast, so guard with a 2-block margin: if we are at
   // or near the prepare boundary, wait for the next reward phase to start fresh.
   const posOf = (info: typeof poxInfo) =>

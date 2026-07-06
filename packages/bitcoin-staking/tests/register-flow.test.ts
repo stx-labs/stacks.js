@@ -1,7 +1,7 @@
 /**
  * Validates the combined register-for-bond flow helper `buildRegisterMetadata`
  * computes byte-for-byte the same artifacts as the hand-wired sequence it
- * replaces (computeBondUnlockHeight → buildUnlockScript → buildLockScript →
+ * replaces (computeBondUnlockHeight -> buildUnlockScript -> buildLockScript ->
  * buildLockAddress / buildLockOutputScript), and that the `lockScript`
  * overload on `buildLockProof` / `buildLockProofFromBlock` is equivalent to
  * passing `outputScript` directly.

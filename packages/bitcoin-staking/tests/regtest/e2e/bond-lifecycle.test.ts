@@ -1,7 +1,7 @@
 /**
  * Composed the way an integrator would write it — friction found here is an
  * SDK gap candidate (see ../SDK-GAPS.md). Bond expiry is NOT covered:
- * BOND_LENGTH_CYCLES=12 ≈ 8 min of regtest chain; unstake/early-exit have
+ * BOND_LENGTH_CYCLES=12 is about 8 min of regtest chain; unstake/early-exit have
  * their own action tests.
  */
 import {
@@ -40,7 +40,7 @@ import { useFixtures } from '../../helpers/mock';
 import { signTransaction } from '../../helpers/sign';
 import { deploySbtcMinter, mintSbtc, fetchSbtcBalance } from '../../helpers/sbtc';
 
-jest.setTimeout(6 * 60_000); // runway (≤70s) + D0 wait (≤40s) + 1 cycle (40s) + txs
+jest.setTimeout(6 * 60_000); // runway (<=70s) + bond-start wait (<=40s) + 1 cycle (40s) + txs
 
 const network = getNetwork();
 let admin: Account;
@@ -84,7 +84,7 @@ test('bond lifecycle: setup → register → bond starts → rewards settle → 
   expect(await fetchSignerInfo({ signerManager, network })).toBeDefined();
   expect(await fetchBondMembership({ address: staker.address, network })).toBeUndefined();
 
-  // ── admin: setup-bond ──────────────────────────────────────────────────────
+  // admin: setup-bond
   const { bondIndex, bondStartHeight, poxInfo } = await waitForBondWithRunway(15);
   console.log('chosen bond', { bondIndex, bondStartHeight, burn: poxInfo.currentBurnchainBlockHeight });
   expect(await fetchBondStatus({ bondIndex, network })).toBe('eligible');
@@ -107,7 +107,7 @@ test('bond lifecycle: setup → register → bond starts → rewards settle → 
   if (!bond) throw 'setup-bond aborted';
   expect(await fetchBondAllowance({ bondIndex, address: staker.address, network })).toBe(MAX_SATS);
 
-  // ── staker: register (sBTC lockup) ─────────────────────────────────────────
+  // staker: register (sBTC lockup)
   const amountUstx = minUstxForSatsAmount({
     sats: MAX_SATS,
     stxValueRatio: STX_VALUE_RATIO,
@@ -147,7 +147,7 @@ test('bond lifecycle: setup → register → bond starts → rewards settle → 
   );
   expect(await fetchBondStatus({ bondIndex, network })).toBe('open');
 
-  // ── chain: bond starts (D0) ────────────────────────────────────────────────
+  // chain: bond starts
   useFixtures('bond-lifecycle-started');
   await waitForBurnBlockHeight(bondStartHeight + 1);
 
@@ -165,7 +165,7 @@ test('bond lifecycle: setup → register → bond starts → rewards settle → 
   expect(shares).toBeGreaterThan(0n);
   expect(await getStxBalance(staker.address)).toBeLessThan(10_000_000n);
 
-  // ── anyone: settle one elapsed cycle, then the staker reads + claims ───────
+  // anyone: settle one elapsed cycle, then the staker reads + claims
   useFixtures('bond-lifecycle-rewarded');
   await waitForBurnBlockHeight(bondStartHeight + poxInfo.rewardCycleLength + 1);
 

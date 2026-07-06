@@ -10,7 +10,7 @@
  * That drift is fatal for bond math: the contract anchors bond periods to a
  * FIXED `first-bond-period-cycle` data-var (set at deployment), so
  * `bond-period-to-reward-cycle(i) = firstBondPeriodCycle + i * BOND_GAP_CYCLES`.
- * With the drifting fallback, our computed bondIndex→cycle mapping disagrees
+ * With the drifting fallback, our computed bondIndex->cycle mapping disagrees
  * with the contract's, and `setup-bond` aborts with `(err u3)`
  * (`CannotSetupBondTooLate`) — the index we pick already opened on-chain.
  *

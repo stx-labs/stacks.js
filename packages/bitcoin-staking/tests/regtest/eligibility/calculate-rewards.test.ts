@@ -72,7 +72,7 @@ test('BondNotFound — non-existent bondIndex', async () => {
 
 test('BondNotActive — bond exists but start height is in the future at calcHeight', async () => {
   // eligBondIndex was just set up; calcHeight is the previous distribution boundary,
-  // so the bond's start is still in the future relative to calcHeight → BondNotActive.
+  // so the bond's start is still in the future relative to calcHeight -> BondNotActive.
   const pox = await getPoxInfo();
   const r = await fetchEligibleCalculateRewards({
     bondIndices: [eligBondIndex],

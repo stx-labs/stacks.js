@@ -15,7 +15,6 @@
  * Safe senders: bond-admin for setup-bond/calculate-rewards; account5 for
  * register-for-bond.
  *
- * ─────────────────────────────────────────────────────────────────────────────
  * PROBE 1 — setup-bond skip-ahead (far-future index: soonest+3)
  *   Admin setup-bond at bondIndex = soonest+3 (3 gaps ahead of the currently
  *   settable window). Expected: u2 ERR_CANNOT_SETUP_BOND_TOO_SOON (the bond's
@@ -30,7 +29,7 @@
  *
  * PROBE 3 — calculate-rewards WRONG ORDER (ascending stx-value-ratio)
  *   Read stxValueRatio for a handful of known bond indices (47-50 + 4-24 range)
- *   via fetchProtocolBond. Build a list of ≥2 existing bonds sorted in WRONG
+ *   via fetchProtocolBond. Build a list of >=2 existing bonds sorted in WRONG
  *   (ascending) order by stxValueRatio. Call buildCalculateRewards with that
  *   list. Expected: u29 ERR_INVALID_BOND_PERIOD_ORDERING (primary target). Also
  *   tolerant of u31 BondNotActive, u33 ActiveBondNotIncluded, u30
@@ -47,7 +46,6 @@
  *   against that index. Expected: u7 ERR_BOND_NOT_FOUND (primary target —
  *   NEWLY confirmed here). Log describePox5Error to expose the name.
  *
- * ─────────────────────────────────────────────────────────────────────────────
  * Run with:
  *   NETWORK=testnet NETWORK_ID=256 STACKS_API=https://api.private-1.hiro.so RECORD=1 \
  *     POLL_INTERVAL=10000 RETRY_INTERVAL=10000 \
@@ -99,9 +97,7 @@ const MIN_USTX_RATIO_BPS = 500n;
 
 let admin: Awaited<ReturnType<typeof getBondAdminAccount>>;
 
-// ─── helpers ────────────────────────────────────────────────────────────────
-
-/** Parse `(err uN)` repr → N, or undefined. */
+/** Parse `(err uN)` repr -> N, or undefined. */
 function parseErrCode(repr: string | undefined): number | undefined {
   if (!repr) return undefined;
   const m = repr.match(/^\(err u(\d+)\)$/);
@@ -221,8 +217,6 @@ async function findNonExistentBondIndex(
   return undefined;
 }
 
-// ─── setup ───────────────────────────────────────────────────────────────────
-
 beforeAll(async () => {
   admin = await getBondAdminAccount();
   await ensurePox5();
@@ -231,7 +225,7 @@ beforeAll(async () => {
   console.log('signerManager:', SIGNER_MANAGER);
 }, 20 * 60_000);
 
-// ─── PROBE 1: setup-bond skip-ahead (soonest+3) ───────────────────────────────
+// PROBE 1: setup-bond skip-ahead (soonest+3)
 //
 // bondIndex = soonest+3 — 3 bond gaps ahead of the currently open window.
 // The contract checks: setup window is BOND_GAP_CYCLES before the bond's
@@ -287,7 +281,7 @@ test.skip('adversarial-4-1: setup-bond skip-ahead (soonest+3) expects u2 CannotS
   }
 });
 
-// ─── PROBE 2: setup-bond past index (bondIndex = 0) ──────────────────────────
+// PROBE 2: setup-bond past index (bondIndex = 0)
 //
 // bondIndex = 0 is the very first bond period anchored at firstBondPeriodCycle.
 // The setup window for bond 0 was openable only during the first BOND_GAP_CYCLES
@@ -340,7 +334,7 @@ test.skip('adversarial-4-2: setup-bond past index (bondIndex=0) expects u3 Canno
   }
 });
 
-// ─── PROBE 3: calculate-rewards WRONG ORDER (ascending stx-value-ratio) ──────
+// PROBE 3: calculate-rewards WRONG ORDER (ascending stx-value-ratio)
 //
 // The contract requires bondPeriods sorted DESCENDING by stx-value-ratio (ties:
 // higher bond-index first). ERR_INVALID_BOND_PERIOD_ORDERING (u29) is the
@@ -349,7 +343,7 @@ test.skip('adversarial-4-2: setup-bond past index (bondIndex=0) expects u3 Canno
 // Steps:
 //   1. Read fetchProtocolBond for a spread of likely-existing indices (47-50 and
 //      a sample from 4-24). Log each bond's stxValueRatio.
-//   2. If ≥2 bonds found with DIFFERENT ratios, sort them ASCENDING (wrong order)
+//   2. If >=2 bonds found with DIFFERENT ratios, sort them ASCENDING (wrong order)
 //      and call buildCalculateRewards.
 //   3. If all ratios are equal (ties), reverse the index order (lower index first)
 //      — that also violates the tie-break rule (higher index should come first).
@@ -379,7 +373,7 @@ test.skip('adversarial-4-3: calculate-rewards WRONG ORDER (ascending stx-value-r
     return a.bondIndex - b.bondIndex; // ascending index for ties (wrong: should be descending)
   });
 
-  // Cap at 6 — calculate-rewards takes (list 6 uint); >6 → BadFunctionArgument.
+  // Cap at 6 — calculate-rewards takes (list 6 uint); >6 -> BadFunctionArgument.
   const wrongIndices = wrongOrder.map(b => b.bondIndex).slice(0, 6);
   console.log(
     'probe-3 wrong-order indices:',
@@ -442,7 +436,7 @@ test.skip('adversarial-4-3: calculate-rewards WRONG ORDER (ascending stx-value-r
   }
 });
 
-// ─── PROBE 4: calculate-rewards INCOMPLETE active set (single bond index) ────
+// PROBE 4: calculate-rewards INCOMPLETE active set (single bond index)
 //
 // The contract's assert-all-active-bonds-included guard requires the FULL set of
 // currently active bonds. Submitting only a single bond index (e.g. 47) when
@@ -528,18 +522,18 @@ test.skip('adversarial-4-4: calculate-rewards INCOMPLETE active set (single bond
   }
 });
 
-// ─── PROBE 5: register-for-bond against a NON-EXISTENT bond index ────────────
+// PROBE 5: register-for-bond against a NON-EXISTENT bond index
 //
 // Verify fetchProtocolBond returns undefined for a candidate index, then call
 // buildRegisterForBond (sBTC path, account5) against it. Expected: u7
 // ERR_BOND_NOT_FOUND — this is the primary DISCOVERY target for this probe.
 //
-// Guard ordering in pox-5.clar register-for-bond (inferred from other tests):
-//   1. prepare-phase guard  → u47 StakeInPreparePhase
-//   2. bond-exists guard    → u7  BondNotFound        ← THIS PROBE
-//   3. allowlist guard      → u11 NotAllowlisted
-//   4. already-started guard→ u43 BondAlreadyStarted
-//   5. lock-sbtc            → u1  Unauthorized (no sBTC balance)
+// Guard ordering in pox-5.register-for-bond (inferred from other tests):
+//   1. prepare-phase guard  -> u47 StakeInPreparePhase
+//   2. bond-exists guard    -> u7  BondNotFound        <- THIS PROBE
+//   3. allowlist guard      -> u11 NotAllowlisted
+//   4. already-started guard-> u43 BondAlreadyStarted
+//   5. lock-sbtc            -> u1  Unauthorized (no sBTC balance)
 //
 // We try indices 9, 25, 999 in order — taking the first non-existent one.
 // Tolerant: u7 (primary), u47 (prepare-phase guard fires first), u1 (lock-sbtc).

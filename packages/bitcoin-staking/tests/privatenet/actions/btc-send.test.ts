@@ -9,7 +9,7 @@
  *  4. Broadcasts via POST {base}/tx (text/plain body — mempool.space compatible).
  *  5. Polls until the txid appears in the mempool API.
  *
- * Composable action — configure via ENV (defaults send 0.1 BTC account5→account6):
+ * Composable action — configure via ENV (defaults send 0.1 BTC account5->account6):
  *   BTC_FROM_PRIV   sender private key, 64-hex (default: account5)
  *   TO_ADDRESS      recipient bcrt1 address (default: account6)
  *   AMOUNT_SATS     amount to send                       (default: 10000000)
@@ -34,8 +34,6 @@ fetchMock.disableMocks();
 
 jest.setTimeout(30 * 60_000);
 
-// ─── Network params ──────────────────────────────────────────────────────────
-
 const REGTEST = {
   bech32: "bcrt",
   pubKeyHash: 0x6f,
@@ -46,8 +44,6 @@ const REGTEST = {
 const MEMPOOL_BASE = "https://mempool.bitcoin.private-1.hiro.so/api";
 const FAUCET_URL = "https://api.private-1.hiro.so/extended/v1/faucets/btc";
 
-// ─── Key material ────────────────────────────────────────────────────────────
-
 // Sender priv (64-hex). Default: account5. Override with BTC_FROM_PRIV.
 const SENDER_PRIV_HEX =
   process.env.BTC_FROM_PRIV ??
@@ -56,12 +52,8 @@ const SENDER_PRIV_HEX =
 const RECIPIENT_ADDR =
   process.env.TO_ADDRESS ?? "bcrt1qr5g5smqp2650kgxz64664vs2hwpkwpq7nm4gm4";
 
-// ─── Tx parameters (ENV-overridable) ──────────────────────────────────────────
-
 const SEND_SATS = BigInt(process.env.AMOUNT_SATS ?? 10_000_000); // default 0.1 BTC
 const FEE_SATS = BigInt(process.env.FEE_SATS ?? 300); // 1 sat/vB × ~141 vB rounded up
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Resolve sender pubkey + p2wpkh spend object once. */
 function senderSpend() {
@@ -168,8 +160,6 @@ async function broadcast(rawHex: string): Promise<string> {
   throw new Error("broadcast failed on both /tx and /v1/tx");
 }
 
-// ─── Test ─────────────────────────────────────────────────────────────────────
-
 test("send 0.1 BTC from account5 to account6 on regtest", async () => {
   const { priv, spend } = senderSpend();
   const senderAddr = spend.address!;
@@ -179,7 +169,7 @@ test("send 0.1 BTC from account5 to account6 on regtest", async () => {
   console.log("recipient addr:", RECIPIENT_ADDR);
   console.log("sender scriptPubKey:", senderScriptHex);
 
-  // ── 1. Find a confirmed UTXO large enough ──────────────────────────────────
+  // 1. Find a confirmed UTXO large enough
   let utxos = await fetchUtxos(senderAddr, senderScriptHex);
   console.log("initial UTXOs:", utxos.map((u) => `${u.txid}:${u.vout} (${u.value} sats)`));
 
@@ -213,7 +203,7 @@ test("send 0.1 BTC from account5 to account6 on regtest", async () => {
   console.log("fee:", FEE_SATS.toString(), "sats");
   console.log("change:", changeSats.toString(), "sats");
 
-  // ── 2. Build + sign tx ────────────────────────────────────────────────────
+  // 2. Build + sign tx
   const tx = new btc.Transaction();
   tx.addInput({
     txid: utxo.txid,
@@ -233,14 +223,14 @@ test("send 0.1 BTC from account5 to account6 on regtest", async () => {
   console.log("tx size:", rawHex.length / 2, "bytes");
   console.log("tx hex:", rawHex);
 
-  // ── 3. Broadcast ──────────────────────────────────────────────────────────
+  // 3. Broadcast
   const txid = await broadcast(rawHex);
   console.log("broadcast txid:", txid);
 
   // Basic sanity: 64 lowercase hex chars
   expect(txid).toMatch(/^[0-9a-f]{64}$/);
 
-  // ── 4. Confirm the tx is visible in the mempool API ───────────────────────
+  // 4. Confirm the tx is visible in the mempool API
   const seenTx = await poll(
     async () => {
       const resp = await fetch(`${MEMPOOL_BASE}/tx/${txid}`);

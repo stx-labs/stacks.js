@@ -87,12 +87,12 @@ export const ENV = {
 
   /**
    * The canonical fixtures store the recorder maintains (relative to cwd, the
-   * package dir) — a JSON map of request `path + search` → response body. Source
+   * package dir) — a JSON map of request `path + search` -> response body. Source
    * of truth for offline replay; tests read it via `fixtures.ts` (`FIXTURES`).
    *
    * Defaults by network when `FIXTURES_JSON` is not explicitly set:
-   * - `devnet` (or unset) → `tests/regtest/fixtures.json`
-   * - `testnet`           → `tests/privatenet/fixtures/fixtures.json`
+   * - `devnet` (or unset) -> `tests/regtest/fixtures.json`
+   * - `testnet`           -> `tests/privatenet/fixtures/fixtures.json`
    *   so privatenet recordings never touch the committed regtest fixtures.
    */
   FIXTURES_JSON:
@@ -102,7 +102,7 @@ export const ENV = {
       : "tests/regtest/fixtures.json"),
   /**
    * Capture mode. When `RECORD=1`, hit the live node (jest-fetch-mock disabled)
-   * and record every observed request/response into FIXTURES_JSON. Unset →
+   * and record every observed request/response into FIXTURES_JSON. Unset ->
    * replay via mocks.
    */
   RECORD: process.env.RECORD === "1",
@@ -121,7 +121,7 @@ export const isMocking = !ENV.RECORD;
 export const timeout = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-// Recorder: programmatically maintain the canonical JSON fixtures store ========
+// Recorder: programmatically maintain the canonical JSON fixtures store.
 
 /** Pull the request URL out of any `fetch` input shape. */
 function inputToUrl(input: Parameters<typeof fetch>[0]): URL {
@@ -135,7 +135,7 @@ function inputToUrl(input: Parameters<typeof fetch>[0]): URL {
 }
 
 /**
- * Active fixture-file key. `undefined` → the default store (`fixtures.json`). A
+ * Active fixture-file key. `undefined` -> the default store (`fixtures.json`). A
  * key routes BOTH recording and replay to `fixtures-<key>.json` (same dir), so a
  * test's captures and its mocks live in one named file. Test PHASES that need the
  * same path to return different bodies over time use different keys.
@@ -153,7 +153,7 @@ export function fixturePath(key?: string): string {
 
 /**
  * Per-file in-memory cache, seeded from disk so re-records merge + dedupe (latest
- * wins) instead of clobbering. A missing file → empty map (never breaks replay).
+ * wins) instead of clobbering. A missing file -> empty map (never breaks replay).
  */
 const fixtureCache = new Map<string, Record<string, string>>();
 export function loadFixtures(key?: string): Record<string, string> {
@@ -170,7 +170,7 @@ export function loadFixtures(key?: string): Record<string, string> {
   return map;
 }
 
-/** Write the store back as sorted JSON (stable key order → clean diffs). */
+/** Write the store back as sorted JSON (stable key order -> clean diffs). */
 function writeFixtures(key: string | undefined, map: Record<string, string>): void {
   const sorted: Record<string, string> = {};
   for (const k of Object.keys(map).sort()) sorted[k] = map[k];
@@ -204,7 +204,7 @@ export function fixtureKey(
       sender?: unknown;
       arguments?: unknown;
     };
-    // bitcoind JSON-RPC: every call POSTs one path → disambiguate by method+params.
+    // bitcoind JSON-RPC: every call POSTs one path -> disambiguate by method+params.
     if (typeof parsed.method === "string") {
       return `${url.host}${url.pathname}#${parsed.method}:${JSON.stringify(parsed.params ?? [])}`;
     }
@@ -330,7 +330,7 @@ export function withTimeout<T, A extends unknown[]>(
   };
 }
 
-// Network lifecycle (inversion of control) ====================================
+// Network lifecycle (inversion of control).
 // The harness has no docker/compose knowledge — it only execs the agent-provided
 // `NETWORK_*_CMD` commands (see `ENV`). The agent chooses what to run and when
 // to wipe; with no command set the op is a no-op.

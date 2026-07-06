@@ -2,19 +2,19 @@
 /**
  * E2E Negative / Edge-case Matrix
  *
- * Each test probes a distinct failure path in pox-5.clar and asserts the EXACT
+ * Each test probes a distinct failure path in pox-5 and asserts the EXACT
  * abort code returned. No happy-path state is created here; every case either
  * needs NO prior state or guards gracefully (skip-with-log) when a precondition
  * is absent.
  *
- * Error codes (src/errors.ts → Pox5ErrorCode):
- *   case 1 — over-cap sats         → TooMuchSats (u10)
- *   case 2 — double-register       → AlreadyRegistered (u9) OR StakerAlreadyAdded (u5)
- *   case 3 — window closed         → BondAlreadyStarted (u43)
- *   case 4 — CLTV reclaim too early → mempool non-final / CLTV failure (BTC layer)
- *   case 5 — early-reclaim w/o exit announce → CannotAnnounceL1EarlyUnlock (u35) or
+ * Error codes (src/errors.ts -> Pox5ErrorCode):
+ *   case 1 — over-cap sats         -> TooMuchSats (u10)
+ *   case 2 — double-register       -> AlreadyRegistered (u9) OR StakerAlreadyAdded (u5)
+ *   case 3 — window closed         -> BondAlreadyStarted (u43)
+ *   case 4 — CLTV reclaim too early -> mempool non-final / CLTV failure (BTC layer)
+ *   case 5 — early-reclaim w/o exit announce -> CannotAnnounceL1EarlyUnlock (u35) or
  *             commitment/verify failure in pox-5 (no L1-early-exit zeroed shares)
- *   case 6 — stake wrong-cycle startBurnHt → InvalidStartBurnHeight (u24)
+ *   case 6 — stake wrong-cycle startBurnHt -> InvalidStartBurnHeight (u24)
  *
  * Cases needing prior state: 2 (needs an enrolled staker), 4 & 5 (need a live BTC lockup).
  * Cases always runnable without prior state: 1, 3, 6.
@@ -55,8 +55,6 @@ import { pickBondIndex } from '../../helpers/bond';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
 
-// ─── Shared constants ────────────────────────────────────────────────────────
-
 const SIGNER_MANAGER =
   process.env.SIGNER_MANAGER ??
   'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
@@ -72,13 +70,11 @@ function extractErrCode(repr: string | undefined): number | null {
   return m ? Number(m[1]) : null;
 }
 
-// ─── Setup ───────────────────────────────────────────────────────────────────
-
 beforeAll(async () => {
   await ensurePox5();
 }, 60_000);
 
-// ─── Case 1: register-for-bond with amountSats > allowance cap → TooMuchSats (u10) ──
+// Case 1: register-for-bond with amountSats > allowance cap -> TooMuchSats (u10)
 
 test.skip('case 1 — over-cap sats: TooMuchSats (u10)', async () => {
   useFixtures('e2e-negative-matrix-case1');
@@ -181,7 +177,7 @@ test.skip('case 1 — over-cap sats: TooMuchSats (u10)', async () => {
   }
 }, 720_000);
 
-// ─── Case 2: double-register → AlreadyRegistered (u9) or StakerAlreadyAdded (u5) ──
+// Case 2: double-register -> AlreadyRegistered (u9) or StakerAlreadyAdded (u5)
 //
 // REQUIRES PRIOR STATE: an enrolled staker. Skips gracefully if none found.
 
@@ -271,7 +267,7 @@ test.skip('case 2 — double-register: AlreadyRegistered (u9) / StakerAlreadyAdd
   }
 }, 720_000);
 
-// ─── Case 3: register after window closed → BondAlreadyStarted (u43) ─────────
+// Case 3: register after window closed -> BondAlreadyStarted (u43)
 //
 // Discovers (or constructs) a bond whose start height is in the PAST.
 // No prior state required — we pick a bond that has already started.
@@ -396,7 +392,7 @@ test.skip('case 3 — register after window closed: BondAlreadyStarted (u43)', a
   }
 }, 180_000);
 
-// ─── Case 4: CLTV reclaim before unlockHeight → BTC mempool non-final / CLTV failure ──
+// Case 4: CLTV reclaim before unlockHeight -> BTC mempool non-final / CLTV failure
 //
 // REQUIRES PRIOR STATE: a btc-lock artifact at /tmp/btc-lock-<BOND_INDEX>-<STAKER>.json
 // and the BTC CLTV timelock still in the future (tip < unlockHeight).
@@ -489,7 +485,7 @@ test.skip('case 4 — CLTV reclaim before unlockHeight: mempool rejects (non-fin
 
   // Sign via BIP143 preimage. signECDSA returns DER bytes directly.
   const preimage = tx.preimageWitnessV0(0, witnessScript, btc.SigHash.ALL, amount);
-  // signECDSA(hash, privKey, lowR?) → DER-encoded signature bytes (no SIGHASH suffix)
+  // signECDSA(hash, privKey, lowR?) -> DER-encoded signature bytes (no SIGHASH suffix)
   const derSigRaw = signECDSA(preimage, hexToBytes(staker.key.slice(0, 64)), true);
   const derSig = concatBytes(derSigRaw, new Uint8Array([0x01])); // append SIGHASH_ALL
 
@@ -545,7 +541,7 @@ test.skip('case 4 — CLTV reclaim before unlockHeight: mempool rejects (non-fin
   }
 }, 30_000);
 
-// ─── Case 5: early reclaim WITHOUT announce-l1-early-exit → CannotAnnounceL1EarlyUnlock (u35) ──
+// Case 5: early reclaim WITHOUT announce-l1-early-exit -> CannotAnnounceL1EarlyUnlock (u35)
 //
 // REQUIRES PRIOR STATE: an enrolled L1 staker (bond membership with isL1Lock).
 // We call announce-l1-early-exit from a staker that has NOT yet announced — this should
@@ -553,7 +549,7 @@ test.skip('case 4 — CLTV reclaim before unlockHeight: mempool rejects (non-fin
 // the first (L1EarlyExitAlreadyAnnounced u50) OR calling it on an L2 staker (u35).
 //
 // We probe the simpler always-runnable variant: call announce-l1-early-exit from an account
-// that has NO bond membership at all → asserts NotBondParticipant (u34) or NotStaking (u27).
+// that has NO bond membership at all -> asserts NotBondParticipant (u34) or NotStaking (u27).
 
 import { buildAnnounceL1EarlyExit } from '../../../src';
 
@@ -628,9 +624,9 @@ test.skip('case 5 — announce-l1-early-exit with no membership: NotBondParticip
   }
 }, 180_000);
 
-// ─── Case 6: stake with startBurnHt in the NEXT cycle → InvalidStartBurnHeight (u24) ──
+// Case 6: stake with startBurnHt in the NEXT cycle -> InvalidStartBurnHeight (u24)
 //
-// pox-5.clar's `stake` function requires:
+// pox-5.stake requires:
 //   burn-height-to-reward-cycle(startBurnHt) == current-cycle
 // i.e. startBurnHt must fall in the CURRENT cycle. Passing the first burn height
 // of the NEXT cycle fails with ERR_INVALID_START_BURN_HEIGHT (err u24).

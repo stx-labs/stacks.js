@@ -12,17 +12,17 @@
  *   — Spends via the OP_IF (CLTV) branch. Requires tip burn-height >= unlockHeight.
  *     If not yet spendable, logs a clear message and skips (does not fail) so the
  *     orchestrator can wait and retry.
- *     Witness stack: [ staker_sig, 0x01 (truthy → IF), witnessScript ]
+ *     Witness stack: [ staker_sig, 0x01 (truthy -> IF), witnessScript ]
  *     tx.lockTime = unlockHeight, input sequence = 0xfffffffe
  *
  *  MODE=early
  *   — Spends via the OP_ELSE branch. Requires a second signature from account6
  *     (the bond's early-unlock cosigner) plus the 32-byte staker preimage. No CLTV.
- *     Witness stack: [ staker_sig(STAKER), admin_sig(account6), preimage, <empty>(→ELSE), witnessScript ]
+ *     Witness stack: [ staker_sig(STAKER), admin_sig(account6), preimage, <empty>(->ELSE), witnessScript ]
  *     Stack at OP_IF check: top = empty (ELSE taken), then preimage, admin_sig, staker_sig.
  *     ELSE branch: OP_SIZE 32 OP_EQUALVERIFY OP_SHA256 <H> OP_EQUALVERIFY (consumes preimage),
- *     then <account6Pub> OP_CHECKSIG (pops admin_sig → leaves 1), OP_ENDIF OP_VERIFY (consumes
- *     the 1), then <stakerPub> OP_CHECKSIG (pops staker_sig → final result).
+ *     then <account6Pub> OP_CHECKSIG (pops admin_sig -> leaves 1), OP_ENDIF OP_VERIFY (consumes
+ *     the 1), then <stakerPub> OP_CHECKSIG (pops staker_sig -> final result).
  *
  * Composable via ENV:
  *   BOND_INDEX   bond index whose artifact to read (default: 4)
@@ -49,7 +49,7 @@
  * For P2WSH the BIP143 "scriptCode" is the witnessScript itself (not the P2WSH output script).
  *
  * Witness is set manually via tx.updateInput(0, { finalScriptWitness: [...items] }, true).
- * Once finalScriptWitness is set, inputStatus === 'finalized' → isFinal === true → tx.hex works.
+ * Once finalScriptWitness is set, inputStatus === 'finalized' -> isFinal === true -> tx.hex works.
  */
 
 // @ts-ignore — @scure/btc-signer is ESM; ts-jest transforms it via jest.config.js
@@ -68,7 +68,7 @@ fetchMock.disableMocks();
 
 jest.setTimeout(30 * 60_000);
 
-// ─── Network params ──────────────────────────────────────────────────────────
+// Network params
 
 const REGTEST: typeof btc.NETWORK = {
   bech32: 'bcrt',
@@ -79,9 +79,9 @@ const REGTEST: typeof btc.NETWORK = {
 
 const MEMPOOL_BASE = 'https://mempool.bitcoin.private-1.hiro.so/api';
 
-// ─── Key material ────────────────────────────────────────────────────────────
+// Key material
 
-// ─── Staker resolution ───────────────────────────────────────────────────────
+// Staker resolution
 //
 // STAKER env selects the staker account whose BTC key signed the lockup output.
 // Defaults to "account5" so existing usage is unchanged.
@@ -118,7 +118,7 @@ function deriveStakerP2wpkhAddress(): string {
   return p2wpkh.address!;
 }
 
-// ─── Config (ENV-overridable) ─────────────────────────────────────────────────
+// Config (ENV-overridable)
 
 const BOND_INDEX = Number(process.env.BOND_INDEX ?? 4);
 const MODE = (process.env.MODE ?? 'timelock') as 'timelock' | 'early';
@@ -126,7 +126,7 @@ const MODE = (process.env.MODE ?? 'timelock') as 'timelock' | 'early';
 const TO_ADDRESS = process.env.TO_ADDRESS ?? deriveStakerP2wpkhAddress();
 const FEE_SATS = BigInt(process.env.FEE_SATS ?? 300);
 
-// ─── Lock artifact schema ─────────────────────────────────────────────────────
+// Lock artifact schema
 
 interface LockArtifact {
   bondIndex: number;
@@ -146,7 +146,7 @@ interface LockArtifact {
   txCount?: number;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// Helpers
 
 /** Broadcast a raw tx hex; try /tx then /v1/tx. Returns the txid. */
 async function broadcast(rawHex: string): Promise<string> {
@@ -190,7 +190,7 @@ async function fetchTipHeight(): Promise<number> {
   return Number(text.trim());
 }
 
-// ─── BIP143 sighash note ──────────────────────────────────────────────────────
+// BIP143 sighash note
 //
 // For P2WSH inputs, the BIP143 scriptCode is the witnessScript itself (the
 // full redeem script committed to by the P2WSH output script). This is
@@ -199,7 +199,7 @@ async function fetchTipHeight(): Promise<number> {
 // tx.preimageWitnessV0(idx, witnessScript, SIGHASH_ALL=1, amountSats) returns
 // the double-sha256 commitment (32 bytes) that must be signed.
 //
-// ─── Witness construction ─────────────────────────────────────────────────────
+// Witness construction
 //
 // The witnessScript layout (from buildLockScript in src/script.ts — a byte-for-byte
 // mirror of pox-5 `construct-lockup-script`):
@@ -207,11 +207,11 @@ async function fetchTipHeight(): Promise<number> {
 //   OP_IF
 //     <heightPush> OP_CHECKLOCKTIMEVERIFY
 //   OP_ELSE
-//     OP_SIZE 32 OP_EQUALVERIFY OP_SHA256 <H> OP_EQUALVERIFY   ← H = sha256(sha256(consensus-buff(staker)))
-//     <earlyUnlockBytes>     ← <account6Pub> OP_CHECKSIG (leaves 1 for the shared OP_VERIFY)
+//     OP_SIZE 32 OP_EQUALVERIFY OP_SHA256 <H> OP_EQUALVERIFY   <- H = sha256(sha256(consensus-buff(staker)))
+//     <earlyUnlockBytes>     <- <account6Pub> OP_CHECKSIG (leaves 1 for the shared OP_VERIFY)
 //   OP_ENDIF
 //   OP_VERIFY
-//   <unlockBytes>            ← <account5Pub> OP_CHECKSIG (runs in BOTH branches, final result)
+//   <unlockBytes>            <- <account5Pub> OP_CHECKSIG (runs in BOTH branches, final result)
 //
 // Bitcoin witness items are pushed onto the stack in index order (item[0] first
 // = deepest in the stack; last item = top). The witnessScript itself is the
@@ -220,34 +220,33 @@ async function fetchTipHeight(): Promise<number> {
 //
 // TIMELOCK branch (OP_IF takes it when top is truthy):
 //   Witness: [ staker_sig, 0x01, witnessScript ]
-//   Initial stack (bottom→top): [ staker_sig, 0x01 ]
-//     1. OP_IF          → pops 0x01 (truthy)    → enters IF branch
-//     2. <heightPush>   → pushes height          → stack: [ staker_sig, height ]
-//     3. OP_CLTV        → checks nLockTime (fails if tx.lockTime < height; does NOT pop)
-//     4. OP_ENDIF OP_VERIFY → pops height (truthy) → stack: [ staker_sig ]
-//     5. <account5Pub> OP_CHECKSIG → pops staker_sig → verifies → stack: [ 1 ]
-//   Result: stack = [ 1 ] → valid spend.
+//   Initial stack (bottom->top): [ staker_sig, 0x01 ]
+//     1. OP_IF          -> pops 0x01 (truthy)    -> enters IF branch
+//     2. <heightPush>   -> pushes height          -> stack: [ staker_sig, height ]
+//     3. OP_CLTV        -> checks nLockTime (fails if tx.lockTime < height; does NOT pop)
+//     4. OP_ENDIF OP_VERIFY -> pops height (truthy) -> stack: [ staker_sig ]
+//     5. <account5Pub> OP_CHECKSIG -> pops staker_sig -> verifies -> stack: [ 1 ]
+//   Result: stack = [ 1 ] -> valid spend.
 //   tx.lockTime = unlockHeight, input sequence = 0xfffffffe (non-final, enables CLTV).
 //
 // EARLY branch (OP_ELSE when top is falsy/empty):
 //   Witness: [ staker_sig, admin_sig, preimage, <empty>=0x, witnessScript ]
-//   Initial stack (bottom→top): [ staker_sig, admin_sig, preimage, empty ]  (empty on top)
-//     1. OP_IF          → pops empty (falsy)     → enters ELSE branch
-//     2. OP_SIZE 32 OP_EQUALVERIFY OP_SHA256 <H> OP_EQUALVERIFY → consumes preimage
-//        (asserts |preimage| == 32 and sha256(preimage) == H)  → stack: [ staker_sig, admin_sig ]
-//     3. <account6Pub> OP_CHECKSIG → pops admin_sig → verifies → stack: [ staker_sig, 1 ]
-//     4. OP_ENDIF OP_VERIFY → pops the 1          → stack: [ staker_sig ]
-//     5. <account5Pub> OP_CHECKSIG → pops staker_sig → verifies → stack: [ 1 ]
-//   Result: stack = [ 1 ] → valid spend.
+//   Initial stack (bottom->top): [ staker_sig, admin_sig, preimage, empty ]  (empty on top)
+//     1. OP_IF          -> pops empty (falsy)     -> enters ELSE branch
+//     2. OP_SIZE 32 OP_EQUALVERIFY OP_SHA256 <H> OP_EQUALVERIFY -> consumes preimage
+//        (asserts |preimage| == 32 and sha256(preimage) == H)  -> stack: [ staker_sig, admin_sig ]
+//     3. <account6Pub> OP_CHECKSIG -> pops admin_sig -> verifies -> stack: [ staker_sig, 1 ]
+//     4. OP_ENDIF OP_VERIFY -> pops the 1          -> stack: [ staker_sig ]
+//     5. <account5Pub> OP_CHECKSIG -> pops staker_sig -> verifies -> stack: [ 1 ]
+//   Result: stack = [ 1 ] -> valid spend.
 //   (No lockTime constraint in the ELSE branch.)
 //   preimage = computeRegisterPreimage(stakerStxAddress) = sha256(consensus-buff(staker)).
 //
-// ─────────────────────────────────────────────────────────────────────────────
 
-// ─── Test ─────────────────────────────────────────────────────────────────────
+// Test
 
 test.skip(`reclaim P2WSH lockup output for bond ${BOND_INDEX} via ${MODE} branch (staker=${STAKER_NAME})`, async () => {
-  // ── 1. Load lock artifact ─────────────────────────────────────────────────
+  // 1. Load lock artifact
   const artifactPath = `/tmp/btc-lock-${BOND_INDEX}.json`;
   console.log(`\n=== BTC-RECLAIM: bondIndex=${BOND_INDEX} mode=${MODE} staker=${STAKER_NAME} ===`);
   console.log(`reading artifact: ${artifactPath}`);
@@ -277,7 +276,7 @@ test.skip(`reclaim P2WSH lockup output for bond ${BOND_INDEX} via ${MODE} branch
   console.log('witnessScriptHex:', witnessScriptHex);
   console.log('witnessScript length:', witnessScript.length, 'bytes');
 
-  // ── 2. For timelock mode: check current tip height ─────────────────────────
+  // 2. For timelock mode: check current tip height
   if (MODE === 'timelock') {
     const tipHeight = await fetchTipHeight();
     console.log(`tip burn-height: ${tipHeight}, unlockHeight: ${unlockHeight}`);
@@ -291,7 +290,7 @@ test.skip(`reclaim P2WSH lockup output for bond ${BOND_INDEX} via ${MODE} branch
     console.log(`tip height ${tipHeight} >= unlockHeight ${unlockHeight} — CLTV satisfied`);
   }
 
-  // ── 3. Derive keys ─────────────────────────────────────────────────────────
+  // 3. Derive keys
   const stakerPriv = hexToBytes(STAKER_PRIV_HEX);
   const stakerPub = secp256k1.getPublicKey(stakerPriv, true); // compressed
   const account6Priv = hexToBytes(ACCOUNT6_PRIV_HEX);
@@ -307,7 +306,7 @@ test.skip(`reclaim P2WSH lockup output for bond ${BOND_INDEX} via ${MODE} branch
   console.log('P2WSH scriptPubKey:', bytesToHex(p2wshScript));
   console.log('P2WSH address:', p2wshObj.address);
 
-  // ── 4. Build transaction skeleton ─────────────────────────────────────────
+  // 4. Build transaction skeleton
   const reclaimSats = amountSats - FEE_SATS;
   if (reclaimSats <= 0n) throw new Error(`fee (${FEE_SATS}) exceeds lockup amount (${amountSats})`);
 
@@ -327,7 +326,7 @@ test.skip(`reclaim P2WSH lockup output for bond ${BOND_INDEX} via ${MODE} branch
   // sequence = 0xfffffffe for timelock (non-final, enables nLockTime+CLTV), 0xffffffff for early.
   const sequence = MODE === 'timelock' ? 0xfffffffe : 0xffffffff;
 
-  // ── 5. Build final transaction (lockTime embedded in constructor opts) ─────
+  // 5. Build final transaction (lockTime embedded in constructor opts)
   // @scure/btc-signer sets lockTime via TxOpts.lockTime in the constructor.
   // For timelock mode we must set it to unlockHeight so OP_CLTV passes.
   let finalTx: btc.Transaction;
@@ -359,10 +358,10 @@ test.skip(`reclaim P2WSH lockup output for bond ${BOND_INDEX} via ${MODE} branch
 
   console.log('input sequence:', `0x${sequence.toString(16).toUpperCase()}`);
 
-  // ── 6. Compute BIP143 sighash ─────────────────────────────────────────────
+  // 6. Compute BIP143 sighash
   //
   // For P2WSH: scriptCode = witnessScript (the full redeem script).
-  // preimageWitnessV0(inputIdx, scriptCode, sighashType, inputAmountSats) → 32-byte hash.
+  // preimageWitnessV0(inputIdx, scriptCode, sighashType, inputAmountSats) -> 32-byte hash.
   //
   // SIGHASH_ALL = 1 (0x01).
   const SIGHASH_ALL = 1;
@@ -376,14 +375,14 @@ test.skip(`reclaim P2WSH lockup output for bond ${BOND_INDEX} via ${MODE} branch
   const stakerSig = concatBytes(stakerSigDer, new Uint8Array([SIGHASH_ALL]));
   console.log('staker sig (DER + sighash byte):', bytesToHex(stakerSig));
 
-  // ── 7. Build witness stack ─────────────────────────────────────────────────
+  // 7. Build witness stack
   let witnessItems: Uint8Array[];
 
   if (MODE === 'timelock') {
-    // TIMELOCK witness: [ staker_sig, 0x01 (truthy → IF branch), witnessScript ]
+    // TIMELOCK witness: [ staker_sig, 0x01 (truthy -> IF branch), witnessScript ]
     //
     // Stack at OP_IF: bottom: staker_sig | top: 0x01
-    // OP_IF pops 0x01 (truthy) → IF branch → CLTV check → OP_VERIFY → staker_sig CHECKSIG.
+    // OP_IF pops 0x01 (truthy) -> IF branch -> CLTV check -> OP_VERIFY -> staker_sig CHECKSIG.
     const selector = new Uint8Array([0x01]); // truthy: selects OP_IF (timelock) branch
 
     witnessItems = [stakerSig, selector, witnessScript];
@@ -393,14 +392,14 @@ test.skip(`reclaim P2WSH lockup output for bond ${BOND_INDEX} via ${MODE} branch
     console.log('[1] selector (0x01 = truthy → IF):', bytesToHex(selector));
     console.log('[2] witnessScript (popped as script):', bytesToHex(witnessScript));
   } else {
-    // EARLY witness: [ staker_sig, admin_sig, preimage, <empty> (falsy → ELSE), witnessScript ]
+    // EARLY witness: [ staker_sig, admin_sig, preimage, <empty> (falsy -> ELSE), witnessScript ]
     //
     // Stack at OP_IF: bottom: staker_sig | admin_sig | preimage | top: <empty>
-    // OP_IF pops empty (falsy) → enters ELSE branch.
-    // ELSE: OP_SIZE 32 OP_EQUALVERIFY OP_SHA256 <H> OP_EQUALVERIFY → consumes preimage.
-    //       <account6Pub> OP_CHECKSIG → pops admin_sig → leaves 1.
-    // OP_ENDIF OP_VERIFY → consumes the 1.
-    //       <account5Pub> OP_CHECKSIG → pops staker_sig → final result.
+    // OP_IF pops empty (falsy) -> enters ELSE branch.
+    // ELSE: OP_SIZE 32 OP_EQUALVERIFY OP_SHA256 <H> OP_EQUALVERIFY -> consumes preimage.
+    //       <account6Pub> OP_CHECKSIG -> pops admin_sig -> leaves 1.
+    // OP_ENDIF OP_VERIFY -> consumes the 1.
+    //       <account5Pub> OP_CHECKSIG -> pops staker_sig -> final result.
     //
     // We need a separate sighash for account6 since it signs the same tx commitment.
     const adminSighash = finalTx.preimageWitnessV0(0, witnessScript, SIGHASH_ALL, amountSats);
@@ -426,7 +425,7 @@ test.skip(`reclaim P2WSH lockup output for bond ${BOND_INDEX} via ${MODE} branch
     console.log('[4] witnessScript (popped as script):', bytesToHex(witnessScript));
   }
 
-  // ── 8. Inject witness manually ────────────────────────────────────────────
+  // 8. Inject witness manually
   //
   // Setting finalScriptWitness bypasses @scure/btc-signer's standard finalization
   // (which only handles known script shapes like p2wpkh, p2ms, p2tr). Once set,
@@ -444,20 +443,20 @@ test.skip(`reclaim P2WSH lockup output for bond ${BOND_INDEX} via ${MODE} branch
   console.log('\ntx.isFinal:', isFinal);
   if (!isFinal) throw new Error('Transaction is not finalized — witness injection failed');
 
-  // ── 9. Serialize + log ────────────────────────────────────────────────────
+  // 9. Serialize + log
   const rawHex = finalTx.hex;
   const vsize = finalTx.vsize;
   console.log('\ntx vsize:', vsize, 'vBytes');
   console.log('tx hex:', rawHex);
   console.log('raw tx size:', rawHex.length / 2, 'bytes');
 
-  // ── 10. Broadcast ─────────────────────────────────────────────────────────
+  // 10. Broadcast
   const txid = await broadcast(rawHex);
   console.log('\n=== RECLAIM TXID:', txid, '===');
 
   expect(txid).toMatch(/^[0-9a-f]{64}$/);
 
-  // ── 11. Confirm the tx is visible in the mempool API ───────────────────────
+  // 11. Confirm the tx is visible in the mempool API
   const seenTx = await poll(
     async () => {
       const resp = await fetch(`${MEMPOOL_BASE}/tx/${txid}`);
@@ -485,7 +484,7 @@ test.skip(`reclaim P2WSH lockup output for bond ${BOND_INDEX} via ${MODE} branch
   expect(seenTx.txid).toBe(txid);
   expect(seenTx.fee).toBeGreaterThan(0);
 
-  // ── 12. Summary ───────────────────────────────────────────────────────────
+  // 12. Summary
   console.log('\n=== BTC-RECLAIM SUMMARY ===');
   console.log('bondIndex:', BOND_INDEX);
   console.log('mode:', MODE);

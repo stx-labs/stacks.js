@@ -35,17 +35,13 @@ import { freshFundedStxAccount } from '../../helpers/fresh-account';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 const SIGNER_MANAGER = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 const AMOUNT_USTX = BigInt(process.env.AMOUNT_USTX ?? 1_000_000_000); // 1000 STX per staker
 const NUM_CYCLES = Number(process.env.NUM_CYCLES ?? 1);
 const FEE_USTX = BigInt(process.env.FEE_USTX ?? 10_000);
 
-// ─── Staker definitions ────────────────────────────────────────────────────────
-//
 // To avoid ACCOUNT-STATE COLLISIONS (a reused REGTEST_KEYS account that's
-// already staked → err u19 ALREADY_STAKED), each of the 3 stakers is a
+// already staked -> err u19 ALREADY_STAKED), each of the 3 stakers is a
 // freshly-derived random account funded in beforeAll. STX-only `stake` needs no
 // bond allowlist, so fresh accounts work here.
 
@@ -59,8 +55,6 @@ interface Staker {
 }
 
 const STAKERS: Staker[] = [];
-
-// ─── Per-staker stake action ───────────────────────────────────────────────────
 
 async function doStxStake(
   staker: Staker,
@@ -104,8 +98,6 @@ async function doStxStake(
   console.log(`[${staker.name}] staked ${AMOUNT_USTX} uSTX ✓`);
   return AMOUNT_USTX;
 }
-
-// ─── Test ─────────────────────────────────────────────────────────────────────
 
 beforeAll(async () => {
   useFixtures('e2e-multi-stx-pool');

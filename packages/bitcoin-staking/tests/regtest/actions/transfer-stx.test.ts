@@ -1,7 +1,7 @@
 /**
  * STX transfer smoke test — doubles as a "fund a wallet" utility.
  *
- * Defaults: account4 → account5 (both daemon-free, funded on all nets).
+ * Defaults: account4 -> account5 (both daemon-free, funded on all nets).
  * Override the recipient with STACKS_ADDRESS (this action only — not in the
  * shared ENV global), e.g. to top up an external wallet:
  *

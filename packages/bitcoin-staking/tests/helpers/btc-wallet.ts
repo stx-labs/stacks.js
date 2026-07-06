@@ -17,8 +17,6 @@ import * as btc from '@scure/btc-signer';
 import { secp256k1 } from '@noble/curves/secp256k1.js';
 import { bytesToHex, hexToBytes } from '@stacks/common';
 
-// ─── Constants ──────────────────────────────────────────────────────────────
-
 export const MEMPOOL_BASE = 'https://mempool.bitcoin.private-1.hiro.so/api';
 export const FAUCET_URL = 'https://api.private-1.hiro.so/extended/v1/faucets/btc';
 
@@ -32,8 +30,6 @@ export const REGTEST: typeof btc.NETWORK = {
   scriptHash: 0xc4,
   wif: 0xef,
 };
-
-// ─── Key helpers ────────────────────────────────────────────────────────────
 
 /** Derive a compressed 33-byte secp256k1 pubkey from a 32-byte raw private key. */
 export function derivePubKey(privKey: Uint8Array): Uint8Array {
@@ -52,8 +48,6 @@ export function privKeyToP2wpkhScriptHex(privKey: Uint8Array): string {
   return bytesToHex(btc.p2wpkh(pub, REGTEST).script);
 }
 
-// ─── UTXO type ──────────────────────────────────────────────────────────────
-
 export interface Utxo {
   txid: string;
   vout: number;
@@ -61,10 +55,8 @@ export interface Utxo {
   scriptPubKey: Uint8Array;
 }
 
-// ─── Core helpers ────────────────────────────────────────────────────────────
-
 /**
- * POST the BTC faucet for `address` (xlarge=true → ~1 BTC).
+ * POST the BTC faucet for `address` (xlarge=true -> ~1 BTC).
  * Returns the faucet txid, or throws if the faucet request fails.
  */
 export async function faucetFund(address: string): Promise<string> {
@@ -186,7 +178,7 @@ export async function getBtcTipHeight(): Promise<number> {
 }
 
 /**
- * Ensure `address` has at least one confirmed UTXO ≥ minSats.
+ * Ensure `address` has at least one confirmed UTXO >= minSats.
  * If not, call the faucet then poll until a sufficient UTXO appears.
  * Returns the biggest confirmed UTXO found.
  *

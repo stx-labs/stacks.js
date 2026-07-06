@@ -46,15 +46,11 @@ fetchMock.disableMocks();
 
 jest.setTimeout(30 * 60_000);
 
-// ─── Config ──────────────────────────────────────────────────────────────────
-
 const BOND_INDEX = Number(process.env.BOND_INDEX ?? 4);
 const AMOUNT_SATS = BigInt(process.env.AMOUNT_SATS ?? 30_000);
 // Flat fee for the funding tx (1 sat/vB × ~300 vB rounded up generously)
 const FEE_SATS = BigInt(process.env.FEE_SATS ?? 500);
 
-// ─── Staker resolution ───────────────────────────────────────────────────────
-//
 // STAKER env selects which account acts as the staker (account5 | account6 | account7).
 // Defaults to "account5" so existing usage is unchanged.
 // Bond membership is one-per-staker: use a different account (e.g. account7) for
@@ -83,8 +79,6 @@ const STAKER_STX_ADDRESS = stakerAccount.address;
 // (Used only for sanity-checking; the bond's earlyUnlockBytes come from on-chain.)
 const ACCOUNT6_BTC_PUBKEY = '022bb4b050afd84f0a7eedd02d4ea6ebe426bbb02744dfcca0b789a643eff6e78c';
 
-// ─── Network params ──────────────────────────────────────────────────────────
-
 const REGTEST: typeof btc.NETWORK = {
   bech32: 'bcrt',
   pubKeyHash: 0x6f,
@@ -95,7 +89,7 @@ const REGTEST: typeof btc.NETWORK = {
 const MEMPOOL_BASE = 'https://mempool.bitcoin.private-1.hiro.so/api';
 const FAUCET_URL = 'https://api.private-1.hiro.so/extended/v1/faucets/btc';
 
-// ─── BTC helpers (mirrors btc-send.test.ts) ───────────────────────────────────
+// BTC helpers (mirrors btc-send.test.ts)
 
 function senderKeys() {
   const priv = hexToBytes(STAKER_PRIV_HEX);
@@ -277,12 +271,10 @@ async function fetchBlockTxCount(blockHash: string): Promise<number> {
   return data.tx_count;
 }
 
-// ─── Test ────────────────────────────────────────────────────────────────────
-
 test.skip(`fund P2WSH L1 lockup on regtest BTC for bond ${BOND_INDEX}`, async () => {
   const network = getNetwork();
 
-  // ── 1. Fetch bond + pox info, derive unlock height + lockup script ────────
+  // 1. Fetch bond + pox info, derive unlock height + lockup script
   console.log(`\n=== BTC-LOCK ACTION: bondIndex=${BOND_INDEX} amount=${AMOUNT_SATS} sats staker=${STAKER_NAME} ===`);
   console.log('staker STX address:', STAKER_STX_ADDRESS);
 
@@ -340,14 +332,14 @@ test.skip(`fund P2WSH L1 lockup on regtest BTC for bond ${BOND_INDEX}`, async ()
   const p2wshAddress = p2wshObj.address!;
   console.log('P2WSH address:', p2wshAddress);
 
-  // ── 2. Derive staker P2WPKH address (funding source) ─────────────────────
+  // 2. Derive staker P2WPKH address (funding source)
   const p2wpkhObj = btc.p2wpkh(stakerBtcPub, REGTEST);
   const senderAddr = p2wpkhObj.address!;
   const senderScriptHex = bytesToHex(p2wpkhObj.script);
   console.log(`${STAKER_NAME} P2WPKH addr:`, senderAddr);
   console.log(`${STAKER_NAME} P2WPKH scriptPubKey:`, senderScriptHex);
 
-  // ── 3. Find/fund a confirmed UTXO ─────────────────────────────────────────
+  // 3. Find/fund a confirmed UTXO
   let utxos = await fetchUtxos(senderAddr, senderScriptHex);
   console.log('initial UTXOs:', utxos.map(u => `${u.txid}:${u.vout} (${u.value} sats)`));
 
@@ -378,7 +370,7 @@ test.skip(`fund P2WSH L1 lockup on regtest BTC for bond ${BOND_INDEX}`, async ()
   console.log('change:', changeSats.toString(), 'sats');
   expect(changeSats).toBeGreaterThan(0n);
 
-  // ── 4. Build + sign funding tx ────────────────────────────────────────────
+  // 4. Build + sign funding tx
   const tx = new btc.Transaction();
   tx.addInput({
     txid: utxo.txid,
@@ -400,17 +392,17 @@ test.skip(`fund P2WSH L1 lockup on regtest BTC for bond ${BOND_INDEX}`, async ()
   console.log('funding tx size:', rawHex.length / 2, 'bytes');
   console.log('funding tx hex:', rawHex);
 
-  // ── 5. Broadcast ──────────────────────────────────────────────────────────
+  // 5. Broadcast
   const txid = await broadcast(rawHex);
   console.log('\n=== FUNDING TXID:', txid, '===');
   expect(txid).toMatch(/^[0-9a-f]{64}$/);
 
-  // ── 6. Wait for confirmation ──────────────────────────────────────────────
+  // 6. Wait for confirmation
   console.log('waiting for confirmation...');
   const { blockHash, blockHeight } = await waitForConfirmation(txid);
   console.log('confirmed in block:', blockHash, 'height:', blockHeight);
 
-  // ── 7. Fetch SPV proof components ────────────────────────────────────────
+  // 7. Fetch SPV proof components
   console.log('fetching block header...');
   const headerHex = await fetchBlockHeader(blockHash);
   console.log('block header (80 bytes hex):', headerHex);
@@ -431,7 +423,7 @@ test.skip(`fund P2WSH L1 lockup on regtest BTC for bond ${BOND_INDEX}`, async ()
   // The P2WSH output is always at index 0 in our tx (we added it first)
   const outputIndex = 0;
 
-  // ── 8. Summary ────────────────────────────────────────────────────────────
+  // 8. Summary
   console.log('\n=== BTC-LOCK SUMMARY ===');
   console.log('bondIndex:', BOND_INDEX);
   console.log('staker:', STAKER_NAME, '(', STAKER_STX_ADDRESS, ')');
@@ -449,7 +441,7 @@ test.skip(`fund P2WSH L1 lockup on regtest BTC for bond ${BOND_INDEX}`, async ()
   console.log('headerHex:', headerHex);
   console.log('legacyTxHex:', legacyHex);
 
-  // ── 9. Persist to /tmp/btc-lock-<BOND_INDEX>.json ────────────────────────
+  // 9. Persist to /tmp/btc-lock-<BOND_INDEX>.json
   const artifact = {
     bondIndex: BOND_INDEX,
     stakerName: STAKER_NAME,

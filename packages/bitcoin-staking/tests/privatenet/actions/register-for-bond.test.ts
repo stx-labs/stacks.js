@@ -7,8 +7,8 @@
  * here is `kind: 'sbtc'`, and we exercise it as an ABORT-path probe rather than
  * a happy path:
  *
- *   register-for-bond evaluates the lockup branch FIRST (pox-5.clar line ~531:
- *   `(try! (match btc-lockup ... sbtc-amount (lock-sbtc sbtc-amount)))`), so
+ *   register-for-bond evaluates the lockup branch FIRST
+ *   (`(try! (match btc-lockup ... sbtc-amount (lock-sbtc sbtc-amount)))`), so
  *   `lock-sbtc`'s `sbtc-token.transfer` runs before any bond/allowlist/signer
  *   guard. Calling from an account that holds 0 sBTC makes that `ft-transfer?`
  *   abort with `(err u1)` — proving the builder serializes against the real ABI

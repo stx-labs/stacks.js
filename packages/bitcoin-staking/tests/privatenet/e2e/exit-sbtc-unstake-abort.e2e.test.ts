@@ -73,7 +73,7 @@ test.skip('unstake-sbtc aborts with expected error (no sBTC position on account8
   console.log('signerManager:', SIGNER_MANAGER);
   console.log('Expected: abort with (err u43) ERR_CANNOT_UNSTAKE_SBTC or (err u27) ERR_NOT_STAKING');
 
-  // ── 1. Build unstake-sbtc transaction ────────────────────────────────────
+  // 1. Build unstake-sbtc transaction
   // amountToWithdrawSats = 1 sat (minimum plausible value; the tx aborts before
   // the amount is validated because there's no sBTC position at all).
   const unsigned = await buildUnstakeSbtc({
@@ -87,7 +87,7 @@ test.skip('unstake-sbtc aborts with expected error (no sBTC position on account8
 
   console.log('unstake-sbtc tx built successfully (serialization check passed ✓)');
 
-  // ── 2. Sign and broadcast ─────────────────────────────────────────────────
+  // 2. Sign and broadcast
   const tx = signTransaction(unsigned, staker.key);
   const res = await broadcastTransaction({ transaction: tx, network });
 
@@ -104,7 +104,7 @@ test.skip('unstake-sbtc aborts with expected error (no sBTC position on account8
   }
   console.log('unstake-sbtc txid:', res.txid);
 
-  // ── 3. Wait for on-chain result ───────────────────────────────────────────
+  // 3. Wait for on-chain result
   const txRecord = await waitForFulfilled(async () => {
     const t = await getTransaction(res.txid);
     if (!t || t.tx_status === 'pending') throw new Error('tx still pending');
@@ -118,7 +118,7 @@ test.skip('unstake-sbtc aborts with expected error (no sBTC position on account8
     burn_block_height: txRecord.burn_block_height,
   });
 
-  // ── 4. Assert expected abort ──────────────────────────────────────────────
+  // 4. Assert expected abort
   expect(txRecord.tx_status).toBe('abort_by_response');
 
   const code = parseErrCode(txRecord.tx_result?.repr);

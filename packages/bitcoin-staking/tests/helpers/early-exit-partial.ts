@@ -9,9 +9,9 @@
  * sighash. Once BOTH signatures are present, either side can assemble the final
  * witness and broadcast.
  *
- * Witness (bottom→top), modeled EXACTLY on btc-lockup-roundtrip TEST 1 / the
+ * Witness (bottom->top), modeled EXACTLY on btc-lockup-roundtrip TEST 1 / the
  * exit-l1-announce-and-reclaim e2e test:
- *   [ stakerSig, cosignerSig, stakerPreimage, <empty→ELSE>, witnessScript ]
+ *   [ stakerSig, cosignerSig, stakerPreimage, <empty->ELSE>, witnessScript ]
  *
  * Both sigs are ECDSA over `tx.preimageWitnessV0(0, witnessScript, SIGHASH_ALL,
  * amount)` with a trailing SIGHASH_ALL byte. For P2WSH the scriptCode IS the
@@ -61,7 +61,7 @@ export interface EarlyExitPartial {
 /**
  * Rebuild the unsigned ELSE-branch reclaim tx from a partial and derive its
  * BIP143 sighash (lowercase hex). The tx layout is fixed: one P2WSH input
- * (sequence 0xffffffff → ELSE, no CLTV), one P2WPKH output already encoded in
+ * (sequence 0xffffffff -> ELSE, no CLTV), one P2WPKH output already encoded in
  * `reclaimTxUnsignedHex`. The sighash MUST match `partial.sighashHex`.
  */
 export function computeSighash(partial: EarlyExitPartial): string {
@@ -102,7 +102,7 @@ export function assembleAndFinalize(partial: EarlyExitPartial): string {
     hexToBytes(partial.stakerSig),
     hexToBytes(partial.cosignerSig),
     hexToBytes(partial.preimageHex),
-    new Uint8Array(0), // empty → OP_IF falsy → ELSE branch
+    new Uint8Array(0), // empty -> OP_IF falsy -> ELSE branch
     witnessScript,
   ];
   tx.updateInput(0, { finalScriptWitness: witnessItems }, true);

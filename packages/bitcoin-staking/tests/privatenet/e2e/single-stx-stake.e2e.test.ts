@@ -28,8 +28,6 @@ import {
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 const AMOUNT_USTX = BigInt(process.env.AMOUNT_USTX ?? 1_000_000_000); // 1000 STX
 const NUM_CYCLES = Number(process.env.NUM_CYCLES ?? 1);
 const FEE = BigInt(process.env.FEE_USTX ?? 10_000);
@@ -40,8 +38,6 @@ const SIGNER_MANAGER =
 
 // Dedicated lane account (override via STAKER env). Default account3 (rich, uncontended).
 const staker = resolveAccount('STAKER', 'account3');
-
-// ─── Test ─────────────────────────────────────────────────────────────────────
 
 beforeAll(async () => {
   useFixtures('e2e-single-stx-stake');
@@ -55,7 +51,7 @@ test.skip('single-staker STX stake: account7 end-to-end', async () => {
   console.log('\n=== E2E: single-stx-stake ===');
   console.log('staker:', staker.address);
 
-  // ── 1. Read current chain state ───────────────────────────────────────────
+  // 1. Read current chain state
   const poxInfo = await getPoxInfo();
   const currentCycle = poxInfo.rewardCycleId;
   const startBurnHt = poxInfo.currentBurnchainBlockHeight;
@@ -66,7 +62,7 @@ test.skip('single-staker STX stake: account7 end-to-end', async () => {
   console.log('numCycles:', NUM_CYCLES);
   console.log('signerManager:', SIGNER_MANAGER);
 
-  // ── 2. Check if already staked ────────────────────────────────────────────
+  // 2. Check if already staked
   const existingInfo = await fetchStakerInfo({ address: staker.address, network });
   if (existingInfo.staked) {
     console.warn('account7 is already staked:', JSON.stringify(existingInfo, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)));
@@ -76,7 +72,7 @@ test.skip('single-staker STX stake: account7 end-to-end', async () => {
     return;
   }
 
-  // ── 3. Build + sign + broadcast stake tx ──────────────────────────────────
+  // 3. Build + sign + broadcast stake tx
   const nonce = await getNextNonce(staker.address);
   console.log('staker nonce:', nonce);
 
@@ -97,7 +93,7 @@ test.skip('single-staker STX stake: account7 end-to-end', async () => {
   console.log('\n=== STAKE TXID:', txid, '===');
   useFixtures('e2e-single-stx-stake-after');
 
-  // ── 4. Assert staker info ─────────────────────────────────────────────────
+  // 4. Assert staker info
   console.log('polling fetchStakerInfo until staked...');
   const stakerInfo = await waitForFulfilled(async () => {
     const info = await fetchStakerInfo({ address: staker.address, network });

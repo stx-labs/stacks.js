@@ -72,7 +72,7 @@ test.skip('account7: stake STX-only then early-exit (unstake) rewrites position 
   console.log('currentCycle:', poxInfo.rewardCycleId);
   console.log('currentBurnHt:', poxInfo.currentBurnchainBlockHeight);
 
-  // ── Step 1: Stake if not already staking ─────────────────────────────────
+  // Step 1: Stake if not already staking
   const beforeStake = await fetchStakerInfo({ address: staker.address, network });
   console.log('BEFORE stake — staked:', beforeStake.staked);
 
@@ -143,7 +143,7 @@ test.skip('account7: stake STX-only then early-exit (unstake) rewrites position 
     });
   }
 
-  // ── Step 2: Read staker info before unstake ───────────────────────────────
+  // Step 2: Read staker info before unstake
   const beforeUnstake = await fetchStakerInfo({ address: staker.address, network });
   console.log('\nBEFORE unstake — staker-info:', beforeUnstake.staked
     ? { amountUstx: beforeUnstake.details.amountUstx.toString(), numCycles: beforeUnstake.details.numCycles, firstRewardCycle: beforeUnstake.details.firstRewardCycle }
@@ -155,7 +155,7 @@ test.skip('account7: stake STX-only then early-exit (unstake) rewrites position 
     return;
   }
 
-  // ── Step 3: Wait out prepare phase (unstake reverts in prepare phase u28) ──
+  // Step 3: Wait out prepare phase (unstake reverts in prepare phase u28)
   poxInfo = await getPoxInfo();
   const posOf = () =>
     (poxInfo.currentBurnchainBlockHeight - poxInfo.firstBurnchainBlockHeight) %
@@ -167,7 +167,7 @@ test.skip('account7: stake STX-only then early-exit (unstake) rewrites position 
     poxInfo = await getPoxInfo();
   }
 
-  // ── Step 4: Unstake (early exit) ──────────────────────────────────────────
+  // Step 4: Unstake (early exit)
   const oldSignerManager = beforeUnstake.details.signer;
   console.log('\nunstake params:', {
     staker: staker.address,
@@ -204,7 +204,7 @@ test.skip('account7: stake STX-only then early-exit (unstake) rewrites position 
     burn_block_height: unstakeTxRecord.burn_block_height,
   });
 
-  // ── Step 5: Read staker info after unstake and assert ─────────────────────
+  // Step 5: Read staker info after unstake and assert
   const afterUnstake = await fetchStakerInfo({ address: staker.address, network });
   console.log('\nAFTER unstake — staker-info:', afterUnstake.staked
     ? { amountUstx: afterUnstake.details.amountUstx.toString(), numCycles: afterUnstake.details.numCycles, firstRewardCycle: afterUnstake.details.firstRewardCycle }
@@ -224,7 +224,7 @@ test.skip('account7: stake STX-only then early-exit (unstake) rewrites position 
     expect(afterUnstake.staked).toBe(true);
 
     if (afterUnstake.staked && beforeUnstake.staked) {
-      // num-cycles collapsed: must be ≤ what it was before
+      // num-cycles collapsed: must be <= what it was before
       expect(afterUnstake.details.numCycles).toBeLessThanOrEqual(beforeUnstake.details.numCycles);
       // STX still locked — amount unchanged
       expect(afterUnstake.details.amountUstx).toBe(beforeUnstake.details.amountUstx);

@@ -1,8 +1,8 @@
 // TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
- * E2E — signer-grant lifecycle: real grant → verify → revoke → verify (happy path).
+ * E2E — signer-grant lifecycle: real grant -> verify -> revoke -> verify (happy path).
  *
- * CONTRACT TRUTH (pox-5.clar):
+ * CONTRACT TRUTH (pox-5):
  *   `grant-signer-key` asserts `(is-eq contract-caller signer-manager)` where
  *   `signer-manager` is the ARG passed to the call. So an EOA SUCCEEDS when it
  *   passes its OWN stx address as the `signerManager` arg (contract-caller ==
@@ -13,9 +13,9 @@
  *
  * This test therefore drives the REAL happy path from account1:
  *   1. buildGrantSignerKey with signerManager = account1's OWN address, a fresh
- *      auth-id, and a valid SIP-018 signer-sig over the grant → assert success.
+ *      auth-id, and a valid SIP-018 signer-sig over the grant -> assert success.
  *   2. fetchVerifySignerKeyGrant(signerKey, signerManager) === true.
- *   3. buildRevokeSignerGrant (caller == signerManager == account1) → success.
+ *   3. buildRevokeSignerGrant (caller == signerManager == account1) -> success.
  *   4. fetchVerifySignerKeyGrant(...) === false.
  *
  * Run:
@@ -71,7 +71,7 @@ test.skip('grant-signer-key (self-managed EOA): grant → verify true → revoke
   console.log('signerManager (account1 OWN address):', signerManager);
   console.log('authId:', GRANT_AUTH_ID.toString());
 
-  // ── 1. Build + sign a valid SIP-018 grant signature over (signerManager, authId, chainId) ──
+  // 1. Build + sign a valid SIP-018 grant signature over (signerManager, authId, chainId)
   const signerSignature = signSignerGrant({
     signerManager,
     authId: GRANT_AUTH_ID,
@@ -111,13 +111,13 @@ test.skip('grant-signer-key (self-managed EOA): grant → verify true → revoke
   });
   expect(grantRecord.tx_status).toBe('success');
 
-  // ── 2. Verify the grant now exists ────────────────────────────────────────
+  // 2. Verify the grant now exists
   useFixtures('e2e-signer-grant-after');
   const grantedNow = await fetchVerifySignerKeyGrant({ signerKey, signerManager, network });
   console.log('fetchVerifySignerKeyGrant after grant:', grantedNow);
   expect(grantedNow).toBe(true);
 
-  // ── 3. Revoke the grant (caller == signerManager == account1) ─────────────
+  // 3. Revoke the grant (caller == signerManager == account1)
   const unsignedRevoke = await buildRevokeSignerGrant({
     signerKey,
     signerManager,
@@ -147,7 +147,7 @@ test.skip('grant-signer-key (self-managed EOA): grant → verify true → revoke
   });
   expect(revokeRecord.tx_status).toBe('success');
 
-  // ── 4. Verify the grant is gone ───────────────────────────────────────────
+  // 4. Verify the grant is gone
   const grantedAfterRevoke = await fetchVerifySignerKeyGrant({ signerKey, signerManager, network });
   console.log('fetchVerifySignerKeyGrant after revoke:', grantedAfterRevoke);
   expect(grantedAfterRevoke).toBe(false);

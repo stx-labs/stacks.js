@@ -16,7 +16,6 @@
  * No Bitcoin transactions. No `set-bond-admin` calls. No contract deploys.
  * Safe senders: bond-admin (getBondAdminAccount), account5.
  *
- * ─────────────────────────────────────────────────────────────────────────────
  * PROBE A — authorization bypass: non-admin setup-bond
  *   Compute the soonest settable index. Build a VALID setup-bond (all params
  *   sensible) but sign it with account5 (NOT the bond-admin). The timing guard
@@ -47,7 +46,6 @@
  *   contract should abort. We wrap broadcastAndWait in try/catch and log
  *   whichever outcome occurs.
  *
- * ─────────────────────────────────────────────────────────────────────────────
  * Run with:
  *   NETWORK=testnet NETWORK_ID=256 STACKS_API=https://api.private-1.hiro.so RECORD=1 \
  *     POLL_INTERVAL=10000 RETRY_INTERVAL=10000 \
@@ -103,8 +101,6 @@ const SBTC_SATS = 1_000n;
 
 let admin: Awaited<ReturnType<typeof getBondAdminAccount>>;
 let signerManager: string;
-
-// ─── helpers ────────────────────────────────────────────────────────────────
 
 /** Parse the raw `(err uN)` repr string and return N, or undefined. */
 function parseErrCode(repr: string | undefined): number | undefined {
@@ -182,8 +178,6 @@ async function assertTolerableResult(
   return undefined;
 }
 
-// ─── setup ───────────────────────────────────────────────────────────────────
-
 beforeAll(async () => {
   admin = await getBondAdminAccount();
   await ensurePox5();
@@ -195,19 +189,19 @@ beforeAll(async () => {
   console.log("nonConformingSignerManager:", NON_CONFORMING_SIGNER_MANAGER);
 }, 20 * 60_000);
 
-// ─── PROBE A: non-admin setup-bond → authorization bypass check ───────────────
+// PROBE A: non-admin setup-bond -> authorization bypass check
 //
 // Target: ERR_UNAUTHORIZED (u1) — the authorization guard should fire AFTER the
-// timing guard passes (soonest index → window open).
+// timing guard passes (soonest index -> window open).
 //
 // "Bad" (vuln) outcome: tx succeeds, meaning a non-admin principal created a
 // bond. We verify by reading fetchBond() after the tx; if a bond exists at that
 // index with our staker in the allowlist we flag it as CRITICAL.
 //
-// Guard ordering in pox-5.clar setup-bond (hypothesized):
-//   1. timing guard (too soon / too late) → (err u2) / (err u3)
-//   2. authorization guard               → (err u1)  ← what we target here
-//   3. already-setup guard               → (err u4)
+// Guard ordering in pox-5.setup-bond (hypothesized):
+//   1. timing guard (too soon / too late) -> (err u2) / (err u3)
+//   2. authorization guard               -> (err u1)  <- what we target here
+//   3. already-setup guard               -> (err u4)
 
 test.skip("adversarial-3-A: non-admin setup-bond — expect ERR_UNAUTHORIZED (u1)", async () => {
   const { bondIndex, anchorCycle, currentCycle } =
@@ -281,7 +275,7 @@ test.skip("adversarial-3-A: non-admin setup-bond — expect ERR_UNAUTHORIZED (u1
       "probe-A NOTE: (err u4) BondAlreadySetup — bond already existed; auth guard may or may not have fired before it"
     );
   } else if (code === undefined && newBondCreated) {
-    // tx succeeded AND created a bond → critical
+    // tx succeeded AND created a bond -> critical
     expect(newBondCreated).toBe(false); // fail the test with a clear message
   } else if (code === undefined) {
     console.warn(
@@ -294,7 +288,7 @@ test.skip("adversarial-3-A: non-admin setup-bond — expect ERR_UNAUTHORIZED (u1
   }
 });
 
-// ─── PROBE B: setup-bond with stxValueRatio = 0 ──────────────────────────────
+// PROBE B: setup-bond with stxValueRatio = 0
 //
 // Target: unknown — the contract may or may not validate that stxValueRatio > 0.
 // If it does not validate, the bond is created with ratio=0, meaning
@@ -365,7 +359,7 @@ test.skip("adversarial-3-B: setup-bond stxValueRatio = 0 — economic validation
       );
     }
   } else {
-    // Success path → unvalidated zero ratio is the finding.
+    // Success path -> unvalidated zero ratio is the finding.
     const newBondCreated = bondAfter !== undefined && bondBefore === undefined;
     if (newBondCreated) {
       console.error(
@@ -381,13 +375,13 @@ test.skip("adversarial-3-B: setup-bond stxValueRatio = 0 — economic validation
   }
 });
 
-// ─── PROBE C: setup-bond with minUstxRatioBps = 20000 (> 100%) ───────────────
+// PROBE C: setup-bond with minUstxRatioBps = 20000 (> 100%)
 //
 // Target: unknown — the contract may or may not enforce that minUstxRatioBps
-// ≤ 10000 (100% in basis points).
+// <= 10000 (100% in basis points).
 //
 // Uses the soonest settable index (computed fresh after probe B may have
-// consumed an index). Timing guard passes → real check reached.
+// consumed an index). Timing guard passes -> real check reached.
 //
 // "Bad" (vuln) outcome: success — log "minUstxRatioBps=20000 accepted at idx N".
 // At 20000 bps (200%), a staker must provide 2× the STX-equivalent of their BTC,
@@ -467,7 +461,7 @@ test.skip("adversarial-3-C: setup-bond minUstxRatioBps = 20000 (> 100%) — econ
   }
 });
 
-// ─── PROBE D: trait conformance — non-conforming signerManager ───────────────
+// PROBE D: trait conformance — non-conforming signerManager
 //
 // Target: node-level rejection (BadFunctionArgument) OR on-chain abort.
 // Tests that Clarity trait conformance is enforced when a contract that does NOT
@@ -497,7 +491,7 @@ test.skip("adversarial-3-D: register-for-bond with non-conforming signerManager 
         break;
       }
     } catch {
-      // network errors → skip
+      // network errors -> skip
     }
   }
 

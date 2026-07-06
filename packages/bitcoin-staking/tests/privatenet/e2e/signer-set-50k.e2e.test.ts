@@ -1,17 +1,17 @@
 // TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
- * E2E — Stake ≥50,000 STX → signer counts toward the signer set.
+ * E2E — Stake >=50,000 STX -> signer counts toward the signer set.
  *
- * pox-5.clar gates signer-set membership on the signer's aggregate delegated
+ * pox-5 gates signer-set membership on the signer's aggregate delegated
  * uSTX exceeding SIGNER_SET_MIN_USTX (50,000,000,000 uSTX = 50k STX).
- * A single stake of ≥50k STX from a fresh account pushes that signer's
+ * A single stake of >=50k STX from a fresh account pushes that signer's
  * aggregate over (or confirms it's over) the floor.
  *
  * Assertions (relative, before/after delta):
  *   - fetchSignerSharesStakedForCycle(signerManager, targetCycle) increases by AMOUNT_USTX.
  *   - fetchSignerInfo(signerManager) returns the signer key (registered in the set).
- *   - get-amount-delegated-for-signer ≥ SIGNER_SET_MIN_USTX after the stake.
- *   - signer-set-contains-for-cycle → true after the stake.
+ *   - get-amount-delegated-for-signer >= SIGNER_SET_MIN_USTX after the stake.
+ *   - signer-set-contains-for-cycle -> true after the stake.
  *
  * Uses account1 (uncontended, ~10B STX, not driven by any daemon).
  *
@@ -49,14 +49,12 @@ import {
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
 
-// ─── Config ───────────────────────────────────────────────────────────────────
-
 const SIGNER_MANAGER = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 const FEE = 10_000n;
 // Exactly the floor: 50k STX = 50_000_000_000 uSTX.
 const AMOUNT_USTX = BigInt(process.env.AMOUNT_USTX ?? 50_000_000_000n);
 const NUM_CYCLES = 1;
-const SIGNER_SET_MIN_USTX = 50_000_000_000n; // from pox-5.clar
+const SIGNER_SET_MIN_USTX = 50_000_000_000n; // from pox-5
 
 // Dedicated lane account (override via STAKER env). Default account1 (Lane A).
 const staker = resolveAccount('STAKER', 'account1');
@@ -68,7 +66,7 @@ function parseErrCode(repr: string | undefined): number | undefined {
   return m ? Number(m[1]) : undefined;
 }
 
-// ─── Read-only helpers (not yet wrapped in src/fetch.ts) ─────────────────────
+// Read-only helpers (not yet wrapped in src/fetch.ts)
 
 async function getAmountDelegatedForSigner(signer: string, cycle: number): Promise<bigint> {
   const r = await fetchCallReadOnlyFunction({
@@ -117,14 +115,10 @@ async function snapshot(label: string, cycle: number): Promise<Snapshot> {
   return { delegated, inSet, signerShares, totalShares };
 }
 
-// ─── Setup ────────────────────────────────────────────────────────────────────
-
 beforeAll(async () => {
   useFixtures('e2e-signer-set-50k');
   await ensurePox5();
 }, 60_000);
-
-// ─── Test ─────────────────────────────────────────────────────────────────────
 
 test.skip('account1: stake ≥50k STX → signer aggregate ≥ floor, signer counts toward signer set', async () => {
   useFixtures('e2e-signer-set-50k');
@@ -135,7 +129,7 @@ test.skip('account1: stake ≥50k STX → signer aggregate ≥ floor, signer cou
   console.log('amountUstx:', AMOUNT_USTX.toString(), '(', Number(AMOUNT_USTX) / 1e6, 'STX )');
   console.log('SIGNER_SET_MIN_USTX:', SIGNER_SET_MIN_USTX.toString());
 
-  // ── Guard: already staking? ───────────────────────────────────────────────
+  // Guard: already staking?
   const existing = await fetchStakerInfo({ address: staker.address, network });
   console.log('account1 existing staker-info:', existing.staked
     ? { amountUstx: existing.details.amountUstx.toString(), numCycles: existing.details.numCycles }
@@ -150,7 +144,7 @@ test.skip('account1: stake ≥50k STX → signer aggregate ≥ floor, signer cou
     return;
   }
 
-  // ── Wait out prepare phase ────────────────────────────────────────────────
+  // Wait out prepare phase
   let pox = await getPoxInfo();
   const posOf = () =>
     (pox.currentBurnchainBlockHeight - pox.firstBurnchainBlockHeight) % pox.rewardCycleLength;
@@ -176,10 +170,10 @@ test.skip('account1: stake ≥50k STX → signer aggregate ≥ floor, signer cou
     numCycles: NUM_CYCLES,
   });
 
-  // ── BEFORE snapshot ───────────────────────────────────────────────────────
+  // BEFORE snapshot
   const before = await snapshot('BEFORE', targetCycle);
 
-  // ── Broadcast stake ───────────────────────────────────────────────────────
+  // Broadcast stake
   const unsigned = await buildStake({
     signerManager: SIGNER_MANAGER,
     amountUstx: AMOUNT_USTX,
@@ -213,20 +207,17 @@ test.skip('account1: stake ≥50k STX → signer aggregate ≥ floor, signer cou
     throw new Error(`stake aborted (err u${code}): ${JSON.stringify(tx.tx_result)}`);
   }
 
-  // ── AFTER snapshot ────────────────────────────────────────────────────────
+  // AFTER snapshot
   const after = await snapshot('AFTER', targetCycle);
 
-  // ── fetchStakerInfo ───────────────────────────────────────────────────────
   const stakerInfo = await fetchStakerInfo({ address: staker.address, network });
   console.log('account1 staker-info AFTER:', stakerInfo.staked
     ? { amountUstx: stakerInfo.details.amountUstx.toString(), numCycles: stakerInfo.details.numCycles, firstRewardCycle: stakerInfo.details.firstRewardCycle }
     : 'not staking');
 
-  // ── fetchSignerInfo ───────────────────────────────────────────────────────
   const signerInfo = await fetchSignerInfo({ signerManager: SIGNER_MANAGER, network });
   console.log('signerInfo:', signerInfo);
 
-  // ── Assertions ────────────────────────────────────────────────────────────
   console.log('\n=== SIGNER-SET-50K ASSERTIONS ===');
 
   // 1. Staker position created
@@ -242,7 +233,7 @@ test.skip('account1: stake ≥50k STX → signer aggregate ≥ floor, signer cou
   expect(sharesDelta).toBe(AMOUNT_USTX);
   console.log(`✓ signerSharesStakedForCycle(${targetCycle}) delta: ${sharesDelta.toString()} = AMOUNT_USTX`);
 
-  // 3. delegated ≥ SIGNER_SET_MIN_USTX → signer must be in the set
+  // 3. delegated >= SIGNER_SET_MIN_USTX -> signer must be in the set
   if (after.delegated >= SIGNER_SET_MIN_USTX) {
     expect(after.inSet).toBe(true);
     console.log(`✓ delegated (${after.delegated}) ≥ floor (${SIGNER_SET_MIN_USTX}) → signer IN set`);

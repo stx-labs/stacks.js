@@ -43,8 +43,6 @@ jest.setTimeout(60 * 60_000); // bond open can be 20+ blocks away; 1h covers it
 const network = getNetwork();
 let admin: Awaited<ReturnType<typeof getBondAdminAccount>>;
 
-// ─── env-parameterized bond configuration ───────────────────────────────────
-
 const FEE = 10_000n;
 
 /** bps charged to stakers — override with TARGET_RATE_BPS env var */
@@ -116,7 +114,7 @@ test.skip("setup-bond: admin creates a bond at the correct time", async () => {
   // Bond periods are anchored to the contract's FIXED `first-bond-period-cycle`
   // data-var (read live — the SDK's `firstPox5RewardCycle` can't see it on this
   // net because pox-5 is absent from `/v2/pox` contract_versions[], and its
-  // fallback drifts with the current cycle → `(err u3)` CannotSetupBondTooLate).
+  // fallback drifts with the current cycle -> `(err u3)` CannotSetupBondTooLate).
   const poxInfo = await getPoxInfo();
   const burn = poxInfo.currentBurnchainBlockHeight;
   const anchorCycle = await fetchFirstBondPeriodCycle();

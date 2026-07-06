@@ -10,7 +10,7 @@ import {
 import * as BtcAddress from '../src/btc-address';
 import * as pkg from '../src';
 
-// 32-byte hex private key (uncompressed marker absent → compressed pubkey).
+// 32-byte hex private key (uncompressed marker absent -> compressed pubkey).
 const PRIVATE_KEY = '7287ba251d44a4d3fd9276c88ce34dbd028debf7af3c8d2dad5e3ce25c020f8801';
 const WRONG_PRIVATE_KEY = '11'.repeat(32) + '01';
 
@@ -71,7 +71,7 @@ describe('signSignerGrant + verifySignerGrant', () => {
       privateKey: PRIVATE_KEY,
     });
     expect(typeof sig).toBe('string');
-    // RSV signature is 65 bytes → 130 hex chars.
+    // RSV signature is 65 bytes -> 130 hex chars.
     expect(sig.length).toBe(130);
 
     const ok = verifySignerGrant({

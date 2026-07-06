@@ -43,10 +43,7 @@ export const getReceivedByAddress = (address: string, minconf = 0, wallet = 'mai
 export const sendToAddress = (address: string, amountBtc: number, wallet = 'main') =>
   bitcoinRpc<string>('sendtoaddress', [address, amountBtc], wallet);
 
-// ---------------------------------------------------------------------------
-// SPV proof inputs via RPC (no Esplora)
-// ---------------------------------------------------------------------------
-//
+// SPV proof inputs via RPC (no Esplora).
 // The SDK's `buildLockProofFromBlock` does all the merkle math; it just
 // needs the block's ordered txid list + the raw tx + header, which we pull from
 // bitcoind: `gettransaction` (wallet, no -txindex needed) for the raw tx +

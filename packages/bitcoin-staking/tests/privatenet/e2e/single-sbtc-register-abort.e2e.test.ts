@@ -39,8 +39,6 @@ import { waitForBondWithRunway } from '../../helpers/bond';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 const FEE = BigInt(process.env.FEE_USTX ?? 10_000);
 const AMOUNT_USTX = 1_000_000n; // 1 STX
 const SBTC_SATS = 1_000n;
@@ -55,8 +53,6 @@ const staker = getAccount(REGTEST_KEYS.account5);
 // The known abort codes this path may produce (see file-level comment)
 const EXPECTED_ABORTS = new Set(['(err u1)', '(err u11)', '(err u43)', '(err u47)']);
 
-// ─── Test ─────────────────────────────────────────────────────────────────────
-
 beforeAll(async () => {
   useFixtures('e2e-single-sbtc-register-abort');
   await ensurePox5();
@@ -70,19 +66,19 @@ test.skip('single-staker sBTC register: aborts with expected error (serialize+ab
   console.log('staker:', staker.address);
   console.log('sBTC minted to staker: 0 (expected abort path)');
 
-  // ── 1. Dynamic bond discovery ─────────────────────────────────────────────
+  // 1. Dynamic bond discovery
   // lock-sbtc aborts before the bond guard, so any bond index works;
   // we still discover dynamically to stay aligned with the protocol state.
   const { bondIndex, poxInfo } = await waitForBondWithRunway();
   console.log(`discovered bondIndex=${bondIndex}`);
   console.log('currentBurnHeight:', poxInfo.currentBurnchainBlockHeight);
 
-  // ── 2. Precondition: staker not enrolled ──────────────────────────────────
+  // 2. Precondition: staker not enrolled
   const existing = await fetchBondMembership({ address: staker.address, network });
   expect(existing).toBeUndefined();
   console.log('precondition: no existing bond membership ✓');
 
-  // ── 3. Build + sign + broadcast register (sbtc) ───────────────────────────
+  // 3. Build + sign + broadcast register (sbtc)
   const nonce = await getNextNonce(staker.address);
   const unsigned = await buildRegisterForBond({
     bondIndex,
@@ -100,12 +96,12 @@ test.skip('single-staker sBTC register: aborts with expected error (serialize+ab
   const txid = await broadcastAndWait(tx, staker.address, network);
   console.log('\n=== BROADCAST TXID:', txid, '===');
 
-  // ── 4. Assert no enrollment was created (abort must NOT enroll) ───────────
+  // 4. Assert no enrollment was created (abort must NOT enroll)
   const membershipAfter = await fetchBondMembership({ address: staker.address, network });
   expect(membershipAfter).toBeUndefined();
   console.log('post-broadcast: no bond membership (abort confirmed via read-only) ✓');
 
-  // ── 5. Best-effort exact result check via /extended (RECORD=1 only) ───────
+  // 5. Best-effort exact result check via /extended (RECORD=1 only)
   // The /extended API lags on this chain, so we only assert under RECORD=1.
   // Without RECORD the test still proves the builder serialized + the abort
   // left no enrollment. Both outcomes confirm the serialize+abort path.

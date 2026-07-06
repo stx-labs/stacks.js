@@ -2,7 +2,7 @@
 /**
  * Privatenet STX-only EXTEND / re-stake action — exercises `stake-update`.
  *
- * pox-5.clar `stake-update` (L1077) is the manual re-stake entry-point for an
+ * pox-5.stake-update (L1077) is the manual re-stake entry-point for an
  * existing STX-only position. A single call can:
  *   - extend the lock by `cycles-to-extend` cycles,
  *   - top up the locked amount by `amount-increase` uSTX,

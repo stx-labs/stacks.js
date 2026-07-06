@@ -50,19 +50,15 @@ fetchMock.disableMocks();
 
 jest.setTimeout(30 * 60_000);
 
-// ─── Config ──────────────────────────────────────────────────────────────────
-
 const BOND_INDEX = Number(process.env.BOND_INDEX ?? 4);
 const SIGNER_MANAGER =
   process.env.SIGNER_MANAGER ??
   'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 const FEE = BigInt(process.env.FEE_USTX ?? 10_000);
 
-// ─── Staker resolution ───────────────────────────────────────────────────────
-//
 // STAKER env selects which account registers as the staker (account5 | account6 | account7).
 // Defaults to "account5" so existing usage is unchanged.
-// The "already enrolled → skip" precondition checks the selected staker's own membership.
+// The "already enrolled -> skip" precondition checks the selected staker's own membership.
 
 const STAKER_NAME = process.env.STAKER ?? 'account5';
 
@@ -77,8 +73,7 @@ if (!staker?.address) {
   throw new Error(`Unknown STAKER="${STAKER_NAME}" and no STAKER_RAW_KEY provided.`);
 }
 
-// ─── Artifact type (written by btc-lock.test.ts) ─────────────────────────────
-
+// Artifact type (written by btc-lock.test.ts).
 interface BtcLockArtifact {
   bondIndex: number;
   txid: string;
@@ -101,8 +96,6 @@ interface BtcLockArtifact {
   txCount: number;
 }
 
-// ─── Test ─────────────────────────────────────────────────────────────────────
-
 beforeAll(async () => {
   await ensurePox5();
 }, 30 * 60_000);
@@ -114,7 +107,7 @@ test.skip(`register-for-bond (real L1 BTC proof) for bond ${BOND_INDEX}`, async 
   console.log('staker:', staker.address);
   console.log('signer-manager:', SIGNER_MANAGER);
 
-  // ── 1. Read btc-lock artifact ─────────────────────────────────────────────
+  // 1. Read btc-lock artifact.
   const artifactPath = `/tmp/btc-lock-${BOND_INDEX}-${STAKER_NAME}.json`;
   let artifact: BtcLockArtifact;
   try {
@@ -137,7 +130,7 @@ test.skip(`register-for-bond (real L1 BTC proof) for bond ${BOND_INDEX}`, async 
   // Sanity: bondIndex must match
   expect(artifact.bondIndex).toBe(BOND_INDEX);
 
-  // ── 2. Fetch bond params (to compute minUstx) ────────────────────────────
+  // 2. Fetch bond params (to compute minUstx).
   const bond = await fetchBond({ bondIndex: BOND_INDEX, network });
   if (!bond) throw new Error(`bond ${BOND_INDEX} not found on-chain`);
   console.log('bond:', JSON.stringify({
@@ -158,12 +151,12 @@ test.skip(`register-for-bond (real L1 BTC proof) for bond ${BOND_INDEX}`, async 
   console.log('minUstx (contract minimum):', minUstx.toString());
   console.log('amountUstx (with buffer):', amountUstx.toString());
 
-  // ── 3. Reconstruct unlock-bytes ───────────────────────────────────────────
-  // account5 BTC pubkey → default unlock script: <pubkey> OP_CHECKSIG
+  // 3. Reconstruct unlock-bytes.
+  // account5 BTC pubkey -> default unlock script: <pubkey> OP_CHECKSIG
   const unlockBytes = buildUnlockScript(staker.publicKey);
   console.log('unlockBytes (hex):', artifact.unlockBytesHex);
 
-  // ── 4. Derive expected P2WSH output script (the "expected script hash") ──
+  // 4. Derive expected P2WSH output script (the "expected script hash").
   const outputScript = buildLockOutputScript({
     stxAddress: artifact.stakerStxAddress,
     unlockHeight: artifact.unlockHeight,
@@ -172,7 +165,7 @@ test.skip(`register-for-bond (real L1 BTC proof) for bond ${BOND_INDEX}`, async 
   });
   console.log('expectedP2wshScript (hex):', Buffer.from(outputScript).toString('hex'));
 
-  // ── 5. Assemble the full SPV proof tuple using assembleLockupProof ────────
+  // 5. Assemble the full SPV proof tuple using assembleLockupProof.
   //
   // assembleLockupProof does the two transformations that cause silent failures:
   //   a. Witness-stripping: legacyTxHex is already stripped by btc-lock.test.ts,
@@ -211,7 +204,7 @@ test.skip(`register-for-bond (real L1 BTC proof) for bond ${BOND_INDEX}`, async 
     headerLengthBytes: (lockupOutput.header as Uint8Array).length,
   }));
 
-  // ── 6. Precondition: staker must NOT already be enrolled ─────────────────
+  // 6. Precondition: staker must NOT already be enrolled.
   const existingMembership = await fetchBondMembership({ address: staker.address, network });
   if (existingMembership) {
     console.warn(
@@ -225,7 +218,7 @@ test.skip(`register-for-bond (real L1 BTC proof) for bond ${BOND_INDEX}`, async 
   }
   console.log('precondition: staker has no existing bond membership ✓');
 
-  // ── 7. Build + sign + broadcast register-for-bond ────────────────────────
+  // 7. Build + sign + broadcast register-for-bond.
   const nonce = await getNextNonce(staker.address);
   console.log('staker nonce:', nonce);
 
@@ -255,7 +248,7 @@ test.skip(`register-for-bond (real L1 BTC proof) for bond ${BOND_INDEX}`, async 
   const txid = await broadcastAndWait(tx, staker.address, network);
   console.log('\n=== BROADCAST TXID:', txid, '===');
 
-  // ── 8. Best-effort result check via /extended ─────────────────────────────
+  // 8. Best-effort result check via /extended.
   // Wait briefly for the extended API to index the tx, then check the result.
   await new Promise(r => setTimeout(r, 5_000));
   const record = await getTransaction(txid);
@@ -292,7 +285,7 @@ test.skip(`register-for-bond (real L1 BTC proof) for bond ${BOND_INDEX}`, async 
     console.log('tx still pending or not indexed — checking membership via node read-only...');
   }
 
-  // ── 9. Assert enrollment ──────────────────────────────────────────────────
+  // 9. Assert enrollment.
   // Poll until membership appears (node read-only, no /extended dependency)
   let membership = await fetchBondMembership({ address: staker.address, network });
   if (!membership) {

@@ -80,7 +80,7 @@ async function setupBondTx(index: number, nonce: number) {
 }
 
 /**
- * Make sure `bondIndex` points at a bond that is set up and still ≥6 blocks
+ * Make sure `bondIndex` points at a bond that is set up and still >=6 blocks
  * before its start. The earlier cases' waits (reward-phase guards, API lag)
  * can consume a bond's whole runway, after which register aborts shift to
  * BondAlreadyStarted (u43) and poison the rest of the sequence — so each case

@@ -24,7 +24,6 @@ import {
   makeSTXTokenTransfer,
 } from "@stacks/transactions";
 
-// ─── Config ────────────────────────────────────────────────────────────────
 const STACKS_API = process.env.STACKS_API ?? "https://api.private-1.hiro.so";
 const NETWORK_ID = Number(process.env.NETWORK_ID ?? 256);
 const MEMPOOL_BASE = "https://mempool.bitcoin.private-1.hiro.so/api";

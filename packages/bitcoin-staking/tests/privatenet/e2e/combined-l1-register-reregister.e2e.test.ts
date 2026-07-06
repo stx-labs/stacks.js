@@ -1,6 +1,6 @@
 // TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
- * E2E — L1 register → announce early exit (staker-signed) → re-register in next bond.
+ * E2E — L1 register -> announce early exit (staker-signed) -> re-register in next bond.
  *
  * Flow for account5 (has BTC address, rich ~10B STX, BTC funded via faucet):
  *   1. Discover a bond with open registration window (dynamic, no hardcoded index).
@@ -67,8 +67,6 @@ import { signTransaction } from '../../helpers/sign';
 import { waitForBondWithRunway } from '../../helpers/bond';
 import { useFixtures } from '../../helpers/mock';
 
-// ─── Config ──────────────────────────────────────────────────────────────────
-
 const SIGNER_MANAGER =
   process.env.SIGNER_MANAGER ?? 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 const MEMPOOL_BASE = 'https://mempool.bitcoin.private-1.hiro.so/api';
@@ -94,8 +92,6 @@ function parseErrCode(repr: string | undefined): number | undefined {
   const m = repr?.match(/^\(err u(\d+)\)$/);
   return m ? Number(m[1]) : undefined;
 }
-
-// ─── BTC helpers ─────────────────────────────────────────────────────────────
 
 function stakerPrivBytes(): Uint8Array { return hexToBytes(STAKER_RAW_KEY_HEX); }
 function stakerPubBytes(): Uint8Array { return secp256k1.getPublicKey(stakerPrivBytes(), true); }
@@ -192,7 +188,7 @@ interface LockArtifact {
 }
 
 /**
- * Execute a full BTC lock: faucet → fund P2WSH → wait for confirmation → artifact.
+ * Execute a full BTC lock: faucet -> fund P2WSH -> wait for confirmation -> artifact.
  * Returns the artifact (also written to /tmp for tooling compatibility).
  */
 async function executeBtcLock(bondIndex: number, amountSats: bigint): Promise<LockArtifact> {
@@ -242,7 +238,7 @@ async function executeBtcLock(bondIndex: number, amountSats: bigint): Promise<Lo
   if (!utxoTx) throw new Error(`Cannot fetch UTXO tx ${utxo.txid}`);
   const utxoScriptPubKey = hexToBytes(utxoTx.vout[utxo.vout].scriptpubkey);
 
-  // 5. Build & sign P2WPKH→P2WSH funding tx
+  // 5. Build & sign P2WPKH->P2WSH funding tx
   const lockP2wsh = btc.p2wsh({ type: 'wsh', script: lockScript }, BTC_NETWORK);
   const fundTx = new btc.Transaction({ allowUnknownInputs: true, allowUnknownOutputs: true });
   fundTx.addInput({
@@ -376,14 +372,10 @@ async function executeRegisterL1(artifact: LockArtifact): Promise<string> {
   return txid;
 }
 
-// ─── Setup ────────────────────────────────────────────────────────────────────
-
 beforeAll(async () => {
   useFixtures('e2e-reregister');
   await ensurePox5();
 }, 60_000);
-
-// ─── Test ─────────────────────────────────────────────────────────────────────
 
 test.skip('account5: L1 register → announce early exit (staker-signed) → re-register in next bond', async () => {
   useFixtures('e2e-reregister');
@@ -391,7 +383,7 @@ test.skip('account5: L1 register → announce early exit (staker-signed) → re-
   console.log('\n=== E2E: combined-l1-register-reregister ===');
   console.log('staker:', staker.address);
 
-  // Precondition / SELF-HEAL: this test drives the full register → announce →
+  // Precondition / SELF-HEAL: this test drives the full register -> announce ->
   // re-register flow, which requires account5 to START with no membership. On a
   // shared chain account5 may ALREADY be enrolled (from a prior L1 run). Rather
   // than hard-fail, self-heal: assert the existing membership is a valid L1 lock
@@ -413,16 +405,16 @@ test.skip('account5: L1 register → announce early exit (staker-signed) → re-
     return;
   }
 
-  // ── Step 1: Discover first bond with open registration window ─────────────
+  // Step 1: Discover first bond with open registration window
   const { bondIndex: bond1Index, bondStartHeight: bond1Start, poxInfo: pox1 } =
     await waitForBondWithRunway(10);
   console.log(`\n[Step 1] First bond: bondIndex=${bond1Index}, bondStart=${bond1Start}, currentBurn=${pox1.currentBurnchainBlockHeight}`);
 
-  // ── Step 2: BTC-lock into bond 1 ─────────────────────────────────────────
+  // Step 2: BTC-lock into bond 1
   console.log('\n[Step 2] BTC lock into bond 1...');
   const artifact1 = await executeBtcLock(bond1Index, LOCK_AMOUNT_SATS);
 
-  // ── Step 3: Register for bond 1 ──────────────────────────────────────────
+  // Step 3: Register for bond 1
   console.log('\n[Step 3] register-for-bond (L1) into bond 1...');
   const registerTxid1 = await executeRegisterL1(artifact1);
   console.log('register-l1 txid (bond 1):', registerTxid1);
@@ -449,7 +441,7 @@ test.skip('account5: L1 register → announce early exit (staker-signed) → re-
   expect(membership1.bondIndex).toBe(bond1Index);
   console.log(`=== REGISTRATION 1 CONFIRMED ✓ bondIndex=${membership1.bondIndex}, isL1Lock=${membership1.isL1Lock} ===`);
 
-  // ── Step 4: announce-l1-early-exit (STAKER-signed) ────────────────────────
+  // Step 4: announce-l1-early-exit (STAKER-signed)
   // The contract enforces contract-caller == tx-sender == staker.
   console.log('\n[Step 4] announce-l1-early-exit (staker-signed)...');
 
@@ -482,17 +474,17 @@ test.skip('account5: L1 register → announce early exit (staker-signed) → re-
 
   useFixtures('e2e-reregister-exited');
 
-  // ── Step 5: Discover next bond for re-registration ────────────────────────
+  // Step 5: Discover next bond for re-registration
   console.log('\n[Step 5] Discovering next bond for re-registration...');
   const { bondIndex: bond2Index, bondStartHeight: bond2Start, poxInfo: pox2 } =
     await waitForBondWithRunway(5);
   console.log(`  next bond: bondIndex=${bond2Index}, bondStart=${bond2Start}, currentBurn=${pox2.currentBurnchainBlockHeight}`);
 
-  // ── Step 6: BTC-lock into bond 2 ─────────────────────────────────────────
+  // Step 6: BTC-lock into bond 2
   console.log('\n[Step 6] BTC lock into bond 2...');
   const artifact2 = await executeBtcLock(bond2Index, LOCK_AMOUNT_SATS);
 
-  // ── Step 7: Re-register into bond 2 ──────────────────────────────────────
+  // Step 7: Re-register into bond 2
   console.log('\n[Step 7] register-for-bond (L1) into bond 2 (re-registration)...');
   const registerTxid2 = await executeRegisterL1(artifact2);
   console.log('register-l1 txid (bond 2):', registerTxid2);

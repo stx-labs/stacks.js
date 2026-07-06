@@ -12,7 +12,7 @@
  * (i.e. `<account6-compressed-pubkey> OP_CHECKSIG`, 35 bytes).
  *
  * Flow (single test):
- *   1. Discover the newest registerable bond (waitForBondWithRunway). fetchBond →
+ *   1. Discover the newest registerable bond (waitForBondWithRunway). fetchBond ->
  *      read its on-chain earlyUnlockBytes.
  *   2. PRECONDITION GUARD: if the bond's earlyUnlockBytes is NOT the account6
  *      cosigner script (an old all-zero bond), skip-with-clear-log — only
@@ -20,13 +20,13 @@
  *   3. If account5 isn't already L1-enrolled in a bond: fund a P2WSH lockup
  *      (buildLockScript with the bond's on-chain earlyUnlockBytes), confirm,
  *      buildLockProof, register-for-bond (kind btc). Assert isL1Lock.
- *   4. announce-l1-early-exit signed by account5 (staker) → assert ok.
+ *   4. announce-l1-early-exit signed by account5 (staker) -> assert ok.
  *   5. Build + broadcast the ELSE-branch reclaim spending the P2WSH lockup back
  *      to account5's P2WPKH. Witness EXACTLY as btc-lockup-roundtrip TEST 1:
- *      [ staker_sig, cosigner_sig, staker_preimage, <empty→ELSE>, witnessScript ].
+ *      [ staker_sig, cosigner_sig, staker_preimage, <empty->ELSE>, witnessScript ].
  *      Broadcast via mempool; assert the txid is visible/confirmed.
  *
- * Honest skips (no fake pass): no cosigner bond → skip; faucet down → throws.
+ * Honest skips (no fake pass): no cosigner bond -> skip; faucet down -> throws.
  *
  * Live run:
  *   set -a; . packages/bitcoin-staking/.env; set +a
@@ -72,8 +72,6 @@ import { waitForBondWithRunway } from '../../helpers/bond';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
 
-// ─── Config ──────────────────────────────────────────────────────────────────
-
 const SIGNER_MANAGER =
   process.env.SIGNER_MANAGER ??
   'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
@@ -95,7 +93,6 @@ const REGTEST_BTC: typeof btc.NETWORK = {
   wif: 0xef,
 };
 
-// ─── Raw BTC key material ─────────────────────────────────────────────────────
 // account5 — the staker whose L1 lock we register, then reclaim via ELSE branch.
 const STAKER_PRIV_HEX = 'cb3df38053d132895220b9ce471f6b676db5b9bf0b4adefb55f2118ece2478df';
 // account6 — the bond's early-unlock COSIGNER (its pubkey is in earlyUnlockBytes).
@@ -104,7 +101,7 @@ const COSIGNER_PRIV_HEX = '5b8303150239eceaba43892af7cdd1fa7fc26eda5182ebaaa568e
 const staker = getAccount(REGTEST_KEYS.account5);
 const network = getNetwork();
 
-// ─── Inlined BTC helpers (from single-l1-register.e2e.test.ts) ────────────────
+// Inlined BTC helpers (from single-l1-register.e2e.test.ts)
 
 interface Utxo {
   txid: string;
@@ -243,8 +240,6 @@ async function fetchRawTxHex(txid: string): Promise<string> {
   return bytesToHex(legacyBytes);
 }
 
-// ─── Test ─────────────────────────────────────────────────────────────────────
-
 beforeAll(async () => {
   useFixtures('e2e-exit-l1-announce-and-reclaim');
   await ensurePox5();
@@ -266,7 +261,7 @@ test.skip('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5',
   const expectedEarlyUnlockHex = bytesToHex(buildUnlockScript(cosignerBtcPub));
   console.log('expected cosigner earlyUnlockBytes:', expectedEarlyUnlockHex);
 
-  // ── 1. Discover the newest registerable bond ───────────────────────────────
+  // 1. Discover the newest registerable bond
   console.log('discovering bond with registration runway...');
   const { bondIndex, bondStartHeight, poxInfo } = await waitForBondWithRunway();
   console.log(`discovered bondIndex=${bondIndex} bondStartHeight=${bondStartHeight}`);
@@ -277,7 +272,7 @@ test.skip('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5',
   console.log('bond earlyUnlockBytes (on-chain):', bond.earlyUnlockBytes);
   console.log('bond stxValueRatio:', bond.stxValueRatio.toString());
 
-  // ── 2. PRECONDITION GUARD: bond must be cosigner-enabled ───────────────────
+  // 2. PRECONDITION GUARD: bond must be cosigner-enabled
   if (bond.earlyUnlockBytes.toLowerCase() !== expectedEarlyUnlockHex.toLowerCase()) {
     console.warn(
       `SKIP: bond ${bondIndex} earlyUnlockBytes (${bond.earlyUnlockBytes}) is NOT the ` +
@@ -295,7 +290,7 @@ test.skip('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5',
   // witnessScript come straight from the bond's on-chain value.
   const earlyUnlockBytes = hexToBytes(bond.earlyUnlockBytes);
 
-  // ── 3. Ensure account5 has an L1 lock (register if not already enrolled) ───
+  // 3. Ensure account5 has an L1 lock (register if not already enrolled)
   const unlockHeightBig = await fetchBondL1UnlockHeight({ bondIndex, network });
   const unlockHeight = Number(unlockHeightBig);
   console.log('L1 unlockHeight:', unlockHeight);
@@ -501,8 +496,8 @@ test.skip('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5',
     lockupAmountSats = AMOUNT_SATS;
   }
 
-  // ── 4. announce-l1-early-exit (STAKER signs — zeroes the staker's shares) ──
-  // Deployed pox-5 enforces contract-caller == tx-sender == staker → the staker
+  // 4. announce-l1-early-exit (STAKER signs — zeroes the staker's shares)
+  // Deployed pox-5 enforces contract-caller == tx-sender == staker -> the staker
   // themselves must announce (ERR_UNAUTHORIZED otherwise).
   console.log('\n--- Announcing L1 early exit (staker-signed) ---');
   const announceNonce = await getNextNonce(staker.address); // late nonce before broadcast
@@ -538,14 +533,14 @@ test.skip('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5',
   console.log('=== announce-l1-early-exit success ✓ ===');
   useFixtures('e2e-exit-l1-announce-and-reclaim-after');
 
-  // ── 5. Build + broadcast the ELSE-branch P2WSH reclaim ─────────────────────
+  // 5. Build + broadcast the ELSE-branch P2WSH reclaim
   // Modeled EXACTLY on btc-lockup-roundtrip.test.ts TEST 1 (EARLY branch):
   //   - ELSE branch: lockTime 0, input sequence 0xffffffff (no CLTV).
   //   - BIP143 sighash: tx.preimageWitnessV0(0, witnessScript, SIGHASH_ALL, amount).
   //     For P2WSH the scriptCode IS the witnessScript.
   //   - Both staker and cosigner sign the SAME sighash; each sig has SIGHASH_ALL appended.
   //   - The ELSE branch reveals the 32-byte staker preimage = computeRegisterPreimage(stxAddress).
-  //   - Witness (bottom→top): [ staker_sig, cosigner_sig, preimage, <empty→ELSE>, witnessScript ]
+  //   - Witness (bottom->top): [ staker_sig, cosigner_sig, preimage, <empty->ELSE>, witnessScript ]
   console.log('\n--- Building P2WSH ELSE-branch reclaim tx ---');
 
   // reclaimWitnessScript matches the actual locked UTXO (reuse path may differ).
@@ -586,7 +581,7 @@ test.skip('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5',
   const rawHex = reclaimTx.hex;
   console.log('reclaim tx vsize:', reclaimTx.vsize, 'vBytes');
 
-  // ── 6. Broadcast reclaim + assert it lands ─────────────────────────────────
+  // 6. Broadcast reclaim + assert it lands
   console.log('\n--- Broadcasting reclaim tx ---');
   const reclaimTxid = await broadcastBtc(rawHex);
   console.log('reclaim txid:', reclaimTxid);

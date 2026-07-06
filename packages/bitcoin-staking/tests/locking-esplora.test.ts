@@ -6,7 +6,7 @@
  * It hits the public Blockstream Esplora API with a stable, deeply-confirmed
  * mainnet tx and feeds the responses straight into `buildLockProof`, then
  * VALIDATES the result by folding the assembled merkle branch back to a root and
- * comparing it to the block's `merkle_root`. If they match, the Esplora →
+ * comparing it to the block's `merkle_root`. If they match, the Esplora ->
  * `BondL1LockupOutput` normalization (witness stripping, endianness, output
  * matching) is correct — the same thing the pox-5 contract folds over.
  *

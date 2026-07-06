@@ -2,7 +2,7 @@
 /**
  * E2E — calculate-rewards across multiple bond indices (waterfall).
  *
- * pox-5.clar `calculate-rewards` requires ALL active bonds sorted in descending
+ * pox-5.calculate-rewards requires ALL active bonds sorted in descending
  * order by `stx-value-ratio`. Without sBTC rewards funded, the tx is expected
  * to hit one of:
  *   - u30 ERR_DISTRIBUTION_ALREADY_COMPUTED — already settled this period
@@ -57,8 +57,6 @@ import {
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
 
-// ─── Config ───────────────────────────────────────────────────────────────────
-
 const FEE = 10_000n;
 // Use account5 as the caller for calculate-rewards (anyone-callable).
 const caller = getAccount(REGTEST_KEYS['account5']);
@@ -73,14 +71,10 @@ function parseErrCode(repr: string | undefined): number | undefined {
   return m ? Number(m[1]) : undefined;
 }
 
-// ─── Setup ────────────────────────────────────────────────────────────────────
-
 beforeAll(async () => {
   useFixtures('e2e-reward-waterfall');
   await ensurePox5();
 }, 60_000);
-
-// ─── Test ─────────────────────────────────────────────────────────────────────
 
 test.skip('calculate-rewards: full sorted waterfall across all active bonds', async () => {
   useFixtures('e2e-reward-waterfall');
@@ -92,7 +86,7 @@ test.skip('calculate-rewards: full sorted waterfall across all active bonds', as
   console.log('currentBurnHt:', poxInfo.currentBurnchainBlockHeight);
   console.log('currentCycle:', poxInfo.rewardCycleId);
 
-  // ── Step 1: Scan all bond indices for 'locked' (active) bonds ─────────────
+  // Step 1: Scan all bond indices for 'locked' (active) bonds
   console.log(`\n[Step 1] Scanning bond indices 0..${BOND_SCAN_LIMIT - 1} for active bonds...`);
 
   interface BondEntry { bondIndex: number; stxValueRatio: bigint }
@@ -118,7 +112,7 @@ test.skip('calculate-rewards: full sorted waterfall across all active bonds', as
   console.log(`\nFound ${activeBonds.length} active ('locked') bond(s):`,
     activeBonds.map(b => `index=${b.bondIndex} ratio=${b.stxValueRatio}`).join(', ') || '(none)');
 
-  // ── Step 2: Sort by descending stx-value-ratio (contract requirement) ──────
+  // Step 2: Sort by descending stx-value-ratio (contract requirement)
   // Contract source: bond-list must be sorted descending by stx-value-ratio to
   // pass the ERR_INVALID_BOND_PERIOD_ORDERING (u29) guard.
   const sortedBonds = [...activeBonds].sort((a, b) => {
@@ -131,7 +125,7 @@ test.skip('calculate-rewards: full sorted waterfall across all active bonds', as
 
   console.log('\n[Step 2] Sorted bond indices (descending stx-value-ratio):', sortedIndices);
 
-  // ── Step 3: Call calculate-rewards ────────────────────────────────────────
+  // Step 3: Call calculate-rewards
   // Even with no active bonds, call with an empty list to probe the contract.
   console.log('\n[Step 3] Broadcasting calculate-rewards...');
   console.log('  bondIndices:', sortedIndices);
@@ -158,7 +152,7 @@ test.skip('calculate-rewards: full sorted waterfall across all active bonds', as
 
   const code = parseErrCode(txRecord.tx_result?.repr);
 
-  // ── Step 4: Assert expected outcomes ──────────────────────────────────────
+  // Step 4: Assert expected outcomes
   // With no sBTC funded, we accept:
   //   - success (waterfall no-op or already settled)
   //   - u30 ERR_DISTRIBUTION_ALREADY_COMPUTED (already settled this period)

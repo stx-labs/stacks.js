@@ -7,7 +7,7 @@
  * `claim-rewards` and VERIFY the staker's sBTC/STX balance moved.
  *
  * WHAT WE FOUND (privatenet, read at authoring time):
- *   - account5 IS enrolled: get-bond-membership → { bondIndex 65, amountUstx
+ *   - account5 IS enrolled: get-bond-membership -> { bondIndex 65, amountUstx
  *     1015000, signer = daemon signer-manager, isL1Lock: true }.
  *   - get-earned / get-earned-staker-rewards for bond 65 = 0.
  *   - get-rewards = 0 and get-new-rewards = 0 on the pox-5 contract.
@@ -17,13 +17,13 @@
  *   `get-rewards = sbtc-token.get-balance(pox-5) - total-sbtc-staked - reserve`,
  *   and `calculate-rewards` only distributes `get-new-rewards` (the delta since
  *   the last compute). With no reward sBTC transferred to the contract,
- *   accrued-rewards = 0 → the waterfall pays nothing → every leg's
- *   rewards-per-token stays flat → get-earned = 0 → claim-rewards reverts
+ *   accrued-rewards = 0 -> the waterfall pays nothing -> every leg's
+ *   rewards-per-token stays flat -> get-earned = 0 -> claim-rewards reverts
  *   ERR_NO_CLAIMABLE_REWARDS (u32). PRECONDITION for accrual: someone must
  *   transfer sBTC into the pox-5 contract as protocol rewards (the signer-set's
  *   PoX payout), THEN calculate-rewards settles it to the bonds + STX-only leg.
  *
- * This action exercises the full path anyway (calculate-rewards → claim-rewards)
+ * This action exercises the full path anyway (calculate-rewards -> claim-rewards)
  * to confirm the entry-points behave and that NO balance is received while
  * accrued-rewards = 0. If a future run has reward sBTC in the contract, the
  * balance-delta assertion flips to verifying an actual payout.
@@ -69,7 +69,7 @@ const FEE = 10_000n;
 
 const account5 = getAccount(REGTEST_KEYS.account5); // enrolled in bond 65 (L1 lock)
 // calculate-rewards is permissionless; we drive it from account5 too (account8 is
-// NOT prefunded on this net → NotEnoughFunds). Sequenced before the claim by nonce.
+// NOT prefunded on this net -> NotEnoughFunds). Sequenced before the claim by nonce.
 
 const SIGNER = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 const SBTC = 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token';
@@ -123,13 +123,13 @@ test.skip('rewards claim-and-receive for account5 / bond 65 — verifies receipt
   const poxInfo = await getPoxInfo();
   console.log('current cycle', poxInfo.rewardCycleId, 'burn', poxInfo.currentBurnchainBlockHeight);
 
-  // ── 0. Contract-level reward fuel ──────────────────────────────────────────
+  // 0. Contract-level reward fuel.
   const rewardsBal = await readUint('get-rewards').catch(() => -1n);
   const newRewards = await readUint('get-new-rewards').catch(() => -1n);
   console.log('pox-5 get-rewards (sBTC reward fuel):', rewardsBal.toString());
   console.log('pox-5 get-new-rewards (undistributed since last compute):', newRewards.toString());
 
-  // ── 1. account5 membership + earned (staker leg + signer leg) ──────────────
+  // 1. account5 membership + earned (staker leg + signer leg).
   const membership = await fetchBondMembership({ address: account5.address, network });
   console.log('account5 bond-membership:', JSON.stringify(membership, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)));
   const bondIndex = membership?.bondIndex ?? 65;
@@ -138,7 +138,7 @@ test.skip('rewards claim-and-receive for account5 / bond 65 — verifies receipt
   const signerEarnedBefore = await fetchEarned({ signerManager: SIGNER, rewardCycle: poxInfo.rewardCycleId, bondIndex, network }).catch(() => -1n);
   console.log(`earned BEFORE — staker(a5,bond${bondIndex})=${stakerEarnedBefore} signer(bond${bondIndex})=${signerEarnedBefore}`);
 
-  // ── 2. Discover ALL existing bonds, sort by descending stx-value-ratio ─────
+  // 2. Discover ALL existing bonds, sort by descending stx-value-ratio.
   //     calculate-rewards requires the FULL active-bond set (u33 otherwise),
   //     sorted descending by stx-value-ratio (u29 otherwise), capped at 6.
   const bonds: { index: number; ratio: bigint }[] = [];
@@ -153,7 +153,7 @@ test.skip('rewards claim-and-receive for account5 / bond 65 — verifies receipt
   console.log('bonds (desc stx-value-ratio):', bonds.map(b => `${b.index}:${b.ratio}`).join(', '));
   console.log('calculate-rewards bondIndices (capped 6):', bondIndices.join(','));
 
-  // ── 3. calculate-rewards (permissionless, from account5) ───────────────────
+  // 3. calculate-rewards (permissionless, from account5).
   //     NOTE: with 29 protocol bonds the true active set at calculation-height
   //     differs from our top-6, so this commonly aborts u33 ActiveBondNotIncluded
   //     or u29 InvalidBondPeriodOrdering — tolerated. Even a perfect settlement
@@ -182,12 +182,12 @@ test.skip('rewards claim-and-receive for account5 / bond 65 — verifies receipt
     name: calcCode !== undefined ? describePox5Error(calcCode)?.name : undefined,
   });
 
-  // ── 4. Re-read earned after settlement ─────────────────────────────────────
+  // 4. Re-read earned after settlement.
   const stakerEarnedAfter = await fetchEarnedStakerRewards({ signerManager: SIGNER, rewardCycle: poxInfo.rewardCycleId, bondIndex, staker: account5.address, network }).catch(() => -1n);
   const signerEarnedAfter = await fetchEarned({ signerManager: SIGNER, rewardCycle: poxInfo.rewardCycleId, bondIndex, network }).catch(() => -1n);
   console.log(`earned AFTER  — staker(a5,bond${bondIndex})=${stakerEarnedAfter} signer(bond${bondIndex})=${signerEarnedAfter}`);
 
-  // ── 5. claim-rewards from account5 + balance receipt check ─────────────────
+  // 5. claim-rewards from account5 + balance receipt check.
   const claimCycle = Math.max(0, poxInfo.rewardCycleId - 1);
   const stxBefore = await getStxBalance(account5.address);
   const sbtcBefore = await sbtcBalance(account5.address);
@@ -232,7 +232,7 @@ test.skip('rewards claim-and-receive for account5 / bond 65 — verifies receipt
     if (sbtcBefore >= 0n && sbtcAfter >= 0n) expect(sbtcAfter).toBeGreaterThanOrEqual(sbtcBefore);
     expect(claimRecord.tx_status).toBe('success');
   } else {
-    // Expected on this net: no reward sBTC in the contract → nothing to claim.
+    // Expected on this net: no reward sBTC in the contract -> nothing to claim.
     console.log(
       'claim ABORTED — no rewards received. Root cause: pox-5 get-rewards = ' +
         `${rewardsBal} (no sBTC reward fuel). PRECONDITION: transfer sBTC into the ` +

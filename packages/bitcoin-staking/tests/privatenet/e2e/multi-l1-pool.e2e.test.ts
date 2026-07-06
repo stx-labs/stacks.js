@@ -54,8 +54,6 @@ import { waitForBondWithRunway } from '../../helpers/bond';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 const SIGNER_MANAGER = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 const AMOUNT_SATS = BigInt(process.env.AMOUNT_SATS ?? 30_000);
 const FEE_SATS = BigInt(process.env.FEE_SATS ?? 500);
@@ -70,8 +68,6 @@ const REGTEST_NET: typeof btc.NETWORK = {
   scriptHash: 0xc4,
   wif: 0xef,
 };
-
-// ─── Staker definitions ────────────────────────────────────────────────────────
 
 // Raw 32-byte priv hex (without the compression byte suffix)
 const STAKER_RAW_KEYS: Record<string, string> = {
@@ -93,7 +89,7 @@ const STAKERS: StakerDef[] = (['account5', 'account6'] as const).map(name => {
   return { name, rawPrivHex, account };
 });
 
-// ─── BTC helpers (self-contained, mirrored from btc-lock.test.ts) ─────────────
+// BTC helpers (self-contained, mirrored from btc-lock.test.ts)
 
 interface Utxo {
   txid: string;
@@ -195,8 +191,6 @@ async function fetchBlockTxCount(blockHash: string): Promise<number> {
   if (!resp.ok) throw new Error(`GET /block/${blockHash} → ${resp.status}`);
   return ((await resp.json()) as { tx_count: number }).tx_count;
 }
-
-// ─── Per-staker L1 lockup + registration ─────────────────────────────────────
 
 interface LockupResult {
   amountSats: bigint;
@@ -368,8 +362,6 @@ async function doL1LockupAndRegister(
 
   return { amountSats: AMOUNT_SATS, txid: stacksTxid };
 }
-
-// ─── Test ─────────────────────────────────────────────────────────────────────
 
 beforeAll(async () => {
   useFixtures('e2e-multi-l1-pool');

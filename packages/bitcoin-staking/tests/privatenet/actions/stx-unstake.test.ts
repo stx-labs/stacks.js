@@ -1,6 +1,6 @@
 // TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
- * Privatenet STX-only UNSTAKE action — exercises `unstake` (L1315 pox-5.clar).
+ * Privatenet STX-only UNSTAKE action — exercises pox-5.unstake (L1315).
  *
  * pox-5 `unstake` is the manual early-exit for an STX-only position. It does NOT
  * immediately release the STX — the locked uSTX only frees at the unlock burn

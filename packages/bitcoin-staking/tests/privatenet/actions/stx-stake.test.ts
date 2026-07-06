@@ -2,7 +2,7 @@
 /**
  * Privatenet STX-only stake action — empirical amount-floor probe.
  *
- * We proved from pox-5.clar SOURCE that `stake` has NO `min-amount-ustx` check;
+ * We proved from pox-5 SOURCE that `stake` has NO `min-amount-ustx` check;
  * the only amount guard is `ERR_INSUFFICIENT_STX (err u8)` (account balance).
  * This action CONFIRMS that on-chain by staking BELOW the API-advertised min
  * (10000.034 STX) and showing the tx is ACCEPTED.

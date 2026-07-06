@@ -1,6 +1,6 @@
 /**
  * Typed accessor for the recorded regtest responses in `fixtures.json` — the
- * canonical store, keyed by request `path + search` → raw response body.
+ * canonical store, keyed by request `path + search` -> raw response body.
  *
  * The store is maintained programmatically by the recorder in
  * `tests/helpers/utils.ts` under `RECORD=1` (deduped, latest wins). Tests import

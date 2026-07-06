@@ -9,24 +9,23 @@
  * No Bitcoin transactions, no L1 proofs, no `set-bond-admin` calls.
  * Safe senders only: account4 (bond admin), account5, account6.
  *
- * ─────────────────────────────────────────────────────────────────────────────
- * PROBE 1 — Duplicate setup-bond → ERR_BOND_ALREADY_SETUP (err u4)
+ * PROBE 1 — Duplicate setup-bond -> ERR_BOND_ALREADY_SETUP (err u4)
  *   We discover the highest existing bond index by probing fetchBond(0..25),
  *   then re-run setup-bond on it from the real bond-admin. The contract should
  *   reject with (err u4) BondAlreadySetup. We additionally assert that the bond
  *   on-chain is unchanged after the abort.
  *
- * PROBE 2 — setup-bond too late → ERR_CANNOT_SETUP_BOND_TOO_LATE (err u3)
+ * PROBE 2 — setup-bond too late -> ERR_CANNOT_SETUP_BOND_TOO_LATE (err u3)
  *   We deliberately compute a bondIndex whose start cycle is in the PAST
  *   (anchorCycle + 0*BOND_GAP_CYCLES = anchorCycle itself, which is already
  *   passed). setup-bond should reject with (err u3). The contract enforces that
  *   the setup window only extends BOND_GAP_CYCLES cycles BEFORE the bond's
- *   start cycle — anything ≤ current cycle is too late.
+ *   start cycle — anything <= current cycle is too late.
  *
- * PROBE 3 — register-for-bond from a non-allowlisted account (sBTC path) → unknown
+ * PROBE 3 — register-for-bond from a non-allowlisted account (sBTC path) -> unknown
  *   account6 is NOT on any bond's allowlist. We send a register-for-bond (sbtc
  *   path) for the highest existing bond. The contract evaluates the lockup branch
- *   FIRST (lock-sbtc → ft-transfer? aborts with (err u1) when the caller has 0
+ *   FIRST (lock-sbtc -> ft-transfer? aborts with (err u1) when the caller has 0
  *   sBTC), so we expect (err u1) rather than the allowlist guard (err u11
  *   ERR_NOT_ALLOWLISTED). This ordering is documented; the probe DISCOVERS which
  *   abort fires first and logs describePox5Error for whichever code comes back.
@@ -87,8 +86,6 @@ let admin: Awaited<ReturnType<typeof getBondAdminAccount>>;
 let existingBondIndex: number | undefined;
 let signerManager: string;
 
-// ─── helpers ────────────────────────────────────────────────────────────────
-
 /** Parse the raw (err uN) repr string and return N, or undefined. */
 function parseErrCode(repr: string | undefined): number | undefined {
   if (!repr) return undefined;
@@ -115,8 +112,6 @@ async function findHighestExistingBondIndex(
   return highest;
 }
 
-// ─── setup ──────────────────────────────────────────────────────────────────
-
 beforeAll(async () => {
   admin = await getBondAdminAccount();
   await ensurePox5();
@@ -127,12 +122,12 @@ beforeAll(async () => {
   existingBondIndex = await findHighestExistingBondIndex(8);
   console.log("Highest existing bond index:", existingBondIndex);
 
-  // Reuse an existing signer-manager (no deploy round-trip → fast beforeAll).
+  // Reuse an existing signer-manager (no deploy round-trip -> fast beforeAll).
   signerManager = SIGNER_MANAGER;
   console.log("signerManager:", signerManager);
 }, 20 * 60_000);
 
-// ─── PROBE 1: Duplicate setup-bond → ERR_BOND_ALREADY_SETUP (err u4) ────────
+// PROBE 1: Duplicate setup-bond -> ERR_BOND_ALREADY_SETUP (err u4)
 
 test.skip("adversarial-1: duplicate setup-bond aborts with ERR_BOND_ALREADY_SETUP (err u4)", async () => {
   if (existingBondIndex === undefined) {
@@ -209,7 +204,7 @@ test.skip("adversarial-1: duplicate setup-bond aborts with ERR_BOND_ALREADY_SETU
   }
 });
 
-// ─── PROBE 2: setup-bond too late → ERR_CANNOT_SETUP_BOND_TOO_LATE (err u3) ─
+// PROBE 2: setup-bond too late -> ERR_CANNOT_SETUP_BOND_TOO_LATE (err u3)
 
 test.skip("adversarial-2: setup-bond with a past bondIndex aborts with ERR_CANNOT_SETUP_BOND_TOO_LATE (err u3)", async () => {
   const poxInfo = await getPoxInfo();
@@ -237,8 +232,8 @@ test.skip("adversarial-2: setup-bond with a past bondIndex aborts with ERR_CANNO
     BOND_GAP_CYCLES,
   });
 
-  // pastBondIndex is the bond whose start cycle is ≤ current cycle → setup
-  // window is closed → expect (err u3). Bond 0 (start = anchorCycle) is always
+  // pastBondIndex is the bond whose start cycle is <= current cycle -> setup
+  // window is closed -> expect (err u3). Bond 0 (start = anchorCycle) is always
   // in the past once any cycles have passed, which they must have for pox-5 to
   // even be active.
   const unsigned = await buildSetupBond({
@@ -299,7 +294,7 @@ test.skip("adversarial-2: setup-bond with a past bondIndex aborts with ERR_CANNO
   }
 });
 
-// ─── PROBE 3: non-allowlisted register-for-bond (sBTC path) ─────────────────
+// PROBE 3: non-allowlisted register-for-bond (sBTC path)
 
 test.skip("adversarial-3: register-for-bond from non-allowlisted account6 aborts (sbtc path)", async () => {
   const bondIndex = existingBondIndex ?? 1; // fallback to bond 1 if none discovered
@@ -349,7 +344,7 @@ test.skip("adversarial-3: register-for-bond from non-allowlisted account6 aborts
 
       // Must be some (err uN). Exact code depends on evaluation order:
       //   - (err u1)  ERR_UNAUTHORIZED       — lock-sbtc's ft-transfer? fires first (0 sBTC)
-      //   - (err u11) ERR_NOT_ALLOWLISTED     — allowlist guard (would fire if sbtc balance > 0)
+      //   - (err u11) ERR_NOT_ALLOWLISTED    — allowlist guard (would fire if sbtc balance > 0)
       // We DISCOVER and LOG, then assert tolerantly.
       expect(record.tx_result?.repr).toMatch(/^\(err u\d+\)$/);
 

@@ -8,7 +8,7 @@
  * inline when running live/record:
  *   set -a; . ./.env; set +a
  * Derive the key once from the bond-admin seed phrase with `@stacks/wallet-sdk`
- * (`generateWallet → accounts[0].stxPrivateKey`); the result is `ST1V2ASRWG…`.
+ * (`generateWallet -> accounts[0].stxPrivateKey`); the result is `ST1V2ASRWG…`.
  *
  * Replay/offline runs don't set `BOND_ADMIN_KEY`: signing is mocked there, so we
  * return the public address with a placeholder signer (the address is all the

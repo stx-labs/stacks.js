@@ -156,7 +156,7 @@ test('StakeInPreparePhase — poxInfo override puts burnHeight in prepare window
 
 test('UpdateBondSameSigner — signerManager === oldSignerManager', async () => {
   const pox = await getPoxInfo();
-  // staker has a membership; same signer on both sides → UpdateBondSameSigner fires
+  // staker has a membership; same signer on both sides -> UpdateBondSameSigner fires
   const r = await fetchEligibleUpdateBondRegistration({
     staker: staker.address,
     signerManager: SIGNER_MANAGER,
@@ -183,7 +183,7 @@ test('SignerNotFound — new signerManager does not exist on-chain', async () =>
 
 test('InvalidOldSignerManager — wrong oldSignerManager for enrolled staker', async () => {
   const pox = await getPoxInfo();
-  // staker's real signer is SIGNER_MANAGER; pass SIGNER_MANAGER_2 as old → mismatch
+  // staker's real signer is SIGNER_MANAGER; pass SIGNER_MANAGER_2 as old -> mismatch
   const r = await fetchEligibleUpdateBondRegistration({
     staker: staker.address,
     signerManager: SIGNER_MANAGER_2,

@@ -182,7 +182,7 @@ async function currentBurnHeight(): Promise<number | null> {
 
 /**
  * Get the chain into a usable pox-5 state before a test:
- * - node down → fresh chain (with `env`, e.g. `{ POX5_STACKING_ENABLED: 'false' }`);
+ * - node down -> fresh chain (with `env`, e.g. `{ POX5_STACKING_ENABLED: 'false' }`);
  * - otherwise reuse the running chain.
  * Then wait until pox-5 is active.
  */
