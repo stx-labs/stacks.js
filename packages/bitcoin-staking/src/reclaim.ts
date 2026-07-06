@@ -16,9 +16,9 @@ import type { Utxo } from './types';
 /**
  * Spend a P2WSH bond lockup back out.
  *
- * Two paths through the lockup script (mirror of pox-5 `construct-lockup-script`):
+ * Two paths through the lockup script (mirror of `pox-5.construct-lockup-script`):
  * - `'locktime'`   — the normal CLTV exit (`OP_IF` branch), single-sig (staker),
- *   spendable once burn height ≥ the lock's unlock height.
+ *   spendable once burn height >= the lock's unlock height.
  * - `'early-exit'` — the cosigned early exit (`OP_ELSE` branch), a 2-of-2 between
  *   the staker and the bond's early-unlock cosigner.
  */
@@ -29,13 +29,6 @@ const SIGHASH_ALL = 1;
 const ELSE_SELECTOR = new Uint8Array(0);
 /** Truthy witness item — selects the `OP_IF` (CLTV) branch. */
 const IF_SELECTOR = new Uint8Array([0x01]);
-/**
- * Placeholder fee for the single sweep output when the caller doesn't pass one.
- * It is only a starting value — adjust the output on the returned tx (the vsize
- * is deterministic: 1 P2WSH input, 1 P2WPKH output) before signing.
- */
-const DEFAULT_FEE_SATS = 1_000n;
-
 /** The reclaim tx is a custom-script spend; let btc-signer carry it unvalidated. */
 const TX_OPTS = {
   allowUnknownOutputs: true,
@@ -116,11 +109,11 @@ export interface BuildReclaimOpts {
   utxo: Utxo;
   network: StacksNetworkName | StacksNetwork;
   /**
-   * The initial sweep output. `toAddress` defaults to the staker's P2WPKH (derived
-   * from the staker key in the lockup script); `feeSats` to a small placeholder.
-   * Both are only a starting point — mutate the returned tx before signing.
+   * The sweep output: where the reclaimed funds go and the fee to leave for
+   * miners (`value - feeSats` is swept to `address`). The caller may still
+   * mutate the returned tx's outputs before signing.
    */
-  output?: { toAddress?: string; feeSats?: bigint };
+  output: { address: string; feeSats: bigint };
 
   /**
    * The lockup `witnessScript`. The staker reuses `RegisterMetadata.lockScript`
@@ -145,12 +138,12 @@ export interface BuildReclaimOpts {
  *
  * Attaches one P2WSH input — with its `witnessUtxo` + `witnessScript` set, so the
  * tx is a complete PSBT that `toPSBT()` / `fromPSBT()` round-trip and that
- * {@link computeReclaimSighash} can read — and one default sweep output. The
- * caller may adjust outputs / fee on the returned tx **before signing** (the
- * `SIGHASH_ALL` signature commits to them).
+ * {@link computeReclaimSighash} can read — and the sweep output from
+ * `opts.output`. The caller may still adjust outputs / fee on the returned tx
+ * **before signing** (the `SIGHASH_ALL` signature commits to them).
  *
- * - `path: 'early-exit'` → `OP_ELSE` branch: `sequence = 0xffffffff`, `lockTime = 0`.
- * - `path: 'locktime'`   → `OP_IF`/CLTV branch: `sequence = 0xfffffffe`,
+ * - `path: 'early-exit'` -> `OP_ELSE` branch: `sequence = 0xffffffff`, `lockTime = 0`.
+ * - `path: 'locktime'`   -> `OP_IF`/CLTV branch: `sequence = 0xfffffffe`,
  *   `lockTime = unlockHeight` (taken from `opts.unlockHeight`, else parsed from the
  *   `lockScript`).
  *
@@ -161,16 +154,14 @@ export interface BuildReclaimOpts {
 export function buildReclaim(opts: BuildReclaimOpts): btc.Transaction {
   const network = btcNetworkFrom(opts.network);
   const lockScript = resolveLockScript(opts);
-  const { stakerPub, unlockHeight: scriptHeight } = decodeLockScript(lockScript);
+  const { unlockHeight: scriptHeight } = decodeLockScript(lockScript);
 
   const amount = opts.utxo.value;
-  const feeSats = opts.output?.feeSats ?? DEFAULT_FEE_SATS;
+  const { address, feeSats } = opts.output;
   const sweepSats = amount - feeSats;
   if (sweepSats <= 0n) {
     throw new Error(`buildReclaim: fee (${feeSats}) >= utxo value (${amount})`);
   }
-  const toAddress = opts.output?.toAddress ?? btc.p2wpkh(stakerPub, network).address;
-  if (!toAddress) throw new Error('buildReclaim: could not derive a default toAddress');
 
   const earlyExit = opts.path === 'early-exit';
   let lockTime = 0;
@@ -192,7 +183,7 @@ export function buildReclaim(opts: BuildReclaimOpts): btc.Transaction {
     witnessUtxo: { script: computeWshOutputScript(lockScript), amount },
     witnessScript: lockScript,
   });
-  tx.addOutputAddress(toAddress, sweepSats, network);
+  tx.addOutputAddress(address, sweepSats, network);
   return tx;
 }
 
@@ -285,7 +276,7 @@ export function finalizeReclaim(opts: FinalizeReclaimOpts): { txHex: string; txi
 }
 
 /**
- * @internal Assemble the branch-specific witness stack (bottom→top) from the
+ * @internal Assemble the branch-specific witness stack (bottom->top) from the
  * `partialSig`(s) on input 0, matching pubkeys against the lockup script to tell
  * the staker from the cosigner.
  */
@@ -297,10 +288,10 @@ function reclaimWitness(opts: FinalizeReclaimOpts, witnessScript: Uint8Array): U
   const stakerSig = sigFor(stakerPub);
   if (!stakerSig) throw new Error('finalizeReclaim: missing staker signature (partialSig)');
 
-  // CLTV branch: [ stakerSig, 0x01 (→ OP_IF), witnessScript ]
+  // CLTV branch: [ stakerSig, 0x01 (-> OP_IF), witnessScript ]
   if (opts.path === 'locktime') return [stakerSig, IF_SELECTOR, witnessScript];
 
-  // Early-exit branch: [ stakerSig, cosignerSig, preimage, <empty> (→ OP_ELSE), witnessScript ]
+  // Early-exit branch: [ stakerSig, cosignerSig, preimage, <empty> (-> OP_ELSE), witnessScript ]
   const cosignerSig = sigFor(cosignerPub);
   if (!cosignerSig) throw new Error('finalizeReclaim: missing cosigner signature (partialSig)');
   const preimage = computeRegisterPreimage(opts.stxAddress);

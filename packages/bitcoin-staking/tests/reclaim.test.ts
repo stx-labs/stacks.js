@@ -30,10 +30,11 @@ const LOCK_SCRIPT = buildLockScript({
 });
 
 const UTXO: Utxo = { txid: 'a'.repeat(64), vout: 0, value: 30_000n };
+const OUTPUT = { address: btc.p2wpkh(STAKER_PUB, btc.TEST_NETWORK).address!, feeSats: 1_000n };
 
 describe('buildReclaim', () => {
   test('locktime: sets lockTime + sequence + P2WSH input', () => {
-    const tx = buildReclaim({ path: 'locktime', utxo: UTXO, lockScript: LOCK_SCRIPT, network: NETWORK });
+    const tx = buildReclaim({ path: 'locktime', utxo: UTXO, lockScript: LOCK_SCRIPT, network: NETWORK, output: OUTPUT });
     expect(tx.lockTime).toBe(UNLOCK_HEIGHT);
     expect(tx.inputsLength).toBe(1);
     expect(bytesToHex(tx.getInput(0).witnessScript!)).toBe(bytesToHex(LOCK_SCRIPT));
@@ -44,6 +45,7 @@ describe('buildReclaim', () => {
       path: 'early-exit',
       utxo: UTXO,
       network: NETWORK,
+      output: OUTPUT,
       stxAddress: STX_ADDRESS,
       unlockHeight: UNLOCK_HEIGHT,
       stakerBtcPublicKey: STAKER_PUB,
@@ -52,27 +54,27 @@ describe('buildReclaim', () => {
     expect(bytesToHex(tx.getInput(0).witnessScript!)).toBe(bytesToHex(LOCK_SCRIPT));
   });
 
-  test('default toAddress is the staker P2WPKH; fee defaults applied', () => {
-    const tx = buildReclaim({ path: 'early-exit', utxo: UTXO, lockScript: LOCK_SCRIPT, network: NETWORK });
-    // single sweep output = value - default fee, paying the staker's P2WPKH scriptPubKey
-    expect(tx.getOutput(0).amount).toBe(UTXO.value - 1_000n);
+  test('builds the sweep output from opts.output', () => {
+    const tx = buildReclaim({ path: 'early-exit', utxo: UTXO, lockScript: LOCK_SCRIPT, network: NETWORK, output: OUTPUT });
+    // single sweep output = value - fee, paying the requested scriptPubKey
+    expect(tx.getOutput(0).amount).toBe(UTXO.value - OUTPUT.feeSats);
     expect(bytesToHex(tx.getOutput(0).script!)).toBe(bytesToHex(btc.p2wpkh(STAKER_PUB, btc.TEST_NETWORK).script));
   });
 
   test('rejects a fee >= the utxo value', () => {
     expect(() =>
-      buildReclaim({ path: 'early-exit', utxo: UTXO, lockScript: LOCK_SCRIPT, network: NETWORK, output: { feeSats: 30_000n } })
+      buildReclaim({ path: 'early-exit', utxo: UTXO, lockScript: LOCK_SCRIPT, network: NETWORK, output: { ...OUTPUT, feeSats: 30_000n } })
     ).toThrow(/fee/);
   });
 
   test('throws when neither lockScript nor the full pieces are given', () => {
-    expect(() => buildReclaim({ path: 'early-exit', utxo: UTXO, network: NETWORK, stxAddress: STX_ADDRESS })).toThrow(/lockScript/);
+    expect(() => buildReclaim({ path: 'early-exit', utxo: UTXO, network: NETWORK, output: OUTPUT, stxAddress: STX_ADDRESS })).toThrow(/lockScript/);
   });
 });
 
 describe('computeReclaimSighash', () => {
   test('matches preimageWitnessV0 over the lockScript + amount', () => {
-    const tx = buildReclaim({ path: 'early-exit', utxo: UTXO, lockScript: LOCK_SCRIPT, network: NETWORK });
+    const tx = buildReclaim({ path: 'early-exit', utxo: UTXO, lockScript: LOCK_SCRIPT, network: NETWORK, output: OUTPUT });
     expect(bytesToHex(computeReclaimSighash(tx))).toBe(
       bytesToHex(tx.preimageWitnessV0(0, LOCK_SCRIPT, 1, UTXO.value))
     );
@@ -84,10 +86,10 @@ describe('signing variants are interchangeable', () => {
   // Variant B: native btc-signer signIdx. Matched low-R (both default false).
 
   test('locktime: helper-signed and native-signed finalize byte-identically', () => {
-    const a = buildReclaim({ path: 'locktime', utxo: UTXO, lockScript: LOCK_SCRIPT, network: NETWORK });
+    const a = buildReclaim({ path: 'locktime', utxo: UTXO, lockScript: LOCK_SCRIPT, network: NETWORK, output: OUTPUT });
     a.updateInput(0, { partialSig: [[STAKER_PUB, signReclaim(computeReclaimSighash(a), STAKER_PRIV)]] }, true);
 
-    const b = buildReclaim({ path: 'locktime', utxo: UTXO, lockScript: LOCK_SCRIPT, network: NETWORK });
+    const b = buildReclaim({ path: 'locktime', utxo: UTXO, lockScript: LOCK_SCRIPT, network: NETWORK, output: OUTPUT });
     b.signIdx(STAKER_PRIV, 0);
 
     const ra = finalizeReclaim({ path: 'locktime', tx: a });
@@ -101,11 +103,11 @@ describe('signing variants are interchangeable', () => {
   });
 
   test('early-exit: helper-signed and native-signed finalize byte-identically', () => {
-    const a = buildReclaim({ path: 'early-exit', utxo: UTXO, lockScript: LOCK_SCRIPT, network: NETWORK });
+    const a = buildReclaim({ path: 'early-exit', utxo: UTXO, lockScript: LOCK_SCRIPT, network: NETWORK, output: OUTPUT });
     a.updateInput(0, { partialSig: [[STAKER_PUB, signReclaim(computeReclaimSighash(a), STAKER_PRIV)]] }, true);
     a.updateInput(0, { partialSig: [[COSIGNER_PUB, signReclaim(computeReclaimSighash(a), COSIGNER_PRIV)]] }, true);
 
-    const b = buildReclaim({ path: 'early-exit', utxo: UTXO, lockScript: LOCK_SCRIPT, network: NETWORK });
+    const b = buildReclaim({ path: 'early-exit', utxo: UTXO, lockScript: LOCK_SCRIPT, network: NETWORK, output: OUTPUT });
     b.signIdx(STAKER_PRIV, 0);
     b.signIdx(COSIGNER_PRIV, 0);
 
@@ -119,7 +121,7 @@ describe('signing variants are interchangeable', () => {
   });
 
   test('early-exit interoperates: staker via helper, cosigner via signIdx (mixed)', () => {
-    const tx = buildReclaim({ path: 'early-exit', utxo: UTXO, lockScript: LOCK_SCRIPT, network: NETWORK });
+    const tx = buildReclaim({ path: 'early-exit', utxo: UTXO, lockScript: LOCK_SCRIPT, network: NETWORK, output: OUTPUT });
     tx.updateInput(0, { partialSig: [[STAKER_PUB, signReclaim(computeReclaimSighash(tx), STAKER_PRIV)]] }, true);
     tx.signIdx(COSIGNER_PRIV, 0);
     const { txHex } = finalizeReclaim({ path: 'early-exit', tx, stxAddress: STX_ADDRESS });
@@ -130,20 +132,20 @@ describe('signing variants are interchangeable', () => {
 
 describe('finalizeReclaim guards', () => {
   test('early-exit fails without the cosigner signature', () => {
-    const tx = buildReclaim({ path: 'early-exit', utxo: UTXO, lockScript: LOCK_SCRIPT, network: NETWORK });
+    const tx = buildReclaim({ path: 'early-exit', utxo: UTXO, lockScript: LOCK_SCRIPT, network: NETWORK, output: OUTPUT });
     tx.signIdx(STAKER_PRIV, 0); // staker only
     expect(() => finalizeReclaim({ path: 'early-exit', tx, stxAddress: STX_ADDRESS })).toThrow(/cosigner/);
   });
 
   test('fails without any signature', () => {
-    const tx = buildReclaim({ path: 'locktime', utxo: UTXO, lockScript: LOCK_SCRIPT, network: NETWORK });
+    const tx = buildReclaim({ path: 'locktime', utxo: UTXO, lockScript: LOCK_SCRIPT, network: NETWORK, output: OUTPUT });
     expect(() => finalizeReclaim({ path: 'locktime', tx })).toThrow(/staker/);
   });
 });
 
 describe('PSBT hand-off round-trip', () => {
   test('staker sig survives toPSBT/fromPSBT; cosigner completes it', () => {
-    const staker = buildReclaim({ path: 'early-exit', utxo: UTXO, lockScript: LOCK_SCRIPT, network: NETWORK });
+    const staker = buildReclaim({ path: 'early-exit', utxo: UTXO, lockScript: LOCK_SCRIPT, network: NETWORK, output: OUTPUT });
     staker.signIdx(STAKER_PRIV, 0);
 
     // Hand off as PSBT; cosigner imports (staker sig rides inside), adds theirs.
