@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [7.5.0](https://github.com/stx-labs/stacks.js/compare/v7.4.0...v7.5.0) (2026-06-23)
+
+### @stacks/api, @stacks/auth, @stacks/bns, @stacks/cli, @stacks/common, @stacks/encryption, @stacks/internal, @stacks/network, @stacks/profile, @stacks/stacking, @stacks/storage, @stacks/wallet-sdk
+
+**Note:** Updated sibling dependencies only.
+
+### @stacks/transactions
+
+#### Minor Changes
+
+- [#1869](https://github.com/stx-labs/stacks.js/pull/1869) [`b7f0ed3`](https://github.com/stx-labs/stacks.js/commit/b7f0ed3f87cd4c5bfb7ab3c4bd8787c2018e3cec) - Add SIP-044 staking (`0x03`) and PoX (`0x04`) post-conditions, including `Pc` builder support (`.ustxToLock()`, `.willPerformPox()`, `.willNotPerformPox()`, `.mayPerformPox()`).
+
+- [#1869](https://github.com/stx-labs/stacks.js/pull/1869) [`b7f0ed3`](https://github.com/stx-labs/stacks.js/commit/b7f0ed3f87cd4c5bfb7ab3c4bd8787c2018e3cec) - Add `ClarityVersion.Clarity6` (enabled with Epoch 4.0).
+
 ## [7.4.0](https://github.com/stx-labs/stacks.js/compare/v7.3.1...v7.4.0) (2026-03-23)
 
 

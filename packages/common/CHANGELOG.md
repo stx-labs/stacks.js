@@ -1,21 +1,16 @@
 # Change Log
 
+## 7.5.0
+
 ## [7.3.1](https://github.com/stx-labs/stacks.js/compare/v7.3.0...v7.3.1) (2025-12-16)
 
 **Note:** Version bump only for package @stacks/common
 
-
-
-
-
 ## [7.0.2](https://github.com/hirosystems/stacks.js/compare/v7.0.1...v7.0.2) (2024-11-14)
-
 
 ### Bug Fixes
 
-* update tsdoc comments to expose internal methods ([#1761](https://github.com/hirosystems/stacks.js/issues/1761)) ([2f2b12b](https://github.com/hirosystems/stacks.js/commit/2f2b12b23be95e10210af72fc3cea32fb27f024f))
-
-
+- update tsdoc comments to expose internal methods ([#1761](https://github.com/hirosystems/stacks.js/issues/1761)) ([2f2b12b](https://github.com/hirosystems/stacks.js/commit/2f2b12b23be95e10210af72fc3cea32fb27f024f))
 
 ## [7.0.0](https://github.com/hirosystems/stacks.js/compare/v6.17.0...v7.0.0) (2024-10-25)
 

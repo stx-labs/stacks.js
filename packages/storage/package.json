@@ -1,6 +1,6 @@
 {
   "name": "@stacks/storage",
-  "version": "7.4.0",
+  "version": "7.5.0",
   "description": "Stacks storage library",
   "license": "MIT",
   "author": "Hiro Systems PBC (https://hiro.so)",
@@ -20,15 +20,15 @@
     "typecheck:watch": "npm run typecheck -- --watch"
   },
   "dependencies": {
-    "@stacks/auth": "^7.4.0",
-    "@stacks/common": "^7.3.1",
-    "@stacks/encryption": "^7.4.0",
-    "@stacks/network": "^7.3.1",
+    "@stacks/auth": "^7.5.0",
+    "@stacks/common": "^7.5.0",
+    "@stacks/encryption": "^7.5.0",
+    "@stacks/network": "^7.5.0",
     "base64-js": "^1.5.1",
     "jsontokens": "^4.0.1"
   },
   "devDependencies": {
-    "@stacks/network": "^4.1.0",
+    "@stacks/network": "^7.5.0",
     "@types/jsdom": "^16.2.10",
     "jsdom": "^16.5.3",
     "process": "^0.11.10",

@@ -501,6 +501,38 @@ const contractNonFungiblePostCondition = makeContractNonFungiblePostCondition(
 );
 ```
 
+### Staking post condition (SIP-044)
+
+Guards staking STX (or modifying staked STX) for a principal — e.g. pox-5
+`stake`, `register-for-bond`, `stake-update`. Uses the same comparators as the
+STX post condition; amounts are denoted in uSTX.
+
+```typescript
+import { Pc } from '@stacks/transactions';
+
+const stakingPostCondition = Pc.principal(
+  'SP2ZD731ANQZT6J4K3F5N8A40ZXWXC1XFXHVVQFKE'
+)
+  .willSendGte(1000000)
+  .ustxToLock();
+```
+
+### PoX post condition (SIP-044)
+
+Guards PoX state changes that do not alter locking status — e.g. pox-5
+`unstake`, `unstake-sbtc`, `update-bond-registration`, `announce-l1-early-exit`.
+Carries only a principal and one of three condition codes.
+
+```typescript
+import { Pc } from '@stacks/transactions';
+
+const principal = 'SP2ZD731ANQZT6J4K3F5N8A40ZXWXC1XFXHVVQFKE';
+
+Pc.principal(principal).willPerformPox(); //    principal will perform a gated PoX action
+Pc.principal(principal).willNotPerformPox(); // principal will not perform any gated PoX action
+Pc.principal(principal).mayPerformPox(); //     principal may or may not (always passes)
+```
+
 ## Helper functions
 
 ### Conversion of Clarity Values to JSON

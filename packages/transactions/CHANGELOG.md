@@ -1,103 +1,85 @@
 # Change Log
 
-## [7.4.0](https://github.com/stx-labs/stacks.js/compare/v7.3.1...v7.4.0) (2026-03-23)
+## 7.5.0
 
+### Minor Changes
+
+- [#1869](https://github.com/stx-labs/stacks.js/pull/1869) [`b7f0ed3`](https://github.com/stx-labs/stacks.js/commit/b7f0ed3f87cd4c5bfb7ab3c4bd8787c2018e3cec) - Add SIP-044 staking (`0x03`) and PoX (`0x04`) post-conditions, including `Pc` builder support (`.ustxToLock()`, `.willPerformPox()`, `.willNotPerformPox()`, `.mayPerformPox()`).
+
+- [#1869](https://github.com/stx-labs/stacks.js/pull/1869) [`b7f0ed3`](https://github.com/stx-labs/stacks.js/commit/b7f0ed3f87cd4c5bfb7ab3c4bd8787c2018e3cec) - Add `ClarityVersion.Clarity6` (enabled with Epoch 4.0).
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @stacks/common@7.5.0
+  - @stacks/network@7.5.0
+
+## [7.4.0](https://github.com/stx-labs/stacks.js/compare/v7.3.1...v7.4.0) (2026-03-23)
 
 ### Features
 
-* Add originator post-condition mode and maybe-sent condition ([#1841](https://github.com/stx-labs/stacks.js/issues/1841)) ([3c7d75c](https://github.com/stx-labs/stacks.js/commit/3c7d75c0835b9cd9fd1401e52087a0137c6b8696))
-
+- Add originator post-condition mode and maybe-sent condition ([#1841](https://github.com/stx-labs/stacks.js/issues/1841)) ([3c7d75c](https://github.com/stx-labs/stacks.js/commit/3c7d75c0835b9cd9fd1401e52087a0137c6b8696))
 
 ### Bug Fixes
 
-* Add Clarity5 option (without defaulting to it yet) ([#1843](https://github.com/stx-labs/stacks.js/issues/1843)) ([b31202a](https://github.com/stx-labs/stacks.js/commit/b31202a4dd5029058db5c1861b7ca8a0af06a81c))
-* Throw on post-condition amounts not in valid range ([#1839](https://github.com/stx-labs/stacks.js/issues/1839)) ([6cbbdb7](https://github.com/stx-labs/stacks.js/commit/6cbbdb75a03ac1425b63ef194b77c655d4be5f9d))
-
-
+- Add Clarity5 option (without defaulting to it yet) ([#1843](https://github.com/stx-labs/stacks.js/issues/1843)) ([b31202a](https://github.com/stx-labs/stacks.js/commit/b31202a4dd5029058db5c1861b7ca8a0af06a81c))
+- Throw on post-condition amounts not in valid range ([#1839](https://github.com/stx-labs/stacks.js/issues/1839)) ([6cbbdb7](https://github.com/stx-labs/stacks.js/commit/6cbbdb75a03ac1425b63ef194b77c655d4be5f9d))
 
 ## [7.3.1](https://github.com/stx-labs/stacks.js/compare/v7.3.0...v7.3.1) (2025-12-16)
 
-
 ### Bug Fixes
 
-* add tenure change causes ([#1818](https://github.com/stx-labs/stacks.js/issues/1818)) ([66964af](https://github.com/stx-labs/stacks.js/commit/66964af5e60ec8b088e847a24711f096366fbca0))
-
-
+- add tenure change causes ([#1818](https://github.com/stx-labs/stacks.js/issues/1818)) ([66964af](https://github.com/stx-labs/stacks.js/commit/66964af5e60ec8b088e847a24711f096366fbca0))
 
 ## [7.3.0](https://github.com/hirosystems/stacks.js/compare/v7.2.0...v7.3.0) (2025-11-12)
 
-
 ### Features
 
-* Add ClarityVersion `.Clarity4` ([#1810](https://github.com/hirosystems/stacks.js/issues/1810)) ([74deecf](https://github.com/hirosystems/stacks.js/commit/74deecf6f4cd21fe2aa5e109666129182f18ae7b))
-
-
+- Add ClarityVersion `.Clarity4` ([#1810](https://github.com/hirosystems/stacks.js/issues/1810)) ([74deecf](https://github.com/hirosystems/stacks.js/commit/74deecf6f4cd21fe2aa5e109666129182f18ae7b))
 
 ## [7.2.0](https://github.com/hirosystems/stacks.js/compare/v7.1.2...v7.2.0) (2025-08-07)
 
 **Note:** Version bump only for package @stacks/transactions
 
-
-
-
-
 ## [7.1.0](https://github.com/hirosystems/stacks.js/compare/v7.0.6...v7.1.0) (2025-06-02)
-
 
 ### Bug Fixes
 
-* Fix `Cl.parse` and `Cl.stringify` to match `JSON.parse` and `JSON.stringify` in escaping characters and string handling ([c3267a5](https://github.com/hirosystems/stacks.js/commit/c3267a5c48853b8f6074ad7fff68982362947dc0))
-
-
+- Fix `Cl.parse` and `Cl.stringify` to match `JSON.parse` and `JSON.stringify` in escaping characters and string handling ([c3267a5](https://github.com/hirosystems/stacks.js/commit/c3267a5c48853b8f6074ad7fff68982362947dc0))
 
 ## [7.0.6](https://github.com/hirosystems/stacks.js/compare/v7.0.5...v7.0.6) (2025-04-18)
 
-
 ### Bug Fixes
 
-* Increase maximum code body length for contract deploys ([#1793](https://github.com/hirosystems/stacks.js/issues/1793)) ([02e05ca](https://github.com/hirosystems/stacks.js/commit/02e05caeead9c8a3da5cf4c1cddbfbe0c692fc3c))
-
-
+- Increase maximum code body length for contract deploys ([#1793](https://github.com/hirosystems/stacks.js/issues/1793)) ([02e05ca](https://github.com/hirosystems/stacks.js/commit/02e05caeead9c8a3da5cf4c1cddbfbe0c692fc3c))
 
 ## [7.0.5](https://github.com/hirosystems/stacks.js/compare/v7.0.4...v7.0.5) (2025-03-10)
 
-
 ### Bug Fixes
 
-* Add missing post-condition conversion functions: `Pc.fromHex()`, `wireToPostCondition` ([4e36e26](https://github.com/hirosystems/stacks.js/commit/4e36e26d69c220f66dff3ddac50e8919c4c75813))
-* Allow `make` builder functions to take in serialized post-conditions ([a617f65](https://github.com/hirosystems/stacks.js/commit/a617f65042b3eaf845375f4b7e72b3a5344079b5))
-
-
+- Add missing post-condition conversion functions: `Pc.fromHex()`, `wireToPostCondition` ([4e36e26](https://github.com/hirosystems/stacks.js/commit/4e36e26d69c220f66dff3ddac50e8919c4c75813))
+- Allow `make` builder functions to take in serialized post-conditions ([a617f65](https://github.com/hirosystems/stacks.js/commit/a617f65042b3eaf845375f4b7e72b3a5344079b5))
 
 ## [7.0.4](https://github.com/hirosystems/stacks.js/compare/v7.0.2...v7.0.4) (2025-02-03)
 
-
 ### Bug Fixes
 
-* Add byte length override for transfer fee estimates ([#1763](https://github.com/hirosystems/stacks.js/issues/1763)) ([a789994](https://github.com/hirosystems/stacks.js/commit/a7899940c0cf8698b1fc9a406b2923d3bf8231f4))
-* regression in 'NoEstimateAvailable' check ([#1785](https://github.com/hirosystems/stacks.js/issues/1785)) ([a079a74](https://github.com/hirosystems/stacks.js/commit/a079a74e0c14189373c93c09229fd039c61c55ab))
-* use correct types for postConditions ([#1784](https://github.com/hirosystems/stacks.js/issues/1784)) ([1d7d280](https://github.com/hirosystems/stacks.js/commit/1d7d2808d039d759fd9bcdc2b6e03e15cf65af43))
-
-
+- Add byte length override for transfer fee estimates ([#1763](https://github.com/hirosystems/stacks.js/issues/1763)) ([a789994](https://github.com/hirosystems/stacks.js/commit/a7899940c0cf8698b1fc9a406b2923d3bf8231f4))
+- regression in 'NoEstimateAvailable' check ([#1785](https://github.com/hirosystems/stacks.js/issues/1785)) ([a079a74](https://github.com/hirosystems/stacks.js/commit/a079a74e0c14189373c93c09229fd039c61c55ab))
+- use correct types for postConditions ([#1784](https://github.com/hirosystems/stacks.js/issues/1784)) ([1d7d280](https://github.com/hirosystems/stacks.js/commit/1d7d2808d039d759fd9bcdc2b6e03e15cf65af43))
 
 ## [7.0.3](https://github.com/hirosystems/stacks.js/compare/v7.0.2...v7.0.3) (2024-11-15)
 
-
 ### Bug Fixes
 
-* Add byte length override for transfer fee estimates ([#1763](https://github.com/hirosystems/stacks.js/issues/1763)) ([a789994](https://github.com/hirosystems/stacks.js/commit/a7899940c0cf8698b1fc9a406b2923d3bf8231f4))
-
-
+- Add byte length override for transfer fee estimates ([#1763](https://github.com/hirosystems/stacks.js/issues/1763)) ([a789994](https://github.com/hirosystems/stacks.js/commit/a7899940c0cf8698b1fc9a406b2923d3bf8231f4))
 
 ## [7.0.2](https://github.com/hirosystems/stacks.js/compare/v7.0.1...v7.0.2) (2024-11-14)
 
-
 ### Bug Fixes
 
-* Default contract deploys to Clarity version 3 ([#1756](https://github.com/hirosystems/stacks.js/issues/1756)) ([748e1e3](https://github.com/hirosystems/stacks.js/commit/748e1e311ef660981b5d8d7134908d94fe37701e))
-* update tsdoc comments to expose internal methods ([#1761](https://github.com/hirosystems/stacks.js/issues/1761)) ([2f2b12b](https://github.com/hirosystems/stacks.js/commit/2f2b12b23be95e10210af72fc3cea32fb27f024f))
-
-
+- Default contract deploys to Clarity version 3 ([#1756](https://github.com/hirosystems/stacks.js/issues/1756)) ([748e1e3](https://github.com/hirosystems/stacks.js/commit/748e1e311ef660981b5d8d7134908d94fe37701e))
+- update tsdoc comments to expose internal methods ([#1761](https://github.com/hirosystems/stacks.js/issues/1761)) ([2f2b12b](https://github.com/hirosystems/stacks.js/commit/2f2b12b23be95e10210af72fc3cea32fb27f024f))
 
 ## [7.0.0](https://github.com/hirosystems/stacks.js/compare/v6.17.0...v7.0.0) (2024-10-25)
 

@@ -1,29 +1,25 @@
 # Change Log
 
+## 7.5.0
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @stacks/common@7.5.0
+
 ## [7.3.1](https://github.com/stx-labs/stacks.js/compare/v7.3.0...v7.3.1) (2025-12-16)
 
 **Note:** Version bump only for package @stacks/network
 
-
-
-
-
 ## [7.2.0](https://github.com/hirosystems/stacks.js/compare/v7.1.2...v7.2.0) (2025-08-07)
-
 
 ### Features
 
-* Add `createNetwork` function for easy API key usage ([#1800](https://github.com/hirosystems/stacks.js/issues/1800)) ([305d854](https://github.com/hirosystems/stacks.js/commit/305d854da4afb903a46ccb09926074c69025d896))
-
-
+- Add `createNetwork` function for easy API key usage ([#1800](https://github.com/hirosystems/stacks.js/issues/1800)) ([305d854](https://github.com/hirosystems/stacks.js/commit/305d854da4afb903a46ccb09926074c69025d896))
 
 ## [7.0.2](https://github.com/hirosystems/stacks.js/compare/v7.0.1...v7.0.2) (2024-11-14)
 
 **Note:** Version bump only for package @stacks/network
-
-
-
-
 
 ## [7.0.0](https://github.com/hirosystems/stacks.js/compare/v6.17.0...v7.0.0) (2024-10-25)
 
