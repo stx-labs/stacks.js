@@ -12,6 +12,7 @@ import {
   parseUnlockScript,
   serializeCScriptNum,
   toConsensusBuff,
+  validateEarlyUnlockBytes,
 } from '../src/script';
 
 // A known compressed public key (33 bytes)
@@ -266,6 +267,79 @@ describe('buildLockScript', () => {
       })
     ).not.toThrow();
   });
+
+  it('rejects malformed earlyUnlockBytes (truncated push would corrupt the script)', () => {
+    const base = {
+      stxAddress: TEST_STX_ADDRESS,
+      unlockHeight: 850_000,
+      unlockBytes,
+    };
+    // 0x21 announces a 33-byte push but only 2 bytes follow.
+    const truncated = new Uint8Array([0x21, 0x02, 0x03]);
+    expect(() => buildLockScript({ ...base, earlyUnlockBytes: truncated })).toThrow(
+      'not decodable'
+    );
+    expect(() => buildLockScript({ ...base, earlyUnlockBytes: new Uint8Array(0) })).toThrow(
+      'empty'
+    );
+  });
+
+  it('rejects non-CHECKSIG-shaped earlyUnlockBytes unless validation is disabled', () => {
+    const base = {
+      stxAddress: TEST_STX_ADDRESS,
+      unlockHeight: 850_000,
+      unlockBytes,
+    };
+    const verifyTail = btc.Script.encode([new Uint8Array(33).fill(0x02), 'CHECKSIGVERIFY']);
+    expect(() => buildLockScript({ ...base, earlyUnlockBytes: verifyTail })).toThrow(
+      'must end in OP_CHECKSIG'
+    );
+    expect(() =>
+      buildLockScript({ ...base, earlyUnlockBytes: verifyTail, validateEarlyUnlockBytes: false })
+    ).not.toThrow();
+  });
+});
+
+describe('validateEarlyUnlockBytes', () => {
+  const key = (fill: number) => new Uint8Array(33).fill(fill);
+
+  it('accepts the documented templates: <pubkey> CHECKSIG and M-of-N CHECKMULTISIG', () => {
+    expect(() => validateEarlyUnlockBytes(TEST_EARLY_UNLOCK)).not.toThrow();
+    const multisig = btc.Script.encode([2, key(0x02), key(0x03), key(0x04), 3, 'CHECKMULTISIG']);
+    expect(() => validateEarlyUnlockBytes(multisig)).not.toThrow();
+  });
+
+  it('always rejects empty and undecodable bytes, even with shape disabled', () => {
+    expect(() => validateEarlyUnlockBytes(new Uint8Array(0), { shape: false })).toThrow('empty');
+    expect(() => validateEarlyUnlockBytes('', { shape: false })).toThrow('empty');
+    const truncated = new Uint8Array([0x21, 0x02, 0x03]);
+    expect(() => validateEarlyUnlockBytes(truncated, { shape: false })).toThrow('not decodable');
+  });
+
+  it('shape: rejects missing 33-byte push, wrong tail, and conditional opcodes', () => {
+    expect(() => validateEarlyUnlockBytes(btc.Script.encode(['CHECKSIG']))).toThrow(
+      'no 33-byte public-key push'
+    );
+    expect(() => validateEarlyUnlockBytes(btc.Script.encode([key(0x02), 'EQUAL']))).toThrow(
+      'must end in OP_CHECKSIG'
+    );
+    expect(() => validateEarlyUnlockBytes(btc.Script.encode([key(0x02)]))).toThrow(
+      'must end in OP_CHECKSIG'
+    );
+    const conditional = btc.Script.encode(['IF', key(0x02), 'ENDIF', key(0x03), 'CHECKSIG']);
+    expect(() => validateEarlyUnlockBytes(conditional)).toThrow('conditional opcodes');
+    // ...but all of these pass with the shape heuristic disabled.
+    expect(() => validateEarlyUnlockBytes(conditional, { shape: false })).not.toThrow();
+  });
+
+  it('returns the decoded bytes (hex input included)', () => {
+    expect(bytesToHex(validateEarlyUnlockBytes(TEST_EARLY_UNLOCK))).toBe(
+      bytesToHex(TEST_EARLY_UNLOCK)
+    );
+    expect(bytesToHex(validateEarlyUnlockBytes(bytesToHex(TEST_EARLY_UNLOCK)))).toBe(
+      bytesToHex(TEST_EARLY_UNLOCK)
+    );
+  });
 });
 
 describe('buildLockAddress', () => {
@@ -314,7 +388,7 @@ describe('buildLockAddress', () => {
   });
 
   it('changes when earlyUnlockBytes changes', () => {
-    const altEarlyUnlock = btc.Script.encode([new Uint8Array(33).fill(0x03), 'CHECKSIGVERIFY']);
+    const altEarlyUnlock = btc.Script.encode([new Uint8Array(33).fill(0x03), 'CHECKSIG']);
     const altOpts = { ...baseOpts, earlyUnlockBytes: altEarlyUnlock };
     expect(buildLockAddress({ ...baseOpts, network: 'mainnet' })).not.toBe(
       buildLockAddress({ ...altOpts, network: 'mainnet' })

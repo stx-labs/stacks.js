@@ -104,6 +104,7 @@ test('l1 register-for-bond happy path: setup-bond → fund BTC → prove → reg
     unlockHeight,
     unlockBytes,
     earlyUnlockBytes: EARLY_UNLOCK_BYTES,
+    validateEarlyUnlockBytes: false, // dummy all-OP_0 blob, not a CHECKSIG template
   };
   // regtest BTC addresses are bcrt (devnet), not the stacks-testnet network.
   const lockupAddress = buildLockAddress({

@@ -139,6 +139,7 @@ test('one bond, two participants: user A (L1) + user B (sBTC)', async () => {
     unlockHeight,
     unlockBytes,
     earlyUnlockBytes: EARLY_UNLOCK_BYTES,
+    validateEarlyUnlockBytes: false, // dummy all-OP_0 blob, not a CHECKSIG template
   };
   const lockupAddress = buildLockAddress({ ...lockupArgs, network: 'devnet' }); // bcrt (regtest)
   const btcTxid = await sendToAddress(lockupAddress, Number(MAX_SATS) / 1e8);

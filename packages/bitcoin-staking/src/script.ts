@@ -208,6 +208,72 @@ export function computeRegisterPreimage(stxAddress: string): Uint8Array {
  * `staker` may be a standard or a contract address — both are serialized by
  * their Clarity consensus buffer, matching pox-5.
  */
+const CONDITIONAL_OPS = ['IF', 'NOTIF', 'ELSE', 'ENDIF'];
+const BOOLEAN_TAIL_OPS = ['CHECKSIG', 'CHECKMULTISIG'];
+
+/**
+ * Validate a bond's `early-unlock-bytes` subscript before it is spliced raw
+ * into a lockup script. The contract stores and splices the bytes without
+ * inspection, so a malformed value (e.g. a truncated data push) corrupts the
+ * assembled script — {@link buildLockScript} still derives a fundable P2WSH
+ * address from it, but the sats would be unspendable in both branches.
+ *
+ * Structural checks (always): the bytes are non-empty and decode as Bitcoin
+ * script (a truncated push fails to decode).
+ *
+ * Shape heuristic (`shape: true`, the default): the fragment contains at least
+ * one 33-byte public-key push, ends in `OP_CHECKSIG`/`OP_CHECKMULTISIG` (it
+ * must leave a boolean for the shared `OP_VERIFY`), and contains no
+ * `OP_IF`/`OP_NOTIF`/`OP_ELSE`/`OP_ENDIF` (which would unbalance the outer
+ * `OP_IF … OP_ENDIF` scaffold). Disable for bond templates that are
+ * intentionally exotic but chain-valid.
+ *
+ * Returns the decoded bytes.
+ *
+ * @throws on a structural or (when enabled) shape violation.
+ */
+export function validateEarlyUnlockBytes(
+  earlyUnlockBytes: Uint8Array | string,
+  opts: { shape?: boolean } = {}
+): Uint8Array {
+  const bytes =
+    typeof earlyUnlockBytes === 'string' ? hexToBytes(earlyUnlockBytes) : earlyUnlockBytes;
+
+  if (bytes.length === 0) {
+    throw new Error(
+      'earlyUnlockBytes: empty subscript — the early-exit branch would not require a cosigner'
+    );
+  }
+
+  let decoded: btc.ScriptType;
+  try {
+    decoded = btc.Script.decode(bytes);
+  } catch (error) {
+    throw new Error(
+      `earlyUnlockBytes: not decodable as Bitcoin script (a truncated push corrupts the lockup script): ${error}`
+    );
+  }
+
+  if (opts.shape ?? true) {
+    if (!decoded.some(op => op instanceof Uint8Array && op.length === 33)) {
+      throw new Error('earlyUnlockBytes: no 33-byte public-key push found');
+    }
+    const tail = decoded[decoded.length - 1];
+    if (typeof tail !== 'string' || !BOOLEAN_TAIL_OPS.includes(tail)) {
+      throw new Error(
+        'earlyUnlockBytes: subscript must end in OP_CHECKSIG or OP_CHECKMULTISIG (its result feeds the shared OP_VERIFY)'
+      );
+    }
+    if (decoded.some(op => typeof op === 'string' && CONDITIONAL_OPS.includes(op))) {
+      throw new Error(
+        'earlyUnlockBytes: conditional opcodes (OP_IF/OP_NOTIF/OP_ELSE/OP_ENDIF) would unbalance the lockup script scaffold'
+      );
+    }
+  }
+
+  return bytes;
+}
+
 export function buildLockScript(opts: {
   /** Stacks address of the staker (standard or contract address). */
   stxAddress: string;
@@ -221,13 +287,18 @@ export function buildLockScript(opts: {
    * `protocol-bonds.early-unlock-bytes` — opaque to the SDK.
    */
   earlyUnlockBytes: Uint8Array | string;
+  /**
+   * Set `false` to skip the shape heuristic on `earlyUnlockBytes` (structural
+   * validation still applies) — see {@link validateEarlyUnlockBytes}.
+   * @default true
+   */
+  validateEarlyUnlockBytes?: boolean;
 }): Uint8Array {
   const unlockBytes =
     typeof opts.unlockBytes === 'string' ? hexToBytes(opts.unlockBytes) : opts.unlockBytes;
-  const earlyUnlockBytes =
-    typeof opts.earlyUnlockBytes === 'string'
-      ? hexToBytes(opts.earlyUnlockBytes)
-      : opts.earlyUnlockBytes;
+  const earlyUnlockBytes = validateEarlyUnlockBytes(opts.earlyUnlockBytes, {
+    shape: opts.validateEarlyUnlockBytes ?? true,
+  });
 
   // Validate the height fits the contract's 5-byte ScriptNum cap before pushing.
   serializeCScriptNum(opts.unlockHeight);
@@ -309,6 +380,7 @@ export function buildLockAddress(opts: {
   unlockBytes: Uint8Array | string;
   earlyUnlockBytes: Uint8Array | string;
   network: StacksNetworkName | StacksNetwork;
+  validateEarlyUnlockBytes?: boolean;
 }): string;
 export function buildLockAddress(opts: {
   stxAddress: string;
@@ -316,6 +388,7 @@ export function buildLockAddress(opts: {
   publicKey: Uint8Array | string;
   earlyUnlockBytes: Uint8Array | string;
   network: StacksNetworkName | StacksNetwork;
+  validateEarlyUnlockBytes?: boolean;
 }): string;
 export function buildLockAddress(opts: {
   stxAddress: string;
@@ -324,6 +397,7 @@ export function buildLockAddress(opts: {
   publicKey?: Uint8Array | string;
   earlyUnlockBytes: Uint8Array | string;
   network: StacksNetworkName | StacksNetwork;
+  validateEarlyUnlockBytes?: boolean;
 }): string {
   const unlockBytes =
     opts.unlockBytes ?? (opts.publicKey ? buildUnlockScript(opts.publicKey) : undefined);
@@ -335,6 +409,7 @@ export function buildLockAddress(opts: {
     unlockHeight: opts.unlockHeight,
     unlockBytes,
     earlyUnlockBytes: opts.earlyUnlockBytes,
+    validateEarlyUnlockBytes: opts.validateEarlyUnlockBytes,
   });
   return lockScriptToAddress(script, networkNameFrom(opts.network));
 }
@@ -473,6 +548,12 @@ export function buildRegisterMetadata(opts: {
   /** Per-bond early-unlock subscript, from `fetchBond(...)`. */
   earlyUnlockBytes: Uint8Array | string;
   network: StacksNetworkName | StacksNetwork;
+  /**
+   * Set `false` to skip the shape heuristic on `earlyUnlockBytes` — see
+   * {@link validateEarlyUnlockBytes}.
+   * @default true
+   */
+  validateEarlyUnlockBytes?: boolean;
 }): RegisterMetadata {
   const unlockHeight = computeBondUnlockHeight({
     bondIndex: opts.bondIndex,
@@ -484,6 +565,7 @@ export function buildRegisterMetadata(opts: {
     unlockHeight,
     unlockBytes,
     earlyUnlockBytes: opts.earlyUnlockBytes,
+    validateEarlyUnlockBytes: opts.validateEarlyUnlockBytes,
   });
 
   return {

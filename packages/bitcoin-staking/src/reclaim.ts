@@ -98,6 +98,7 @@ function resolveLockScript(opts: BuildReclaimOpts): Uint8Array {
     unlockHeight,
     unlockBytes: buildUnlockScript(stakerBtcPublicKey),
     earlyUnlockBytes,
+    validateEarlyUnlockBytes: opts.validateEarlyUnlockBytes,
   });
 }
 
@@ -131,6 +132,13 @@ export interface BuildReclaimOpts {
   stakerBtcPublicKey?: Uint8Array | string;
   /** Per-bond early-unlock subscript, from `fetchBond(...).earlyUnlockBytes`. */
   earlyUnlockBytes?: Uint8Array | string;
+  /**
+   * Set `false` to skip the shape heuristic when rebuilding the lockup script
+   * from `earlyUnlockBytes` — see `validateEarlyUnlockBytes`. Ignored when
+   * `lockScript` is passed directly.
+   * @default true
+   */
+  validateEarlyUnlockBytes?: boolean;
 }
 
 /**
