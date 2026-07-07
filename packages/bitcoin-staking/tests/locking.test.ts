@@ -48,11 +48,7 @@ describe('toConsensusBuff matches the reference (hand-rolled) implementation', (
   // script.ts now delegates to @stacks/transactions' serializeCVBytes. This is
   // the previous hand-rolled impl, kept as a reference oracle.
   function refToConsensusBuff(addr: string): Uint8Array {
-    const parsed = Address.parse(addr) as {
-      version: number;
-      hash160: string;
-      contractName?: string;
-    };
+    const parsed = Address.parse(addr);
     const head = new Uint8Array(22);
     head[1] = parsed.version;
     head.set(hexToBytes(parsed.hash160), 2);

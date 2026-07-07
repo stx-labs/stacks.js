@@ -32,7 +32,9 @@ export type AddressRepr = { hash160: string; contractName?: string } & (
  * // { version: 22, versionChar: 'P', hash160: '0000000000000000000000000000000000000000', contractName: 'pox' }
  * ```
  */
-export function parse(address: AddressString | ContractIdString): Required<AddressRepr> {
+export function parse(
+  address: AddressString | ContractIdString
+): AddressRepr & { version: AddressVersion; versionChar: string; contractName?: string } {
   const [addr, contractName] = address.split('.');
   const parsed = c32addressDecode(addr);
   return {
