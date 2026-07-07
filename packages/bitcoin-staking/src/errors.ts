@@ -146,7 +146,7 @@ export const POX5_ERROR_DESCRIPTIONS: Record<Pox5ErrorCode, string> = {
     'The currently active bond was not included in the supplied list.',
   [Pox5ErrorCode.NotBondParticipant]: 'The caller is not actively in a bond.',
   [Pox5ErrorCode.CannotAnnounceL1EarlyUnlock]:
-    'An early-unlock announcement was made for a bond membership that has an L2 lockup.',
+    'An early-exit announcement was made for a bond membership that has an L2 lockup.',
   [Pox5ErrorCode.InvalidOldSignerManager]:
     "The argument provided does not match the staker's current signer.",
   [Pox5ErrorCode.InvalidUnstakeSbtcAmount]: 'The amount of sats provided to unstake is invalid.',

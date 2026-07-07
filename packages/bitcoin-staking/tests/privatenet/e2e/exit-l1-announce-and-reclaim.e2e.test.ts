@@ -7,7 +7,7 @@
  * on tests/privatenet/actions/btc-lockup-roundtrip.test.ts (TEST 1, EARLY branch)
  * and reuses the funding/register patterns from single-l1-register.e2e.test.ts.
  *
- * Staker = account5. Cosigner = account6 (the bond's early-unlock cosigner).
+ * Staker = account5. Cosigner = account6 (the bond's early-exit cosigner).
  * The VPS daemon sets every new bond's earlyUnlockBytes = buildUnlockScript(account6 pub)
  * (i.e. `<account6-compressed-pubkey> OP_CHECKSIG`, 35 bytes).
  *
@@ -95,7 +95,7 @@ const REGTEST_BTC: typeof btc.NETWORK = {
 
 // account5 — the staker whose L1 lock we register, then reclaim via ELSE branch.
 const STAKER_PRIV_HEX = 'cb3df38053d132895220b9ce471f6b676db5b9bf0b4adefb55f2118ece2478df';
-// account6 — the bond's early-unlock COSIGNER (its pubkey is in earlyUnlockBytes).
+// account6 — the bond's early-exit COSIGNER (its pubkey is in earlyUnlockBytes).
 const COSIGNER_PRIV_HEX = '5b8303150239eceaba43892af7cdd1fa7fc26eda5182ebaaa568e3341d54a4d0';
 
 const staker = getAccount(REGTEST_KEYS.account5);

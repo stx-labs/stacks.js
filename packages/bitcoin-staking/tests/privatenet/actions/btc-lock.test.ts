@@ -54,7 +54,7 @@ const FEE_SATS = BigInt(process.env.FEE_SATS ?? 500);
 // STAKER env selects which account acts as the staker (account5 | account6 | account7).
 // Defaults to "account5" so existing usage is unchanged.
 // Bond membership is one-per-staker: use a different account (e.g. account7) for
-// the early-unlock path when account5 is already enrolled in another bond.
+// the early-exit path when account5 is already enrolled in another bond.
 
 const STAKER_NAME = process.env.STAKER ?? 'account5';
 
@@ -75,7 +75,7 @@ if (!STAKER_PRIV_HEX) {
 const stakerAccount = getAccount(STAKER_PRIV_HEX + '01');
 const STAKER_STX_ADDRESS = stakerAccount.address;
 
-// account6 BTC pubkey — the early-unlock cosigner whose pubkey the bond stores.
+// account6 BTC pubkey — the early-exit cosigner whose pubkey the bond stores.
 // (Used only for sanity-checking; the bond's earlyUnlockBytes come from on-chain.)
 const ACCOUNT6_BTC_PUBKEY = '022bb4b050afd84f0a7eedd02d4ea6ebe426bbb02744dfcca0b789a643eff6e78c';
 

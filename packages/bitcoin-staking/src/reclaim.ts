@@ -20,7 +20,7 @@ import type { Utxo } from './types';
  * - `'locktime'`   — the normal CLTV exit (`OP_IF` branch), single-sig (staker),
  *   spendable once burn height >= the lock's unlock height.
  * - `'early-exit'` — the cosigned early exit (`OP_ELSE` branch), a 2-of-2 between
- *   the staker and the bond's early-unlock cosigner.
+ *   the staker and the bond's early-exit cosigner.
  */
 export type ReclaimPath = 'locktime' | 'early-exit';
 

@@ -73,7 +73,7 @@ const STAKER_FULL_KEY = REGTEST_KEYS[STAKER_NAME];
 if (!STAKER_FULL_KEY) throw new Error(`Unknown STAKER="${String(STAKER_NAME)}"`);
 // raw 32-byte BTC priv = the full key minus its trailing '01' compressed-key suffix.
 const STAKER_PRIV_HEX = STAKER_FULL_KEY.slice(0, 64);
-// account6 — the bond's early-unlock COSIGNER (its pubkey is in earlyUnlockBytes).
+// account6 — the bond's early-exit COSIGNER (its pubkey is in earlyUnlockBytes).
 const COSIGNER_PRIV_HEX = '5b8303150239eceaba43892af7cdd1fa7fc26eda5182ebaaa568e3341d54a4d0';
 
 const SIGHASH_ALL = 1;

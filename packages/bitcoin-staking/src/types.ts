@@ -173,9 +173,10 @@ export interface Bond {
   /** Minimum amount of STX (in basis points) that must be paired per BTC. */
   minUstxRatioBps: number;
   /**
-   * Hex-encoded early-exit subscript that guards the OP_ELSE branch of the L1
-   * lockup witness script (buff 683) — e.g. `<pubkey> OP_CHECKSIG`. Its result
-   * is consumed by the script's shared OP_VERIFY.
+   * Hex-encoded early-unlock subscript that guards the OP_ELSE (early-exit)
+   * branch of the L1 lockup witness script (buff 683) — e.g.
+   * `<pubkey> OP_CHECKSIG`. Its result is consumed by the script's shared
+   * OP_VERIFY.
    */
   earlyUnlockBytes: string;
 }

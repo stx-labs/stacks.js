@@ -17,7 +17,7 @@
  *
  *  MODE=early
  *   — Spends via the OP_ELSE branch. Requires a second signature from account6
- *     (the bond's early-unlock cosigner) plus the 32-byte staker preimage. No CLTV.
+ *     (the bond's early-exit cosigner) plus the 32-byte staker preimage. No CLTV.
  *     Witness stack: [ staker_sig(STAKER), admin_sig(account6), preimage, <empty>(->ELSE), witnessScript ]
  *     Stack at OP_IF check: top = empty (ELSE taken), then preimage, admin_sig, staker_sig.
  *     ELSE branch: OP_SIZE 32 OP_EQUALVERIFY OP_SHA256 <H> OP_EQUALVERIFY (consumes preimage),
@@ -85,7 +85,7 @@ const MEMPOOL_BASE = 'https://mempool.bitcoin.private-1.hiro.so/api';
 //
 // STAKER env selects the staker account whose BTC key signed the lockup output.
 // Defaults to "account5" so existing usage is unchanged.
-// The early-unlock cosigner (OP_CHECKSIGVERIFY) is always account6.
+// The early-exit cosigner (OP_CHECKSIGVERIFY) is always account6.
 
 const STAKER_NAME = (process.env.STAKER ?? 'account5') as
   | 'account5'
@@ -105,7 +105,7 @@ if (!(STAKER_NAME in STAKER_RAW_KEYS)) {
 // 32-byte raw private key for the staker (BTC secp256k1, no trailing 01)
 const STAKER_PRIV_HEX = STAKER_RAW_KEYS[STAKER_NAME];
 
-// account6 — early-unlock cosigner (OP_CHECKSIGVERIFY in the ELSE branch).
+// account6 — early-exit cosigner (OP_CHECKSIGVERIFY in the ELSE branch).
 // This is always account6 regardless of STAKER — it's the bond's admin key.
 const ACCOUNT6_PRIV_HEX = '5b8303150239eceaba43892af7cdd1fa7fc26eda5182ebaaa568e3341d54a4d0';
 
@@ -297,7 +297,7 @@ test.skip(`reclaim P2WSH lockup output for bond ${BOND_INDEX} via ${MODE} branch
   const account6Pub = secp256k1.getPublicKey(account6Priv, true); // compressed
 
   console.log(`${STAKER_NAME} pub (staker):`, bytesToHex(stakerPub));
-  console.log('account6 pub (early-unlock cosigner):', bytesToHex(account6Pub));
+  console.log('account6 pub (early-exit cosigner):', bytesToHex(account6Pub));
 
   // Compute the P2WSH output script (OP_0 <sha256(witnessScript)>) — this is
   // the scriptPubKey of the UTXO we are spending.
