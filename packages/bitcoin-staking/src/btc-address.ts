@@ -6,6 +6,7 @@ import { type BufferCV, ClarityType, type ClarityValue, type TupleCV } from '@st
 import {
   B58_ADDR_PREFIXES,
   BitcoinNetworkVersion,
+  POX_ADDR_DATA_LENGTH,
   PoXAddressVersion,
   SEGWIT_ADDR_PREFIXES,
   SEGWIT_V0,
@@ -22,6 +23,25 @@ export interface BtcAddressRepr {
   version: PoXAddressVersion;
   /** Hash / witness-program bytes. */
   data: Uint8Array;
+}
+
+/**
+ * @internal Assert a PoX version byte is known and `data` has the hash /
+ * witness-program length that version requires (20 or 32 bytes). Mirrors the
+ * decode-side checks in {@link parse} for data arriving from Clarity values or
+ * caller-built reprs.
+ */
+export function assertValidBtcAddressRepr(repr: BtcAddressRepr): BtcAddressRepr {
+  const expected = POX_ADDR_DATA_LENGTH[repr.version];
+  if (expected == null) {
+    throw new Error(`Unexpected PoX address version: ${repr.version}`);
+  }
+  if (repr.data.length !== expected) {
+    throw new Error(
+      `Invalid PoX address hashbytes: version ${repr.version} requires ${expected} bytes, got ${repr.data.length}`
+    );
+  }
+  return repr;
 }
 
 /** @internal */
@@ -109,10 +129,10 @@ function fromPoxTuple(poxAddr: ClarityValue): BtcAddressRepr {
   if (versionCV.type !== ClarityType.Buffer || hashBytesCV.type !== ClarityType.Buffer) {
     throw new Error('Invalid argument, expected `version` and `hashbytes` to be buffer values');
   }
-  return {
+  return assertValidBtcAddressRepr({
     version: hexToBytes(versionCV.value)[0] as PoXAddressVersion,
     data: hexToBytes(hashBytesCV.value),
-  };
+  });
 }
 
 /**
@@ -172,7 +192,9 @@ export function stringify(
   network: StacksNetworkName | StacksNetwork
 ): string {
   const networkName = networkNameFrom(network);
-  const { version, data } = 'type' in address ? fromPoxTuple(address) : address;
+  const { version, data } = assertValidBtcAddressRepr(
+    'type' in address ? fromPoxTuple(address) : address
+  );
 
   switch (version) {
     case PoXAddressVersion.P2PKH:

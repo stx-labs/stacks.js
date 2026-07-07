@@ -1,4 +1,10 @@
-import { ClarityType, privateKeyToPublic, type TupleCV } from '@stacks/transactions';
+import {
+  Cl,
+  ClarityType,
+  privateKeyToPublic,
+  serializeCVBytes,
+  type TupleCV,
+} from '@stacks/transactions';
 import {
   buildSignerCalldata,
   computeSignerGrantHash,
@@ -145,6 +151,27 @@ describe('signer calldata', () => {
 
   it('throws on a non-tuple calldata blob', () => {
     expect(() => parseSignerCalldata('00')).toThrow();
+  });
+
+  it('throws on a tuple whose hashbytes length does not match the version', () => {
+    const bad = Cl.tuple({
+      'pox-addr': Cl.tuple({
+        version: Cl.buffer(Uint8Array.of(4)), // P2WPKH expects 20 bytes
+        hashbytes: Cl.buffer(new Uint8Array(32)),
+      }),
+      'max-fee': Cl.uint(1000),
+    });
+    expect(() => parseSignerCalldata(serializeCVBytes(bad))).toThrow('20 bytes');
+    const emptyVersion = Cl.tuple({
+      'pox-addr': Cl.tuple({
+        version: Cl.buffer(new Uint8Array(0)),
+        hashbytes: Cl.buffer(new Uint8Array(20)),
+      }),
+      'max-fee': Cl.uint(1000),
+    });
+    expect(() => parseSignerCalldata(serializeCVBytes(emptyVersion))).toThrow(
+      'Unexpected PoX address version'
+    );
   });
 });
 

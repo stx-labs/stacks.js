@@ -1,5 +1,6 @@
 // Pure helpers — no network, runs everywhere. Round-trips and known vectors;
 // the regtest reads-sweep cross-checks the on-chain mirrors of the math.
+import { Cl } from '@stacks/transactions';
 import { BtcAddress, PoXAddressVersion } from '../src';
 import {
   bondPeriodToBurnHeight,
@@ -144,6 +145,48 @@ describe('BtcAddress parse/stringify', () => {
         expect(BtcAddress.stringify({ version, data: h32 }, network)).toBeTruthy();
       }
     }
+  });
+
+  test('stringify rejects wrong data lengths per version (no silent truncation)', () => {
+    const h20 = new Uint8Array(20).fill(7);
+    const h32 = new Uint8Array(32).fill(7);
+    // 32-byte data on a 20-byte version: base58 would have silently truncated,
+    // segwit v0 would have emitted a P2WSH-shaped program.
+    for (const version of [
+      PoXAddressVersion.P2PKH,
+      PoXAddressVersion.P2SH,
+      PoXAddressVersion.P2SHP2WPKH,
+      PoXAddressVersion.P2SHP2WSH,
+      PoXAddressVersion.P2WPKH,
+    ]) {
+      expect(() => BtcAddress.stringify({ version, data: h32 }, 'mainnet')).toThrow('20 bytes');
+    }
+    for (const version of [PoXAddressVersion.P2WSH, PoXAddressVersion.P2TR]) {
+      expect(() => BtcAddress.stringify({ version, data: h20 }, 'mainnet')).toThrow('32 bytes');
+    }
+    expect(() =>
+      BtcAddress.stringify({ version: PoXAddressVersion.P2WPKH, data: new Uint8Array(0) }, 'mainnet')
+    ).toThrow('20 bytes');
+  });
+
+  test('stringify rejects unknown version bytes', () => {
+    expect(() =>
+      BtcAddress.stringify(
+        { version: 0x07 as PoXAddressVersion, data: new Uint8Array(20) },
+        'mainnet'
+      )
+    ).toThrow('Unexpected PoX address version');
+  });
+
+  test('stringify validates pox tuples (hashbytes length must match version)', () => {
+    const tuple = (version: number, len: number) =>
+      Cl.tuple({ version: Cl.buffer(Uint8Array.of(version)), hashbytes: Cl.buffer(new Uint8Array(len).fill(7)) });
+    expect(BtcAddress.stringify(tuple(PoXAddressVersion.P2WSH, 32), 'mainnet')).toMatch(/^bc1q/);
+    expect(() => BtcAddress.stringify(tuple(PoXAddressVersion.P2WSH, 20), 'mainnet')).toThrow('32 bytes');
+    expect(() => BtcAddress.stringify(tuple(PoXAddressVersion.P2PKH, 32), 'mainnet')).toThrow('20 bytes');
+    // empty version buffer -> version undefined -> unknown
+    const emptyVersion = Cl.tuple({ version: Cl.buffer(new Uint8Array(0)), hashbytes: Cl.buffer(new Uint8Array(20)) });
+    expect(() => BtcAddress.stringify(emptyVersion, 'mainnet')).toThrow('Unexpected PoX address version');
   });
 });
 

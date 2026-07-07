@@ -12,7 +12,11 @@ import {
   signStructuredData,
   type TupleCV,
 } from '@stacks/transactions';
-import { parse as parseBtcAddress, type BtcAddressRepr } from './btc-address';
+import {
+  assertValidBtcAddressRepr,
+  parse as parseBtcAddress,
+  type BtcAddressRepr,
+} from './btc-address';
 import type { PoXAddressVersion } from './constants';
 import type { SignerCalldataL1Payout, SignerKeyGrantOptions } from './types';
 
@@ -153,10 +157,10 @@ export function parseSignerCalldata(calldata: Uint8Array | string): {
   }
 
   return {
-    poxAddress: {
+    poxAddress: assertValidBtcAddressRepr({
       version: hexToBytes(versionCV.value)[0] as PoXAddressVersion,
       data: hexToBytes(hashbytesCV.value),
-    },
+    }),
     maxFeeSats: BigInt(maxFeeCV.value),
   };
 }

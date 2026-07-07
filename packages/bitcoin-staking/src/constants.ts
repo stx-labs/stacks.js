@@ -41,6 +41,17 @@ export enum PoXAddressVersion {
   P2TR = 0x06,
 }
 
+/** @internal Expected `hashbytes` length (bytes) for each {@link PoXAddressVersion}. */
+export const POX_ADDR_DATA_LENGTH: Record<PoXAddressVersion, number> = {
+  [PoXAddressVersion.P2PKH]: 20,
+  [PoXAddressVersion.P2SH]: 20,
+  [PoXAddressVersion.P2SHP2WPKH]: 20,
+  [PoXAddressVersion.P2SHP2WSH]: 20,
+  [PoXAddressVersion.P2WPKH]: 20,
+  [PoXAddressVersion.P2WSH]: 32,
+  [PoXAddressVersion.P2TR]: 32,
+};
+
 /** @internal Bitcoin base58 address version bytes per network */
 export const BitcoinNetworkVersion = {
   mainnet: { P2PKH: 0x00, P2SH: 0x05 },
