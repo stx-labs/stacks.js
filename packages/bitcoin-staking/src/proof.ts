@@ -109,6 +109,84 @@ function range(n: number): number[] {
   return Array.from({ length: n }, (_, i) => i);
 }
 
+/** Contract cap on the merkle branch: `(list 14 (buff 32))` (blocks <= 16,384 txs). */
+const MAX_LEAF_HASHES = 14;
+
+/**
+ * @internal
+ * Fold a leaf hash up its sibling path to the merkle root, all in internal
+ * little-endian form. Mirrors the contract's per-level fold: bit `i` of `index`
+ * picks the side (`1` -> sibling on the left), each parent is
+ * `sha256(sha256(left || right))`.
+ */
+function foldMerkleBranch(leaf: Uint8Array, siblings: Uint8Array[], index: number): Uint8Array {
+  let hash = leaf;
+  siblings.forEach((sibling, i) => {
+    hash =
+      (index >> i) & 1
+        ? sha256(sha256(concatBytes(sibling, hash)))
+        : sha256(sha256(concatBytes(hash, sibling)));
+  });
+  return hash;
+}
+
+/**
+ * @internal
+ * Validate an assembled proof against itself before it is submitted on-chain:
+ * a proof failing any of these is guaranteed to abort `register-for-bond`
+ * (burning the tx fee), so fail fast client-side instead.
+ *
+ * - `txIndex` within `txCount`, and the branch length is `ceil(log2(txCount))`
+ *   (the two come from independent indexer endpoints on the Esplora path);
+ * - at most 14 siblings of exactly 32 bytes (the contract's `(list 14 (buff 32))`);
+ * - the branch folds from the txid back to the header's merkle root
+ *   (header bytes 36..68).
+ */
+function validateLockProof(opts: {
+  legacyTx: Uint8Array;
+  header: Uint8Array;
+  leafHashes: Uint8Array[];
+  txCount: number;
+  txIndex: number;
+}): void {
+  const { legacyTx, header, leafHashes, txCount, txIndex } = opts;
+
+  if (!Number.isInteger(txCount) || txCount < 1) {
+    throw new Error(`buildLockProof: invalid txCount ${txCount}`);
+  }
+  if (!Number.isInteger(txIndex) || txIndex < 0 || txIndex >= txCount) {
+    throw new Error(`buildLockProof: txIndex ${txIndex} out of range (txCount ${txCount})`);
+  }
+  for (const hash of leafHashes) {
+    if (hash.length !== 32) {
+      throw new Error(`buildLockProof: merkle sibling is ${hash.length} bytes, expected 32`);
+    }
+  }
+  if (leafHashes.length > MAX_LEAF_HASHES) {
+    throw new Error(
+      `buildLockProof: merkle branch has ${leafHashes.length} siblings; the contract accepts at most ${MAX_LEAF_HASHES}`
+    );
+  }
+  // Tree depth must match the block's tx count (integer-safe ceil-log2).
+  let expectedDepth = 0;
+  while (1 << expectedDepth < txCount) expectedDepth++;
+  if (leafHashes.length !== expectedDepth) {
+    throw new Error(
+      `buildLockProof: merkle branch depth ${leafHashes.length} does not match txCount ${txCount} (expected ${expectedDepth})`
+    );
+  }
+
+  // Decisive check: fold the branch from the txid back to the header's root.
+  const leaf = sha256(sha256(legacyTx)); // internal little-endian txid
+  const root = foldMerkleBranch(leaf, leafHashes, txIndex);
+  if (!equals(root, header.slice(36, 68))) {
+    throw new Error(
+      'buildLockProof: merkle branch does not fold to the header merkle root — ' +
+        'the proof would be rejected on-chain (stale or inconsistent indexer data?)'
+    );
+  }
+}
+
 /**
  * Normalize a set of already-fetched indexer responses into the
  * {@link BondL1LockupOutput} tuple `register-for-bond` expects for one L1
@@ -192,12 +270,22 @@ export function buildLockProof(
     throw new Error('buildLockProof: no output matches the expected lockup script');
   }
 
+  const header = serializeBitcoinHeader(input.header);
+  const leafHashes = input.merkleProof.merkle.map(h => reverse32(hexToBytes(h)));
+  validateLockProof({
+    legacyTx: legacy,
+    header,
+    leafHashes,
+    txCount: input.txCount,
+    txIndex: input.merkleProof.pos,
+  });
+
   return {
     height: input.merkleProof.block_height,
     tx: serializeBitcoinTx(legacy),
     outputIndex,
-    header: serializeBitcoinHeader(input.header),
-    leafHashes: input.merkleProof.merkle.map(h => reverse32(hexToBytes(h))),
+    header,
+    leafHashes,
     txCount: input.txCount,
     txIndex: input.merkleProof.pos,
     amount: tx.getOutput(outputIndex).amount ?? 0n,
@@ -236,7 +324,6 @@ function merkleSiblings(level: Uint8Array[], index: number): Uint8Array[] {
   if (level.length <= 1) return [];
   const padded = level.length % 2 === 1 ? [...level, level[level.length - 1]] : level;
   const parents = range(padded.length / 2).map(i =>
-    // todo: maybe a functional chunk or similar, might be nice (optioanl)
     sha256(sha256(concatBytes(padded[2 * i], padded[2 * i + 1])))
   );
   return [padded[index ^ 1], ...merkleSiblings(parents, index >> 1)];

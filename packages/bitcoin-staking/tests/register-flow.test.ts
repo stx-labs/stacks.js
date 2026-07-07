@@ -10,6 +10,7 @@
  * single-output, single-tx block built in-memory.
  */
 import * as btc from '@scure/btc-signer';
+import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, hexToBytes } from '@stacks/common';
 import {
   buildLockAddress,
@@ -114,9 +115,15 @@ describe('lockScript / outputScript overload', () => {
   const txHex = tx.hex;
   const txid = bytesToHex(computeBitcoinTxid(tx.toBytes(true, false)));
 
+  // Single-tx block: the merkle root IS the (internal little-endian) txid.
+  // buildLockProof folds the branch back to header bytes 36..68, so the
+  // synthetic header must carry the real root.
+  const header = new Uint8Array(80);
+  header.set(sha256(sha256(tx.toBytes(true, false))), 36);
+
   const block = {
     txHex,
-    header: new Uint8Array(80), // length-checked only; hash is not verified here
+    header,
     blockHeight: 800_000,
     txids: [txid],
     unlockHeight: meta.unlockHeight,

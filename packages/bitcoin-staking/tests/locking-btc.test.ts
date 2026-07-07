@@ -309,4 +309,47 @@ describe('buildLockProof', () => {
       })
     ).toThrow(/no output matches/);
   });
+
+  // Self-validation: a proof failing any of these is guaranteed to abort
+  // on-chain, so buildLockProof throws instead of burning the tx fee.
+  const withProof = (merkleProof: typeof MERKLE_PROOF, txCount = 3721) => () =>
+    buildLockProof({
+      txHex: TX_HEX,
+      header: HEADER_HEX,
+      merkleProof,
+      txCount,
+      unlockHeight: 850_000,
+      outputScript: OUTPUT_0_SCRIPT,
+    });
+
+  it('rejects a tampered sibling hash (fold no longer reaches the header root)', () => {
+    const merkle = [...MERKLE_PROOF.merkle];
+    merkle[4] = merkle[4].replace(/^../, merkle[4].startsWith('00') ? '11' : '00');
+    expect(withProof({ ...MERKLE_PROOF, merkle })).toThrow(/does not fold to the header/);
+  });
+
+  it('rejects a wrong tx position (fold pairs siblings on the wrong side)', () => {
+    expect(withProof({ ...MERKLE_PROOF, pos: 3 })).toThrow(/does not fold to the header/);
+  });
+
+  it('rejects txIndex out of the txCount range', () => {
+    expect(withProof({ ...MERKLE_PROOF, pos: 4000 })).toThrow(/out of range/);
+    expect(withProof({ ...MERKLE_PROOF, pos: -1 })).toThrow(/out of range/);
+  });
+
+  it('rejects a txCount inconsistent with the branch depth (independent endpoints)', () => {
+    // 12 siblings require ceil(log2(txCount)) == 12; txCount 100 implies depth 7.
+    expect(withProof(MERKLE_PROOF, 100)).toThrow(/does not match txCount/);
+  });
+
+  it('rejects a branch over the contract cap of 14 siblings', () => {
+    const merkle = [...MERKLE_PROOF.merkle, ...MERKLE_PROOF.merkle.slice(0, 3)]; // 15
+    expect(withProof({ ...MERKLE_PROOF, merkle }, 20_000)).toThrow(/at most 14/);
+  });
+
+  it('rejects siblings that are not exactly 32 bytes', () => {
+    const merkle = [...MERKLE_PROOF.merkle];
+    merkle[0] = merkle[0].slice(0, 62); // 31 bytes
+    expect(withProof({ ...MERKLE_PROOF, merkle })).toThrow(/expected 32/);
+  });
 });
