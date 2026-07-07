@@ -3,6 +3,7 @@
  * Every check is exercised via crafted inputs or poxInfo overrides — no broadcasts.
  */
 import {
+  BITCOIN_LOCKTIME_THRESHOLD,
   fetchEligibleRegisterForBond,
   Pox5ErrorCode,
   type PoxInfo,
@@ -222,6 +223,50 @@ test('InvalidBtcHeader — zeroed 80-byte header fails verify-block-header', asy
   });
   expect(r.ok).toBe(false);
   if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.InvalidBtcHeader);
+});
+
+test('InvalidUnlockHeight — unlock-burn-height at/above BITCOIN_LOCKTIME_THRESHOLD is rejected but just below is not', async () => {
+  const pox = await getPoxInfo();
+  const { bondIndex } = pickBondIndex(pox);
+  const minimalTx = new Uint8Array([
+    0x01, 0x00, 0x00, 0x00,
+    0x00,
+    0x00,
+    0x00, 0x00, 0x00, 0x00,
+  ]);
+  const baseOutput = {
+    height: pox.currentBurnchainBlockHeight - 10,
+    tx: minimalTx,
+    outputIndex: 0,
+    header: new Uint8Array(80),
+    leafHashes: [],
+    txCount: 1,
+    txIndex: 0,
+    amount: 100n,
+  };
+  const call = (unlockBurnHeight: number) =>
+    fetchEligibleRegisterForBond({
+      bondIndex,
+      staker,
+      amountUstx: 1_000_000n,
+      satsTotal: 100n,
+      signerManager: SIGNER_MANAGER,
+      outputs: [{ ...baseOutput, unlockBurnHeight }],
+      poxInfo: pox,
+      network,
+    });
+
+  const threshold = Number(BITCOIN_LOCKTIME_THRESHOLD);
+  // At and above the threshold → rejected.
+  const at = await call(threshold);
+  expect(at.ok).toBe(false);
+  if (!at.ok) expect(at.reasons).toContain(Pox5ErrorCode.InvalidUnlockHeight);
+  const above = await call(threshold + 1);
+  expect(above.ok).toBe(false);
+  if (!above.ok) expect(above.reasons).toContain(Pox5ErrorCode.InvalidUnlockHeight);
+  // Just below the threshold → this gate does not flag (other gates may still fail).
+  const below = await call(threshold - 1);
+  if (!below.ok) expect(below.reasons).not.toContain(Pox5ErrorCode.InvalidUnlockHeight);
 });
 
 // TODO(coverage): AlreadyStaked needs daemon-staked sbtcDeployer to have an

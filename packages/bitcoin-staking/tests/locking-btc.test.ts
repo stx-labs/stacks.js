@@ -1,6 +1,7 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, hexToBytes } from '@stacks/common';
 import {
+  BITCOIN_LOCKTIME_THRESHOLD,
   C_SCRIPT_NUM_MAX,
   buildLockProof,
   computeBitcoinTxid,
@@ -38,6 +39,16 @@ describe('serializeCScriptNum', () => {
     expect(serializeCScriptNum(C_SCRIPT_NUM_MAX - 1n).length).toBe(5);
     expect(() => serializeCScriptNum(C_SCRIPT_NUM_MAX)).toThrow();
     expect(() => serializeCScriptNum(C_SCRIPT_NUM_MAX + 1n)).toThrow();
+  });
+
+  it('encodes values around BITCOIN_LOCKTIME_THRESHOLD — it is a validation bound, not an encoding one', () => {
+    // The contract's validate-l1-lockup rejects an unlock-burn-height >= 500,000,000,
+    // but that is a range check, not a ScriptNum limit: the pure encoder accepts any
+    // value below the 2^39 encoding cap, on both sides of the locktime threshold.
+    expect(BITCOIN_LOCKTIME_THRESHOLD).toBeLessThan(C_SCRIPT_NUM_MAX);
+    expect(() => serializeCScriptNum(BITCOIN_LOCKTIME_THRESHOLD - 1n)).not.toThrow();
+    expect(() => serializeCScriptNum(BITCOIN_LOCKTIME_THRESHOLD)).not.toThrow();
+    expect(() => serializeCScriptNum(BITCOIN_LOCKTIME_THRESHOLD + 1n)).not.toThrow();
   });
 });
 

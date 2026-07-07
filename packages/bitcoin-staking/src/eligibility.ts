@@ -36,6 +36,7 @@ import {
   fetchVerifySignerKeyGrant,
 } from './fetch';
 import { computeBitcoinTxid, serializeBitcoinTx } from './proof';
+import { BITCOIN_LOCKTIME_THRESHOLD } from './script';
 import { verifySignerGrant } from './signer';
 import type { BondL1LockupOutput, PoxInfo } from './types';
 
@@ -150,10 +151,16 @@ export async function fetchEligibleRegisterForBond(
 
   if (opts.outputs?.length) {
     // `validate-l1-lockup` folds each output through these asserts in order:
-    // unlock-height (u52) -> duplicate outpoint (u46) -> header (u40).
+    // unlock-height (u52) -> duplicate outpoint (u46) -> header (u40). The
+    // unlock-height gate has both a lower bound (the bond's minimum unlock
+    // height) and an upper bound (`BITCOIN_LOCKTIME_THRESHOLD`, 500,000,000).
     if (
-      registrationL1UnlockHeight !== undefined &&
-      opts.outputs.some(o => o.unlockBurnHeight < Number(registrationL1UnlockHeight))
+      opts.outputs.some(
+        o =>
+          (registrationL1UnlockHeight !== undefined &&
+            o.unlockBurnHeight < Number(registrationL1UnlockHeight)) ||
+          o.unlockBurnHeight >= Number(BITCOIN_LOCKTIME_THRESHOLD)
+      )
     ) {
       reasons.push(Pox5ErrorCode.InvalidUnlockHeight);
     }

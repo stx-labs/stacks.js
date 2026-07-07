@@ -313,8 +313,9 @@ export interface BondL1LockupOutput {
    * BTC absolute CLTV height the output's lockup script commits to — the
    * `unlockHeight` passed to {@link buildLockOutputScript}. The contract
    * re-derives the expected P2WSH script from this height and rejects the
-   * output unless it is at or above the bond's minimum unlock height
-   * (`ERR_INVALID_UNLOCK_HEIGHT`).
+   * output unless it is at or above the bond's minimum unlock height and below
+   * 500,000,000 (`ERR_INVALID_UNLOCK_HEIGHT`) — the latter being the point where
+   * Bitcoin would treat a CLTV value as a Unix timestamp instead of a height.
    */
   unlockBurnHeight: number;
 }

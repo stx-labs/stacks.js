@@ -105,6 +105,14 @@ export function pushScriptBytes(bytes: Uint8Array): Uint8Array {
  */
 export const C_SCRIPT_NUM_MAX = 549755813888n; // 2^39
 
+/**
+ * Bitcoin interprets a `CHECKLOCKTIMEVERIFY` value `>= 500,000,000` as a Unix
+ * timestamp rather than a block height (BIP-65). The contract rejects an
+ * `unlock-burn-height` at or above this threshold with `ERR_INVALID_UNLOCK_HEIGHT`
+ * so a lockup can never commit a height Bitcoin would silently reinterpret.
+ */
+export const BITCOIN_LOCKTIME_THRESHOLD = 500000000n; // 500,000,000
+
 export function serializeCScriptNum(n: number | bigint): Uint8Array {
   const big = typeof n === 'bigint' ? n : BigInt(n);
   if (big < 0n) throw new Error('serializeCScriptNum: negative values not supported');
