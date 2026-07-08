@@ -77,6 +77,9 @@ export function signSignerGrant(opts: SignerKeyGrantOptions & { privateKey: Priv
  * Verify a signer-key grant signature locally. Recovers the public key from
  * the RSV signature against the SIP-018 message hash and compares it to the
  * supplied `publicKey`.
+ *
+ * Returns `false` for malformed signatures (e.g. not 65 bytes) — an
+ * unparseable signature is not a valid one.
  */
 export function verifySignerGrant(
   opts: SignerKeyGrantOptions & {
@@ -84,11 +87,15 @@ export function verifySignerGrant(
     signature: string | Uint8Array;
   }
 ): boolean {
-  return verifyMessageSignatureRsv({
-    message: computeSignerGrantHash(opts),
-    publicKey: typeof opts.publicKey === 'string' ? opts.publicKey : bytesToHex(opts.publicKey),
-    signature: typeof opts.signature === 'string' ? opts.signature : bytesToHex(opts.signature),
-  });
+  try {
+    return verifyMessageSignatureRsv({
+      message: computeSignerGrantHash(opts),
+      publicKey: typeof opts.publicKey === 'string' ? opts.publicKey : bytesToHex(opts.publicKey),
+      signature: typeof opts.signature === 'string' ? opts.signature : bytesToHex(opts.signature),
+    });
+  } catch {
+    return false; // malformed signature or public key
+  }
 }
 
 /**

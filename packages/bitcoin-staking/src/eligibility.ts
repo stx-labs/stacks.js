@@ -626,6 +626,10 @@ export async function fetchEligibleUnstake(
  *
  * `poxInfo` is fetched when not provided, so callers that already hold it avoid
  * the extra round-trip.
+ *
+ * @throws during distribution cycle 0 — rewards cannot be calculated before the
+ * first distribution cycle completes (the contract aborts with a runtime
+ * underflow there, so no error code exists to classify).
  */
 export async function fetchEligibleCalculateRewards(
   opts: {
@@ -637,11 +641,15 @@ export async function fetchEligibleCalculateRewards(
   const networkClient = { network: opts.network, client: opts.client };
   const poxInfo = opts.poxInfo ?? (await fetchPoxInfo(networkClient));
 
-  const calcHeight =
-    distributionCycleToBurnHeight({
-      distributionCycle: currentDistributionCycle(poxInfo),
-      poxInfo,
-    }) - 1;
+  const distributionCycle = currentDistributionCycle(poxInfo);
+  if (distributionCycle < 1) {
+    // The contract's calculation height underflows here (runtime abort, no
+    // error code) — there is nothing to calculate before the first cycle ends.
+    throw new Error(
+      'fetchEligibleCalculateRewards: distribution cycle 0 — rewards cannot be calculated before the first distribution cycle completes'
+    );
+  }
+  const calcHeight = distributionCycleToBurnHeight({ distributionCycle, poxInfo }) - 1;
 
   // Active-bond window the contract checks: indices `latest - 5 .. latest`.
   const calcCycle = burnHeightToRewardCycle({ burnHeight: calcHeight, poxInfo });
@@ -809,7 +817,10 @@ export async function fetchEligibleStake(
   if (!signerInfo) reasons.push(Pox5ErrorCode.SignerNotFound);
   else if (!grantActive) reasons.push(Pox5ErrorCode.SignerKeyGrantNotFound);
 
+  // Pre-genesis heights make burnHeightToRewardCycle throw (the contract hits a
+  // runtime underflow before its own u25 assert) — classify instead of crashing.
   if (
+    opts.startBurnHt < poxInfo.firstBurnchainBlockHeight ||
     burnHeightToRewardCycle({ burnHeight: opts.startBurnHt, poxInfo }) !== poxInfo.rewardCycleId
   ) {
     reasons.push(Pox5ErrorCode.InvalidStartBurnHeight);
