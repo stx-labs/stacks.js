@@ -151,8 +151,28 @@ export function setFixtureFile(key?: string): void {
 
 /** Absolute path of the fixtures file for `key` (co-located with `fixtures.json`). */
 export function fixturePath(key?: string): string {
-  const rel = key ? ENV.FIXTURES_JSON.replace(/\.json$/, `-${key}.json`) : ENV.FIXTURES_JSON;
+  const base = fixturesJsonFor();
+  const rel = key ? base.replace(/\.json$/, `-${key}.json`) : base;
   return resolve(process.cwd(), rel);
+}
+
+/**
+ * Fixtures file for the CURRENT test. An explicit `FIXTURES_JSON` env wins;
+ * otherwise privatenet tests always resolve to their own fixtures dir (by jest
+ * test path), so a bare `npx jest tests/privatenet` replays correctly without
+ * the NETWORK=testnet env combo. Everything else keeps the env-based default.
+ */
+function fixturesJsonFor(): string {
+  if (process.env.FIXTURES_JSON) return process.env.FIXTURES_JSON;
+  try {
+    const testPath = expect.getState().testPath ?? '';
+    if (/tests[\/\\]privatenet[\/\\]/.test(testPath)) {
+      return 'tests/privatenet/fixtures/fixtures.json';
+    }
+  } catch {
+    // outside a jest test context — fall through to the env default
+  }
+  return ENV.FIXTURES_JSON;
 }
 
 /**

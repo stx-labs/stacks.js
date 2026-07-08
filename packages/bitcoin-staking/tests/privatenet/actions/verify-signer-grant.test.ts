@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * SIP-018 signer-key-grant verification against the private testnet
  * (api.private-1.hiro.so). 100% READ-ONLY: contract read-only calls + local
@@ -44,7 +43,7 @@ import {
 } from "../../../src/signer";
 import { fetchSignerGrantMessageHash } from "../../../src/fetch";
 import { REGTEST_KEYS, getAccount, SIGNER_MANAGER } from "../../regtest/regtest";
-import { ENV, getNetwork } from "../../helpers/utils";
+import { getNetwork } from "../../helpers/utils";
 import { useFixtures } from "../../helpers/mock";
 
 jest.setTimeout(30 * 60_000);
@@ -54,7 +53,7 @@ const network = getNetwork();
 // The daemon-registered, staked signer-manager (ST3NBRSFK….signer-manager).
 const signerManager = SIGNER_MANAGER;
 // Node's actual chain-id (256 on private-1) — what the contract domain uses.
-const chainId = ENV.NETWORK_ID;
+const chainId = Number(process.env.NETWORK_ID ?? 256); // private-1 chain id (env-independent replay)
 // A fixed auth-id for the valid case.
 const authId = 424242n;
 

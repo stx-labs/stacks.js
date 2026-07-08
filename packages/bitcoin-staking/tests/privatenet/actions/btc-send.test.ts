@@ -27,10 +27,9 @@ import * as btc from "@scure/btc-signer";
 // @ts-ignore — same ESM transform
 import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { bytesToHex, hexToBytes } from "@stacks/common";
-import fetchMock from "jest-fetch-mock";
+import { useFixtures } from "../../helpers/mock";
 
 // This test hits a live network — disable the global jest-fetch-mock.
-fetchMock.disableMocks();
 
 jest.setTimeout(30 * 60_000);
 
@@ -159,6 +158,8 @@ async function broadcast(rawHex: string): Promise<string> {
   }
   throw new Error("broadcast failed on both /tx and /v1/tx");
 }
+
+beforeAll(() => useFixtures("btc-send"));
 
 test("send 0.1 BTC from account5 to account6 on regtest", async () => {
   const { priv, spend } = senderSpend();
