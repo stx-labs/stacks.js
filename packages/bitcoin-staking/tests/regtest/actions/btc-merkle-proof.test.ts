@@ -15,6 +15,12 @@
  * manually (which would fight the env's auto-miner). Live-only (`RECORD=1`):
  * talks straight to bitcoind, not captured in the stacks fixtures.
  */
+// TODO(coverage): no fixture anywhere exercises SEGWIT witness-stripping txid
+// fidelity — every recorded funding tx is legacy-serialized, so
+// `tx.toBytes(true, false)` in src/proof.ts has only ever run as a no-op. Add a
+// case proving a segwit-spending funding tx (fund the wallet with a P2WPKH
+// input): strip the witness, dsha256 the legacy bytes, and assert it equals the
+// node's txid (the contract's merkle leaf preimage).
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, hexToBytes } from '@stacks/common';
 import { computeMerkleBranch } from '../../../src';

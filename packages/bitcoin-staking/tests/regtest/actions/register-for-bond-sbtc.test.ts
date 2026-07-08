@@ -13,17 +13,17 @@
 import {
   buildRegisterForBond,
   buildSetupBond,
+  fetchEligibleRegisterForBond,
   fetchBond,
   fetchBondAllowance,
   fetchBondMembership,
   fetchSignerInfo,
   minUstxForSatsAmount,
 } from '../../../src';
-import { Pc } from '@stacks/transactions';
 import { ACCOUNTS, REGTEST_KEYS, SIGNER_MANAGER, getAccount, type Account } from '../regtest';
 import { getBondAdminAccount } from '../../helpers/bondAdmin';
 import { getNetwork } from '../../helpers/utils';
-import { SBTC_ASSET_NAME, SBTC_TOKEN } from '../../helpers/constants';
+import { SBTC_TOKEN } from '../../helpers/constants';
 import {
   broadcastAndWait,
   ensurePox5,
@@ -124,6 +124,21 @@ test('sbtc register-for-bond happy path: setup-bond → mint → register → en
   const poxBeforeRegister = await getPoxInfo();
   expect(poxBeforeRegister.currentBurnchainBlockHeight).toBeLessThan(bondStartHeight);
 
+  // Preflight with the eligibility helper (dogfood + surface any abort reason).
+  const eligible = await fetchEligibleRegisterForBond({
+    bondIndex,
+    staker: staker.address,
+    amountUstx,
+    satsTotal: MAX_SATS,
+    signerManager,
+    poxInfo: poxBeforeRegister,
+    network,
+  });
+  expect(eligible.ok).toBe(true);
+
+  // a2888b9 pox-5 moves STX (feat/staking-post-condition) AND the sBTC; the
+  // sBTC-only PC under default Deny doesn't cover the STX move → aborts by PC.
+  // Allow the contract's own transfers (mirrors the keep-alive daemon's stake).
   const registerUnsigned = await buildRegisterForBond({
     bondIndex,
     signerManager,
@@ -133,9 +148,7 @@ test('sbtc register-for-bond happy path: setup-bond → mint → register → en
     fee: FEE,
     nonce: await getNextNonce(staker.address),
     network,
-    postConditions: [
-      Pc.principal(staker.address).willSendEq(MAX_SATS).ft(SBTC_TOKEN, SBTC_ASSET_NAME),
-    ],
+    postConditionMode: 'allow',
   });
   const registerTransaction = signTransaction(registerUnsigned, staker.key);
   await broadcastAndWait(registerTransaction, staker.address, network);

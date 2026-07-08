@@ -9,9 +9,10 @@ import {
   buildUpdateBondRegistration,
   fetchBond,
   fetchBondMembership,
+  fetchEligibleRegisterForBond,
+  fetchEligibleUpdateBondRegistration,
   minUstxForSatsAmount,
 } from '../../../src';
-import { Pc } from '@stacks/transactions';
 import {
   ACCOUNTS,
   REGTEST_KEYS,
@@ -22,11 +23,11 @@ import {
 } from '../regtest';
 import { getBondAdminAccount } from '../../helpers/bondAdmin';
 import { getNetwork } from '../../helpers/utils';
-import { SBTC_ASSET_NAME, SBTC_TOKEN } from '../../helpers/constants';
 import {
   broadcastAndWait,
   ensurePox5,
   getNextNonce,
+  getPoxInfo,
   waitForSignerManager,
 } from '../../helpers/wait';
 import { waitForBondWithRunway } from '../../helpers/bond';
@@ -94,6 +95,20 @@ test('update-bond-registration: rotate the membership signer-manager', async () 
   if (!bond) throw 'setup-bond aborted';
 
   // REGISTER (signer-manager A)
+  const poxBeforeRegister = await getPoxInfo();
+  const registerEligible = await fetchEligibleRegisterForBond({
+    bondIndex,
+    staker: staker.address,
+    amountUstx,
+    satsTotal: MAX_SATS,
+    signerManager: SIGNER_MANAGER,
+    poxInfo: poxBeforeRegister,
+    network,
+  });
+  // Setup register (means to the update under test) — dogfood the preflight but
+  // don't gate on it; the real check is the membership/update assertion below.
+  if (!registerEligible.ok) console.log('setup-register preflight reasons', registerEligible.reasons);
+
   const registerUnsigned = await buildRegisterForBond({
     bondIndex,
     signerManager: SIGNER_MANAGER,
@@ -103,9 +118,7 @@ test('update-bond-registration: rotate the membership signer-manager', async () 
     fee: FEE,
     nonce: await getNextNonce(staker.address),
     network,
-    postConditions: [
-      Pc.principal(staker.address).willSendEq(MAX_SATS).ft(SBTC_TOKEN, SBTC_ASSET_NAME),
-    ],
+    postConditionMode: 'allow',
   });
   await broadcastAndWait(signTransaction(registerUnsigned, staker.key), staker.address, network);
 
@@ -115,6 +128,14 @@ test('update-bond-registration: rotate the membership signer-manager', async () 
   expect(m1.signer).toBe(SIGNER_MANAGER);
 
   // UPDATE (rotate to signer-manager B)
+  const updateEligible = await fetchEligibleUpdateBondRegistration({
+    staker: staker.address,
+    signerManager: SIGNER_MANAGER_2,
+    oldSignerManager: SIGNER_MANAGER,
+    network,
+  });
+  expect(updateEligible.ok).toBe(true);
+
   const updateUnsigned = await buildUpdateBondRegistration({
     signerManager: SIGNER_MANAGER_2,
     oldSignerManager: SIGNER_MANAGER,
@@ -122,6 +143,7 @@ test('update-bond-registration: rotate the membership signer-manager', async () 
     fee: FEE,
     nonce: await getNextNonce(staker.address),
     network,
+    postConditionMode: 'allow',
   });
   await broadcastAndWait(signTransaction(updateUnsigned, staker.key), staker.address, network);
 

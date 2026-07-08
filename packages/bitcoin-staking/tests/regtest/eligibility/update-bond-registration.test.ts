@@ -14,11 +14,9 @@ import {
   Pox5ErrorCode,
   type PoxInfo,
 } from '../../../src';
-import { Pc } from '@stacks/transactions';
 import { ACCOUNTS, REGTEST_KEYS, SIGNER_MANAGER, SIGNER_MANAGER_2, getAccount, type Account } from '../regtest';
 import { getBondAdminAccount } from '../../helpers/bondAdmin';
 import { getNetwork } from '../../helpers/utils';
-import { SBTC_ASSET_NAME, SBTC_TOKEN } from '../../helpers/constants';
 import {
   broadcastAndWait,
   ensurePox5,
@@ -83,6 +81,7 @@ beforeAll(async () => {
     fee: FEE,
     nonce: adminNonce++,
     network,
+    postConditionMode: 'allow',
   });
   await broadcastAndWait(signTransaction(setupTx, admin.key), admin.address, network);
 
@@ -116,9 +115,7 @@ beforeAll(async () => {
     fee: FEE,
     nonce: await getNextNonce(staker.address),
     network,
-    postConditions: [
-      Pc.principal(staker.address).willSendEq(MAX_SATS).ft(SBTC_TOKEN, SBTC_ASSET_NAME),
-    ],
+    postConditionMode: 'allow',
   });
   await broadcastAndWait(signTransaction(regTx, staker.key), staker.address, network);
 

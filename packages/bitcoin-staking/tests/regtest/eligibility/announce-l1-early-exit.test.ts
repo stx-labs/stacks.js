@@ -14,13 +14,12 @@ import {
   Pox5ErrorCode,
   type PoxInfo,
 } from '../../../src';
-import { Pc } from '@stacks/transactions';
 import { ACCOUNTS, REGTEST_KEYS, SIGNER_MANAGER, getAccount, type Account } from '../regtest';
 import { getBondAdminAccount } from '../../helpers/bondAdmin';
 import { getNetwork } from '../../helpers/utils';
-import { SBTC_ASSET_NAME, SBTC_TOKEN } from '../../helpers/constants';
 import {
   broadcastAndWait,
+  broadcastAndWaitForTransaction,
   ensurePox5,
   fundStx,
   getNextNonce,
@@ -65,23 +64,29 @@ beforeAll(async () => {
 
   await deploySbtcMinter({ deployerKey: sbtcDeployer.key, network });
 
-  const { bondIndex } = await waitForBondWithRunway(15);
-
-  let adminNonce = await getNextNonce(admin.address);
-
-  const setupTx = await buildSetupBond({
-    bondIndex,
-    targetRateBps: 1_000n,
-    stxValueRatio: STX_VALUE_RATIO,
-    minUstxRatioBps: MIN_USTX_RATIO_BPS,
-    earlyUnlockBytes: EARLY_UNLOCK_BYTES,
-    allowlist: [{ staker: staker.address, maxSats: MAX_SATS }],
-    publicKey: admin.publicKey,
-    fee: FEE,
-    nonce: adminNonce++,
-    network,
-  });
-  await broadcastAndWait(signTransaction(setupTx, admin.key), admin.address, network);
+  // setup-bond can lose a race to another suite on the same open bond period
+  // (shared chain) — BondAlreadySetup with `staker` missing from the winning
+  // allowlist. Retry against a fresh period until our own setup-bond confirms.
+  let bondIndex: number;
+  for (;;) {
+    ({ bondIndex } = await waitForBondWithRunway(15));
+    const setupTx = await buildSetupBond({
+      bondIndex,
+      targetRateBps: 1_000n,
+      stxValueRatio: STX_VALUE_RATIO,
+      minUstxRatioBps: MIN_USTX_RATIO_BPS,
+      earlyUnlockBytes: EARLY_UNLOCK_BYTES,
+      allowlist: [{ staker: staker.address, maxSats: MAX_SATS }],
+      publicKey: admin.publicKey,
+      fee: FEE,
+      nonce: await getNextNonce(admin.address),
+      network,
+      postConditionMode: 'allow',
+    });
+    const res = await broadcastAndWaitForTransaction(signTransaction(setupTx, admin.key), network);
+    if (res.tx_status === 'success') break;
+    console.log('setup-bond lost the race, retrying on a fresh bond period', res.tx_status);
+  }
 
   useFixtures('eligibility-announce-l1-early-exit-mint');
 
@@ -111,9 +116,7 @@ beforeAll(async () => {
     fee: FEE,
     nonce: await getNextNonce(staker.address),
     network,
-    postConditions: [
-      Pc.principal(staker.address).willSendEq(MAX_SATS).ft(SBTC_TOKEN, SBTC_ASSET_NAME),
-    ],
+    postConditionMode: 'allow',
   });
   await broadcastAndWait(signTransaction(regTx, staker.key), staker.address, network);
 

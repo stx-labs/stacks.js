@@ -4,6 +4,7 @@
  */
 import {
   BITCOIN_LOCKTIME_THRESHOLD,
+  buildSetupBond,
   fetchEligibleRegisterForBond,
   Pox5ErrorCode,
   type PoxInfo,
@@ -11,24 +12,69 @@ import {
 import { ACCOUNTS, REGTEST_KEYS, SIGNER_MANAGER, getAccount } from '../regtest';
 import { getNetwork } from '../../helpers/utils';
 import { useFixtures } from '../../helpers/mock';
-import { ensurePox5, getPoxInfo, waitForSignerManager } from '../../helpers/wait';
-import { pickBondIndex } from '../../helpers/bond';
+import {
+  broadcastAndWait,
+  ensurePox5,
+  getNextNonce,
+  getPoxInfo,
+  waitForRewardPhase,
+  waitForSignerManager,
+} from '../../helpers/wait';
+import { waitForBondWithRunway } from '../../helpers/bond';
+import { getBondAdminAccount } from '../../helpers/bondAdmin';
+import { signTransaction } from '../../helpers/sign';
 
 
 jest.setTimeout(5 * 60_000);
 
 const network = getNetwork();
-// daemon-staked, allowlisted in every live bond; use for AlreadyStaked
+// daemon-staked; allowlisted explicitly below (below the chain ages past
+// whatever bond periods the env originally allowlisted it for) — use for
+// TooMuchSats (where AlreadyStaked co-occurring is fine, `.toContain` only).
 const staker = ACCOUNTS.sbtcDeployer.address;
 // clean account — never staked, never in any allowlist
 const clean = getAccount(REGTEST_KEYS.account4).address;
+// allowlisted-but-never-staked account, dedicated to InsufficientStx: `staker`
+// (daemon-staked) always trips AlreadyStaked, which co-occurs with (and can
+// crowd out) the STX-balance gate under test.
+const insufficientStxStaker = getAccount(REGTEST_KEYS.account19).address;
 // non-existent signer-manager contract
 const unknownSigner = `${clean}.signer-manager`;
+
+// bondIndex freshly set up here (idempotent) with the stakers above
+// allowlisted, so these checks don't depend on the env's original (long since
+// aged-out) allowlisting for whichever bond period happens to be open when
+// this suite runs. Picked with generous runway so it's still un-started by
+// the time the later tests in this file run.
+let openBondIndex: number;
 
 beforeAll(async () => {
   useFixtures('eligibility-register-for-bond');
   await ensurePox5();
   await waitForSignerManager(SIGNER_MANAGER);
+  const admin = await getBondAdminAccount();
+  const { bondIndex } = await waitForBondWithRunway(35);
+  openBondIndex = bondIndex;
+  const setupUnsigned = await buildSetupBond({
+    bondIndex: openBondIndex,
+    targetRateBps: 1_000n,
+    stxValueRatio: 1_000n,
+    minUstxRatioBps: 500n,
+    earlyUnlockBytes: '00'.repeat(683),
+    allowlist: [
+      { staker, maxSats: 999_999_999n },
+      { staker: insufficientStxStaker, maxSats: 999_999_999n },
+    ],
+    publicKey: admin.publicKey,
+    fee: 10_000n,
+    nonce: await getNextNonce(admin.address),
+    network,
+  });
+  // Idempotent: if this bond period is already set up (shared chain), this
+  // aborts BondAlreadySetup and the stakers' allowlist state is whatever it
+  // was — acceptable, since the tests below assert via `.toContain`, not
+  // equality.
+  await broadcastAndWait(signTransaction(setupUnsigned, admin.key), admin.address, network);
 }, 5 * 60_000);
 
 test('BondNotFound — bondIndex 200 has no setup bond', async () => {
@@ -47,8 +93,9 @@ test('BondNotFound — bondIndex 200 has no setup bond', async () => {
 });
 
 test('NotAllowlisted — clean account has no allowance on any bond', async () => {
+  await waitForRewardPhase(await getPoxInfo()); // avoid a StakeInPreparePhase race
   const pox = await getPoxInfo();
-  const { bondIndex } = pickBondIndex(pox);
+  const bondIndex = openBondIndex;
   const r = await fetchEligibleRegisterForBond({
     bondIndex,
     staker: clean,
@@ -64,7 +111,7 @@ test('NotAllowlisted — clean account has no allowance on any bond', async () =
 
 test('StakeInPreparePhase — poxInfo override puts burnHeight in prepare window', async () => {
   const pox = await getPoxInfo();
-  const { bondIndex } = pickBondIndex(pox);
+  const bondIndex = openBondIndex;
   // Craft a burnHeight that falls in the prepare phase
   const cycleEnd =
     (pox.rewardCycleId + 1) * pox.rewardCycleLength + pox.firstBurnchainBlockHeight;
@@ -85,7 +132,7 @@ test('StakeInPreparePhase — poxInfo override puts burnHeight in prepare window
 
 test('BondAlreadyStarted — poxInfo override pushes burnHeight past bond start', async () => {
   const pox = await getPoxInfo();
-  const { bondIndex } = pickBondIndex(pox);
+  const bondIndex = openBondIndex;
   // Place currentBurnchainBlockHeight well after the bond period start
   const farFuture: PoxInfo = {
     ...pox,
@@ -106,7 +153,7 @@ test('BondAlreadyStarted — poxInfo override pushes burnHeight past bond start'
 
 test('SignerNotFound — unknown signer-manager contract', async () => {
   const pox = await getPoxInfo();
-  const { bondIndex } = pickBondIndex(pox);
+  const bondIndex = openBondIndex;
   const r = await fetchEligibleRegisterForBond({
     bondIndex,
     staker,
@@ -121,11 +168,12 @@ test('SignerNotFound — unknown signer-manager contract', async () => {
 });
 
 test('InsufficientStx — amountUstx vastly exceeds any real balance', async () => {
+  await waitForRewardPhase(await getPoxInfo()); // avoid a StakeInPreparePhase race
   const pox = await getPoxInfo();
-  const { bondIndex } = pickBondIndex(pox);
+  const bondIndex = openBondIndex;
   const r = await fetchEligibleRegisterForBond({
     bondIndex,
-    staker,
+    staker: insufficientStxStaker,
     amountUstx: 10_000_000_000_000_000n,
     satsTotal: 1n,
     signerManager: SIGNER_MANAGER,
@@ -138,7 +186,7 @@ test('InsufficientStx — amountUstx vastly exceeds any real balance', async () 
 
 test('TooMuchSats — satsTotal exceeds the per-staker allowance', async () => {
   const pox = await getPoxInfo();
-  const { bondIndex } = pickBondIndex(pox);
+  const bondIndex = openBondIndex;
   // staker is allowlisted, fetch their allowance and exceed it
   const r = await fetchEligibleRegisterForBond({
     bondIndex,
@@ -155,7 +203,7 @@ test('TooMuchSats — satsTotal exceeds the per-staker allowance', async () => {
 
 test('DuplicateLockupOutpoint — same tx+outputIndex appears twice in outputs', async () => {
   const pox = await getPoxInfo();
-  const { bondIndex } = pickBondIndex(pox);
+  const bondIndex = openBondIndex;
   // Build a minimal tx bytes that serializeBitcoinTx / computeBitcoinTxid can parse.
   // A bare 4-byte version + varint(0 inputs) + varint(0 outputs) + 4-byte locktime = 10 bytes.
   // The txid is deterministic from these bytes; two outputs with identical tx and outputIndex
@@ -193,7 +241,7 @@ test('DuplicateLockupOutpoint — same tx+outputIndex appears twice in outputs',
 
 test('InvalidBtcHeader — zeroed 80-byte header fails verify-block-header', async () => {
   const pox = await getPoxInfo();
-  const { bondIndex } = pickBondIndex(pox);
+  const bondIndex = openBondIndex;
   const minimalTx = new Uint8Array([
     0x01, 0x00, 0x00, 0x00,
     0x00,
@@ -227,7 +275,7 @@ test('InvalidBtcHeader — zeroed 80-byte header fails verify-block-header', asy
 
 test('InvalidUnlockHeight — unlock-burn-height at/above BITCOIN_LOCKTIME_THRESHOLD is rejected but just below is not', async () => {
   const pox = await getPoxInfo();
-  const { bondIndex } = pickBondIndex(pox);
+  const bondIndex = openBondIndex;
   const minimalTx = new Uint8Array([
     0x01, 0x00, 0x00, 0x00,
     0x00,

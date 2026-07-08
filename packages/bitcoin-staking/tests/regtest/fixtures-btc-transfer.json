@@ -1,9 +1,18 @@
 {
-  "localhost:18443/wallet/main#getnewaddress:[\"e2e-recipient\"]": "{\"result\":\"n3zYA9yXm5aGSmP8U9f4QfzoRUChBTP89V\",\"error\":null,\"id\":\"e2e\"}\n",
+  "localhost:18443/wallet/main#getnewaddress:[\"e2e-recipient\"]": "{\"result\":\"mqgYCjbPyuuDWUD8EkePtjLsYxUiufCB3g\",\"error\":null,\"id\":\"e2e\"}\n",
+  "localhost:18443/wallet/main#getreceivedbyaddress:[\"mmJECVyVUUuC8aESCfa1LhxgjaVtCpzgTd\",0]": "{\"result\":0.00000000,\"error\":null,\"id\":\"e2e\"}\n",
+  "localhost:18443/wallet/main#getreceivedbyaddress:[\"mmJECVyVUUuC8aESCfa1LhxgjaVtCpzgTd\",1]": "{\"result\":0.50000000,\"error\":null,\"id\":\"e2e\"}\n",
+  "localhost:18443/wallet/main#getreceivedbyaddress:[\"mqgYCjbPyuuDWUD8EkePtjLsYxUiufCB3g\",0]": "{\"result\":0.00000000,\"error\":null,\"id\":\"e2e\"}\n",
+  "localhost:18443/wallet/main#getreceivedbyaddress:[\"mqgYCjbPyuuDWUD8EkePtjLsYxUiufCB3g\",1]": "{\"result\":0.50000000,\"error\":null,\"id\":\"e2e\"}\n",
   "localhost:18443/wallet/main#getreceivedbyaddress:[\"mx2CGj5TsSVoZ8kqpoRqjepFjr15VURjT7\",0]": "{\"result\":0.00000000,\"error\":null,\"id\":\"e2e\"}\n",
   "localhost:18443/wallet/main#getreceivedbyaddress:[\"mx2CGj5TsSVoZ8kqpoRqjepFjr15VURjT7\",1]": "{\"result\":0.50000000,\"error\":null,\"id\":\"e2e\"}\n",
+  "localhost:18443/wallet/main#getreceivedbyaddress:[\"mxoM7juXNHNhhfofjXY7h2XCjnFaWEe5Wq\",0]": "{\"result\":0.00000000,\"error\":null,\"id\":\"e2e\"}\n",
+  "localhost:18443/wallet/main#getreceivedbyaddress:[\"mxoM7juXNHNhhfofjXY7h2XCjnFaWEe5Wq\",1]": "{\"result\":0.50000000,\"error\":null,\"id\":\"e2e\"}\n",
   "localhost:18443/wallet/main#getreceivedbyaddress:[\"n3zYA9yXm5aGSmP8U9f4QfzoRUChBTP89V\",0]": "{\"result\":0.00000000,\"error\":null,\"id\":\"e2e\"}\n",
   "localhost:18443/wallet/main#getreceivedbyaddress:[\"n3zYA9yXm5aGSmP8U9f4QfzoRUChBTP89V\",1]": "{\"result\":0.50000000,\"error\":null,\"id\":\"e2e\"}\n",
+  "localhost:18443/wallet/main#sendtoaddress:[\"mmJECVyVUUuC8aESCfa1LhxgjaVtCpzgTd\",0.5]": "{\"result\":\"aa385e190f69d3b8ab9b99cd7285fa1a5d183826fbc0b8b9a46c0feb6b2d5c34\",\"error\":null,\"id\":\"e2e\"}\n",
+  "localhost:18443/wallet/main#sendtoaddress:[\"mqgYCjbPyuuDWUD8EkePtjLsYxUiufCB3g\",0.5]": "{\"result\":\"1de04ad19a55367cbe43c0886d595da5d33e03527cfbb3abed4bf9aa26cb5288\",\"error\":null,\"id\":\"e2e\"}\n",
   "localhost:18443/wallet/main#sendtoaddress:[\"mx2CGj5TsSVoZ8kqpoRqjepFjr15VURjT7\",0.5]": "{\"result\":\"caf0ade8ef5beb45eaf8730c7e597ca7f66037fdf617b9987fa4b34f3f0419e4\",\"error\":null,\"id\":\"e2e\"}\n",
+  "localhost:18443/wallet/main#sendtoaddress:[\"mxoM7juXNHNhhfofjXY7h2XCjnFaWEe5Wq\",0.5]": "{\"result\":\"f3a66418ec937ade676b72dd8f73a8f566e8842011d3b00b1025bf345de99142\",\"error\":null,\"id\":\"e2e\"}\n",
   "localhost:18443/wallet/main#sendtoaddress:[\"n3zYA9yXm5aGSmP8U9f4QfzoRUChBTP89V\",0.5]": "{\"result\":\"9f8e9921f8e98123f64193fd13cfa0d981af38728d07236f29978dff4ec6fc9c\",\"error\":null,\"id\":\"e2e\"}\n"
 }

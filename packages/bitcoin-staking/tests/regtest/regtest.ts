@@ -65,6 +65,42 @@ export const REGTEST_KEYS = {
   // ST2YNPZ6W5… — NOT prefunded; eligibility suite dedicated sBTC staker (unstake-sbtc).
   account16:
     "6650f142402e683dc241334261e3c9d4effe19e069a72762d0913c0f4a5df09d01",
+  // NOT prefunded; register-for-bond-combined userA (L1). Replaces account9,
+  // which registers for a bond permanently (no unstake in that suite) — reused
+  // across manual re-record runs it would carry stale membership forever.
+  account17:
+    "0656df4ed5188f74bed95707224627bf4e5ca9abc5e52ad2a502bf1ae6df4d3301",
+  // NOT prefunded; register-for-bond-combined userB (sBTC). See account17.
+  account18:
+    "7182336a7d8381d4dae21fd20687fd441495aec24db7ebc4cf1121fd512aaa0c01",
+  // NOT prefunded, never staked; eligibility suite dedicated InsufficientStx
+  // staker (register-for-bond) — needs an allowlisted-but-never-staked account
+  // so the AlreadyStaked gate (daemon-staked accounts trip it) doesn't mask
+  // the STX-balance gate under test.
+  account19:
+    "c6d65cbef7fd0c0d8080051ea538a246b00a387ced75b0e2d61cf8a2ca93b9b401",
+  // NOT prefunded; funded in-test. adversarial suite staker (allowlisted leg).
+  // register-for-bond leaves a permanent membership, so — like account16/17 —
+  // this must be a never-registered account; a manual re-record needs a fresh
+  // key here (the prior one carries stale membership forever on a shared chain).
+  account20:
+    "70dca524e1d6d8b5648a01bf82dcda59947a96c366b80903797e970161e4084a01",
+  // NOT prefunded; funded + sBTC-minted in-test. e2e/bond-lifecycle staker.
+  // That suite registers (sBTC) and never unstakes, leaving a permanent
+  // membership — like account17/20, a manual re-record needs a fresh key here
+  // (the prior one carries stale membership forever on a shared chain).
+  account21:
+    "73f19e2cff27c71ad7396f5537a482073c69037bd051c869d9b0b3eff286d46601",
+  // NOT prefunded; funded + sBTC-minted in-test. e2e/bond-lifecycle staker.
+  // Fresh replacement for account21 (which now carries a permanent bond-54
+  // membership) — see the account21 note: each manual re-record needs a new key.
+  account22:
+    "2711fea13cd1bfe9b8fcea886bf9b30d1fa08f10364a2433ab2ff1c3df25e43501",
+  // NOT prefunded; funded + sBTC-minted in-test. e2e/bond-lifecycle staker.
+  // Fresh replacement (account22 now carries a permanent bond-58 membership) —
+  // each manual re-record of this suite needs a new never-registered key.
+  account23:
+    "5104d3de16690e4c3e69fe94f80b00c87ba092260fea0f5b7ed76fb73799d36001",
 } as const;
 
 /** The 3 keys the regtest staking daemons drive (also our bond roles). */

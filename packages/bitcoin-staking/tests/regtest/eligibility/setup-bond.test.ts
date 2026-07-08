@@ -2,22 +2,49 @@
  * Eligibility preflight coverage for `setup-bond`.
  * Gates: caller=admin, timing window, bond unused, no duplicate stakers.
  */
-import { fetchEligibleSetupBond, Pox5ErrorCode, type PoxInfo } from '../../../src';
+import { buildSetupBond, fetchEligibleSetupBond, Pox5ErrorCode, type PoxInfo } from '../../../src';
 import { REGTEST_KEYS, getAccount } from '../regtest';
 import { getNetwork } from '../../helpers/utils';
 import { useFixtures } from '../../helpers/mock';
-import { ensurePox5, getPoxInfo } from '../../helpers/wait';
+import { broadcastAndWait, ensurePox5, getNextNonce, getPoxInfo } from '../../helpers/wait';
 import { pickBondIndex } from '../../helpers/bond';
-import { BOND_ADMIN_ADDRESS } from '../../helpers/bondAdmin';
+import { BOND_ADMIN_ADDRESS, getBondAdminAccount } from '../../helpers/bondAdmin';
+import { signTransaction } from '../../helpers/sign';
 jest.setTimeout(5 * 60_000);
 
 const network = getNetwork();
 const clean = getAccount(REGTEST_KEYS.account4);
 const staker1 = clean.address;
 
+// bondIndex 0 (the "always set up" first bond period) ages out of its own
+// setup-bond window as the chain runs — past that window the preflight
+// legitimately reports CannotSetupBondTooLate instead of/before
+// BondAlreadySetup. Use the CURRENTLY open bond period instead, and make sure
+// it's actually set up (idempotent: it may already be, from a contended
+// shared chain) so "already setup" is exercised within its valid window.
+let alreadySetupBondIndex: number;
+
 beforeAll(async () => {
   useFixtures('eligibility-setup-bond');
   await ensurePox5();
+  const admin = await getBondAdminAccount();
+  const pox = await getPoxInfo();
+  alreadySetupBondIndex = pickBondIndex(pox).bondIndex;
+  const setupUnsigned = await buildSetupBond({
+    bondIndex: alreadySetupBondIndex,
+    targetRateBps: 1_000n,
+    stxValueRatio: 1_000n,
+    minUstxRatioBps: 500n,
+    earlyUnlockBytes: '00'.repeat(683),
+    allowlist: [{ staker: staker1, maxSats: 1000 }],
+    publicKey: admin.publicKey,
+    fee: 10_000n,
+    nonce: await getNextNonce(admin.address),
+    network,
+  });
+  // Idempotent: if another suite already set this bond up, this aborts
+  // BondAlreadySetup, which is exactly the state we want for the test below.
+  await broadcastAndWait(signTransaction(setupUnsigned, admin.key), admin.address, network);
 }, 5 * 60_000);
 
 test('Unauthorized — non-admin caller', async () => {
@@ -36,9 +63,8 @@ test('Unauthorized — non-admin caller', async () => {
 
 test('BondAlreadySetup — bondIndex that already has a bond', async () => {
   const pox = await getPoxInfo();
-  // bondIndex 0 is always set up in the regtest env (first bond period)
   const r = await fetchEligibleSetupBond({
-    bondIndex: 0,
+    bondIndex: alreadySetupBondIndex,
     allowlist: [{ staker: staker1, maxSats: 1000 }],
     caller: BOND_ADMIN_ADDRESS,
     poxInfo: pox,

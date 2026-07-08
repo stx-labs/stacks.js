@@ -21,6 +21,7 @@ import {
   computeBondUnlockHeight,
   fetchBond,
   fetchBondMembership,
+  fetchEligibleRegisterForBond,
   fetchSignerInfo,
   minUstxForSatsAmount,
 } from '../../../src';
@@ -31,6 +32,7 @@ import {
   broadcastAndWait,
   ensurePox5,
   getNextNonce,
+  getPoxInfo,
   waitForBurnBlockHeight,
   waitForFulfilled,
   waitForSignerManager,
@@ -133,7 +135,25 @@ test('l1 register-for-bond happy path: setup-bond → fund BTC → prove → reg
     stxValueRatio: STX_VALUE_RATIO,
     minUstxRatioBps: MIN_USTX_RATIO_BPS,
   });
-  // No post-condition: L1 locks STX (a pox lock, not a token transfer).
+  // Preflight the non-SPV gates (dogfood the helper). Omit `outputs`: the helper
+  // only partially verifies the SPV proof read-only (header/dup only, per its
+  // docstring), so passing them can false-negative — the real proof is proven by
+  // the broadcast + membership assertion below.
+  const poxBeforeRegister = await getPoxInfo();
+  const eligible = await fetchEligibleRegisterForBond({
+    bondIndex,
+    staker: staker.address,
+    amountUstx,
+    satsTotal: MAX_SATS,
+    signerManager,
+    poxInfo: poxBeforeRegister,
+    network,
+  });
+  if (!eligible.ok) console.log('register preflight reasons', eligible.reasons);
+  expect(eligible.ok).toBe(true);
+
+  // a2888b9 pox-5 moves STX during register-for-bond (feat/staking-post-condition),
+  // even for L1 locks (a signer-manager reward-share bookkeeping transfer).
   const registerUnsigned = await buildRegisterForBond({
     bondIndex,
     signerManager,
@@ -143,6 +163,7 @@ test('l1 register-for-bond happy path: setup-bond → fund BTC → prove → reg
     fee: FEE,
     nonce: await getNextNonce(staker.address),
     network,
+    postConditionMode: 'allow',
   });
   const registerTransaction = signTransaction(registerUnsigned, staker.key);
   await broadcastAndWait(registerTransaction, staker.address, network);

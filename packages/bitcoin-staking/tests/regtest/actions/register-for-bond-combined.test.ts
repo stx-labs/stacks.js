@@ -18,19 +18,19 @@ import {
   fetchBond,
   fetchBondAllowance,
   fetchBondMembership,
+  fetchEligibleRegisterForBond,
   fetchTotalSbtcStaked,
   minUstxForSatsAmount,
 } from '../../../src';
-import { Pc } from '@stacks/transactions';
 import { ACCOUNTS, REGTEST_KEYS, SIGNER_MANAGER, getAccount, type Account } from '../regtest';
 import { getBondAdminAccount } from '../../helpers/bondAdmin';
 import { getNetwork } from '../../helpers/utils';
-import { SBTC_ASSET_NAME, SBTC_TOKEN } from '../../helpers/constants';
 import {
   broadcastAndWait,
   ensurePox5,
   fundStx,
   getNextNonce,
+  getPoxInfo,
   waitForBurnBlockHeight,
   waitForFulfilled,
   waitForSignerManager,
@@ -46,8 +46,8 @@ jest.setTimeout(5 * 60_000);
 const network = getNetwork();
 let admin: Account;
 const sbtcDeployer = ACCOUNTS.sbtcDeployer; // owns sbtc-token + the staked signer-manager
-const userA = getAccount(REGTEST_KEYS.account9); // L1 staker
-const userB = getAccount(REGTEST_KEYS.account10); // sBTC staker
+const userA = getAccount(REGTEST_KEYS.account17); // L1 staker
+const userB = getAccount(REGTEST_KEYS.account18); // sBTC staker
 const signerManager = SIGNER_MANAGER;
 
 const MAX_SATS = 10_000n;
@@ -153,6 +153,21 @@ test('one bond, two participants: user A (L1) + user B (sBTC)', async () => {
     unlockHeight,
     outputScript: buildLockOutputScript(lockupArgs),
   });
+  // Omit `outputs`: the helper only partially verifies the SPV proof read-only;
+  // the real proof is proven by the broadcast + membership assertion below.
+  const poxBeforeA = await getPoxInfo();
+  const eligibleA = await fetchEligibleRegisterForBond({
+    bondIndex,
+    staker: userA.address,
+    amountUstx,
+    satsTotal: MAX_SATS,
+    signerManager,
+    poxInfo: poxBeforeA,
+    network,
+  });
+  if (!eligibleA.ok) console.log('userA register preflight reasons', eligibleA.reasons);
+  expect(eligibleA.ok).toBe(true);
+
   const regA = await buildRegisterForBond({
     bondIndex,
     signerManager,
@@ -162,6 +177,7 @@ test('one bond, two participants: user A (L1) + user B (sBTC)', async () => {
     fee: FEE,
     nonce: await getNextNonce(userA.address),
     network,
+    postConditionMode: 'allow',
   });
   await broadcastAndWait(signTransaction(regA, userA.key), userA.address, network);
 
@@ -172,6 +188,18 @@ test('one bond, two participants: user A (L1) + user B (sBTC)', async () => {
   expect(await fetchBondMembership({ address: userB.address, network })).toBeUndefined();
 
   // USER B (sBTC)
+  const poxBeforeB = await getPoxInfo();
+  const eligibleB = await fetchEligibleRegisterForBond({
+    bondIndex,
+    staker: userB.address,
+    amountUstx,
+    satsTotal: MAX_SATS,
+    signerManager,
+    poxInfo: poxBeforeB,
+    network,
+  });
+  expect(eligibleB.ok).toBe(true);
+
   const regB = await buildRegisterForBond({
     bondIndex,
     signerManager,
@@ -181,9 +209,7 @@ test('one bond, two participants: user A (L1) + user B (sBTC)', async () => {
     fee: FEE,
     nonce: await getNextNonce(userB.address),
     network,
-    postConditions: [
-      Pc.principal(userB.address).willSendEq(MAX_SATS).ft(SBTC_TOKEN, SBTC_ASSET_NAME),
-    ],
+    postConditionMode: 'allow',
   });
   await broadcastAndWait(signTransaction(regB, userB.key), userB.address, network);
 

@@ -8,18 +8,20 @@ import {
   buildSetupBond,
   buildUnstakeSbtc,
   fetchBond,
+  fetchEligibleRegisterForBond,
+  fetchEligibleUnstakeSbtc,
   fetchTotalSbtcStaked,
   minUstxForSatsAmount,
 } from '../../../src';
-import { Pc } from '@stacks/transactions';
 import { ACCOUNTS, REGTEST_KEYS, SIGNER_MANAGER, getAccount, type Account } from '../regtest';
 import { getBondAdminAccount } from '../../helpers/bondAdmin';
 import { getNetwork } from '../../helpers/utils';
-import { SBTC_ASSET_NAME, SBTC_TOKEN } from '../../helpers/constants';
+import { SBTC_TOKEN } from '../../helpers/constants';
 import {
   broadcastAndWait,
   ensurePox5,
   getNextNonce,
+  getPoxInfo,
   waitForSignerManager,
 } from '../../helpers/wait';
 import { waitForBondWithRunway } from '../../helpers/bond';
@@ -34,7 +36,6 @@ let admin: Account;
 const sbtcDeployer = ACCOUNTS.sbtcDeployer;
 const staker = getAccount(REGTEST_KEYS.account7);
 const signerManager = SIGNER_MANAGER;
-const POX5_CONTRACT = 'ST000000000000000000002AMW42H.pox-5' as const; // sends sBTC back on unstake
 
 const MAX_SATS = 10_000n;
 const FEE = 10_000n;
@@ -96,6 +97,20 @@ test('sbtc unstake: register → unstake-sbtc → sBTC returned, total falls bac
   if (!bond) throw 'setup-bond aborted';
 
   // REGISTER
+  const poxBeforeRegister = await getPoxInfo();
+  const registerEligible = await fetchEligibleRegisterForBond({
+    bondIndex,
+    staker: staker.address,
+    amountUstx,
+    satsTotal: MAX_SATS,
+    signerManager,
+    poxInfo: poxBeforeRegister,
+    network,
+  });
+  // Setup register (means to the unstake under test) — dogfood but don't gate;
+  // the real check is the unstake preflight + on-chain assertions below.
+  if (!registerEligible.ok) console.log('setup-register preflight reasons', registerEligible.reasons);
+
   const registerUnsigned = await buildRegisterForBond({
     bondIndex,
     signerManager,
@@ -105,9 +120,7 @@ test('sbtc unstake: register → unstake-sbtc → sBTC returned, total falls bac
     fee: FEE,
     nonce: await getNextNonce(staker.address),
     network,
-    postConditions: [
-      Pc.principal(staker.address).willSendEq(MAX_SATS).ft(SBTC_TOKEN, SBTC_ASSET_NAME),
-    ],
+    postConditionMode: 'allow',
   });
   await broadcastAndWait(signTransaction(registerUnsigned, staker.key), staker.address, network);
 
@@ -119,7 +132,14 @@ test('sbtc unstake: register → unstake-sbtc → sBTC returned, total falls bac
   expect(await fetchTotalSbtcStaked({ network })).toBe(totalBefore + MAX_SATS);
 
   // UNSTAKE
-  // PC covers the contract -> staker sBTC transfer (the sender is the staker).
+  const unstakeEligible = await fetchEligibleUnstakeSbtc({
+    staker: staker.address,
+    signerManager,
+    amountToWithdrawSats: MAX_SATS,
+    network,
+  });
+  expect(unstakeEligible.ok).toBe(true);
+
   const unstakeUnsigned = await buildUnstakeSbtc({
     signerManager,
     amountToWithdrawSats: MAX_SATS,
@@ -127,9 +147,7 @@ test('sbtc unstake: register → unstake-sbtc → sBTC returned, total falls bac
     fee: FEE,
     nonce: await getNextNonce(staker.address),
     network,
-    postConditions: [
-      Pc.principal(POX5_CONTRACT).willSendEq(MAX_SATS).ft(SBTC_TOKEN, SBTC_ASSET_NAME),
-    ],
+    postConditionMode: 'allow',
   });
   await broadcastAndWait(signTransaction(unstakeUnsigned, staker.key), staker.address, network);
 

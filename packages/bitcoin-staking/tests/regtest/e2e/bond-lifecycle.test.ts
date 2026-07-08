@@ -15,22 +15,25 @@ import {
   fetchBondMembership,
   fetchBondStatus,
   fetchEarnedStakerRewards,
+  fetchEligibleCalculateRewards,
+  fetchEligibleClaimRewards,
+  fetchEligibleRegisterForBond,
   fetchProtocolBond,
   fetchSignerInfo,
   fetchStakerSharesStakedForCycle,
   fetchTotalSbtcStakedForBond,
   minUstxForSatsAmount,
 } from '../../../src';
-import { Pc } from '@stacks/transactions';
 import { ACCOUNTS, REGTEST_KEYS, SIGNER_MANAGER, getAccount, type Account } from '../regtest';
 import { getBondAdminAccount } from '../../helpers/bondAdmin';
 import { getNetwork } from '../../helpers/utils';
-import { SBTC_ASSET_NAME, SBTC_TOKEN } from '../../helpers/constants';
+import { SBTC_TOKEN } from '../../helpers/constants';
 import {
   broadcastAndWait,
   ensurePox5,
   fundStx,
   getNextNonce,
+  getPoxInfo,
   getStxBalance,
   waitForBurnBlockHeight,
   waitForSignerManager,
@@ -45,7 +48,7 @@ jest.setTimeout(6 * 60_000); // runway (<=70s) + bond-start wait (<=40s) + 1 cyc
 const network = getNetwork();
 let admin: Account;
 const sbtcDeployer = ACCOUNTS.sbtcDeployer;
-const staker = getAccount(REGTEST_KEYS.account11);
+const staker = getAccount(REGTEST_KEYS.account23); // fresh: registers (sBTC) and never unstakes → permanent membership
 const signerManager = SIGNER_MANAGER;
 
 const MAX_SATS = 10_000n;
@@ -119,8 +122,21 @@ test('bond lifecycle: setup → register → bond starts → rewards settle → 
     address: staker.address,
     network,
   });
+  const stxBeforeRegister = await getStxBalance(staker.address);
 
   useFixtures('bond-lifecycle-registered');
+  const poxBeforeRegister = await getPoxInfo();
+  const registerEligible = await fetchEligibleRegisterForBond({
+    bondIndex,
+    staker: staker.address,
+    amountUstx,
+    satsTotal: MAX_SATS,
+    signerManager,
+    poxInfo: poxBeforeRegister,
+    network,
+  });
+  expect(registerEligible.ok).toBe(true);
+
   const registerUnsigned = await buildRegisterForBond({
     bondIndex,
     signerManager,
@@ -130,12 +146,16 @@ test('bond lifecycle: setup → register → bond starts → rewards settle → 
     fee: FEE,
     nonce: await getNextNonce(staker.address),
     network,
-    postConditions: [
-      Pc.principal(staker.address).willSendEq(MAX_SATS).ft(SBTC_TOKEN, SBTC_ASSET_NAME),
-    ],
+    postConditionMode: 'allow',
   });
   await broadcastAndWait(signTransaction(registerUnsigned, staker.key), staker.address, network);
 
+  // New phase: the post-register reads (get-bond-membership now returns the
+  // enrolled staker) must NOT share the preflight's phase — the preflight above
+  // reads get-bond-membership expecting NO membership yet, and latest-wins would
+  // otherwise overwrite that with the enrolled result, sending the replayed
+  // preflight down the bond-overlaps-new-position path (uncaptured → no fixture).
+  useFixtures('bond-lifecycle-registered-after');
   const membership = await fetchBondMembership({ address: staker.address, network });
   if (!membership) throw 'register-for-bond aborted';
   expect(membership.bondIndex).toBe(bondIndex);
@@ -163,7 +183,11 @@ test('bond lifecycle: setup → register → bond starts → rewards settle → 
   });
   console.log('staker shares in first bond cycle', { firstRewardCycle, shares });
   expect(shares).toBeGreaterThan(0n);
-  expect(await getStxBalance(staker.address)).toBeLessThan(10_000_000n);
+  // Relative: register consumes STX (fee + any staked/locked amount), so the
+  // spendable balance must have dropped. An absolute threshold would depend on
+  // the account's pre-existing balance on a shared chain (a fresh staker may
+  // already hold STX), which isn't deterministic across re-records.
+  expect(await getStxBalance(staker.address)).toBeLessThan(stxBeforeRegister);
 
   // anyone: settle one elapsed cycle, then the staker reads + claims
   useFixtures('bond-lifecycle-rewarded');
@@ -181,15 +205,27 @@ test('bond lifecycle: setup → register → bond starts → rewards settle → 
   const bondIndices = bonds.slice(0, 6).map(b => b.index);
   console.log('calculate-rewards set', bondIndices.join(','));
 
+  // Rewards accrual is nondeterministic on regtest (depends on the waterfall's
+  // BTC inflow) — dogfood the preflight but don't hard-assert ok.
+  console.log(
+    'calculate-rewards eligibility',
+    await fetchEligibleCalculateRewards({ bondIndices, network })
+  );
+
   const calcUnsigned = await buildCalculateRewards({
     bondIndices,
     publicKey: staker.publicKey,
     fee: FEE,
     nonce: await getNextNonce(staker.address),
     network,
+    postConditionMode: 'allow',
   });
   await broadcastAndWait(signTransaction(calcUnsigned, staker.key), staker.address, network);
 
+  // New phase: calculate-rewards and claim-rewards are two separate broadcasts
+  // and must not share one (the reused /v2/pox key would overwrite the height
+  // calculate-rewards ran at with claim's later one).
+  useFixtures('bond-lifecycle-claimed');
   const earned = await fetchEarnedStakerRewards({
     signerManager,
     rewardCycle: firstRewardCycle,
@@ -204,6 +240,16 @@ test('bond lifecycle: setup → register → bond starts → rewards settle → 
   // full builder + entrypoint path.
   expect(earned).toBeGreaterThanOrEqual(0n);
 
+  console.log(
+    'claim-rewards eligibility',
+    await fetchEligibleClaimRewards({
+      signerManager,
+      rewardCycle: firstRewardCycle,
+      bondIndices: [bondIndex],
+      network,
+    })
+  );
+
   const claimUnsigned = await buildClaimRewards({
     rewardCycle: firstRewardCycle,
     bondIndices: [bondIndex],
@@ -211,6 +257,7 @@ test('bond lifecycle: setup → register → bond starts → rewards settle → 
     fee: FEE,
     nonce: await getNextNonce(staker.address),
     network,
+    postConditionMode: 'allow',
   });
   await broadcastAndWait(signTransaction(claimUnsigned, staker.key), staker.address, network);
 

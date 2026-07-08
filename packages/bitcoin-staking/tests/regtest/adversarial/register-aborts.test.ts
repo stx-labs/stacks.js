@@ -13,8 +13,7 @@ import {
   minUstxForSatsAmount,
   Pox5ErrorCode,
 } from '../../../src';
-import { Pc, broadcastTransaction } from '@stacks/transactions';
-import { SBTC_ASSET_NAME, SBTC_TOKEN } from '../../helpers/constants';
+import { broadcastTransaction } from '@stacks/transactions';
 import { ACCOUNTS, REGTEST_KEYS, SIGNER_MANAGER, getAccount, type Account } from '../regtest';
 import { getBondAdminAccount } from '../../helpers/bondAdmin';
 import { getNetwork } from '../../helpers/utils';
@@ -45,7 +44,7 @@ if (process.env.RECORD === '1') jest.retryTimes(2);
 const network = getNetwork();
 let admin: Account;
 const sbtcDeployer = ACCOUNTS.sbtcDeployer;
-const staker = getAccount(REGTEST_KEYS.account12); // allowlisted leg
+const staker = getAccount(REGTEST_KEYS.account20); // allowlisted leg (fresh: register leaves permanent membership)
 const outsider = getAccount(REGTEST_KEYS.account13); // never allowlisted
 const signerManager = SIGNER_MANAGER;
 
@@ -76,6 +75,7 @@ async function setupBondTx(index: number, nonce: number) {
     fee: FEE,
     nonce,
     network,
+    postConditionMode: 'allow',
   });
 }
 
@@ -86,7 +86,14 @@ async function setupBondTx(index: number, nonce: number) {
  * BondAlreadyStarted (u43) and poison the rest of the sequence — so each case
  * that needs an OPEN bond re-validates instead of trusting ordering.
  */
-async function ensureOpenBond(): Promise<void> {
+// Own dedicated phase (`${phaseKey}-roll`): whether or not this actually
+// broadcasts is real-chain-timing-dependent, so it must never share a phase
+// with the caller's own (single) broadcast — replaying two broadcasts under
+// one `useFixtures` key corrupts the polled endpoints (e.g. `/v2/pox`, keyed
+// path-only) for the rest of that phase. The caller switches to its own key
+// AFTER this returns.
+async function ensureOpenBond(phaseKey: string): Promise<void> {
+  useFixtures(`${phaseKey}-roll`);
   const pox = await getPoxInfo();
   if (bondStartHeight - pox.currentBurnchainBlockHeight >= 6) return;
   const fresh = await waitForBondWithRunway(15);
@@ -103,10 +110,6 @@ async function registerTx(args: {
   sats: bigint;
   amountUstx?: bigint;
   atBond?: number;
-  /** Attach the sBTC transfer post-condition — ONLY for registers expected to
-   * SUCCEED. An aborted register transfers nothing, so a willSendEq(>0) PC
-   * fails first and masks the response abort we want to assert. */
-  expectSuccess?: boolean;
 }) {
   return buildRegisterForBond({
     bondIndex: args.atBond ?? bondIndex,
@@ -123,11 +126,10 @@ async function registerTx(args: {
     fee: FEE,
     nonce: await getNextNonce(args.from.address),
     network,
-    // The builder does NOT add the sBTC transfer post-condition itself (see
-    // SDK-GAPS.md #5) — without it a SUCCESSFUL register aborts by PC.
-    postConditions: args.expectSuccess
-      ? [Pc.principal(args.from.address).willSendEq(args.sats).ft(SBTC_TOKEN, SBTC_ASSET_NAME)]
-      : [],
+    // pox-5 moves STX (+ sBTC) on register; under default Deny an aborting case
+    // could abort_by_post_condition BEFORE its intended guard, masking the
+    // err-code we assert. Allow so every tx reaches its contract guard.
+    postConditionMode: 'allow',
   });
 }
 
@@ -167,8 +169,8 @@ beforeAll(async () => {
 }, 6 * 60_000);
 
 test('duplicate setup-bond aborts BondAlreadySetup (u4)', async () => {
+  await ensureOpenBond('adversarial-u4');
   useFixtures('adversarial-u4');
-  await ensureOpenBond();
   const tx = await setupBondTx(bondIndex, await getNextNonce(admin.address));
   expectAbort(
     await broadcastAndWaitForTransaction(signTransaction(tx, admin.key), network),
@@ -186,8 +188,8 @@ test('setup-bond far in the future aborts CannotSetupBondTooSoon (u2)', async ()
 });
 
 test('register without allowlist entry aborts NotAllowlisted (u11)', async () => {
+  await ensureOpenBond('adversarial-u11');
   useFixtures('adversarial-u11');
-  await ensureOpenBond();
   const tx = await registerTx({ from: outsider, sats: MAX_SATS });
   expectAbort(
     await broadcastAndWaitForTransaction(signTransaction(tx, outsider.key), network),
@@ -196,8 +198,8 @@ test('register without allowlist entry aborts NotAllowlisted (u11)', async () =>
 });
 
 test('register above the allowance cap aborts TooMuchSats (u10)', async () => {
+  await ensureOpenBond('adversarial-u10');
   useFixtures('adversarial-u10');
-  await ensureOpenBond();
   const tx = await registerTx({ from: staker, sats: MAX_SATS * 2n });
   expectAbort(
     await broadcastAndWaitForTransaction(signTransaction(tx, staker.key), network),
@@ -206,8 +208,8 @@ test('register above the allowance cap aborts TooMuchSats (u10)', async () => {
 });
 
 test('register with dust uSTX aborts InsufficientStx (u8)', async () => {
+  await ensureOpenBond('adversarial-u8');
   useFixtures('adversarial-u8');
-  await ensureOpenBond();
   const tx = await registerTx({ from: staker, sats: MAX_SATS, amountUstx: 1n });
   expectAbort(
     await broadcastAndWaitForTransaction(signTransaction(tx, staker.key), network),
@@ -223,6 +225,7 @@ test('set-bond-admin from a non-admin aborts Unauthorized (u1)', async () => {
     fee: FEE,
     nonce: await getNextNonce(staker.address),
     network,
+    postConditionMode: 'allow',
   });
   expectAbort(
     await broadcastAndWaitForTransaction(signTransaction(tx, staker.key), network),
@@ -231,10 +234,10 @@ test('set-bond-admin from a non-admin aborts Unauthorized (u1)', async () => {
 });
 
 test('happy register, then re-register aborts AlreadyRegistered (u9)', async () => {
+  await ensureOpenBond('adversarial-registered');
   useFixtures('adversarial-registered');
-  await ensureOpenBond();
 
-  const good = await registerTx({ from: staker, sats: MAX_SATS, expectSuccess: true });
+  const good = await registerTx({ from: staker, sats: MAX_SATS });
   const reg = await broadcastAndWaitForTransaction(signTransaction(good, staker.key), network);
   expect(reg.tx_status).toBe('success');
   expect((await fetchBondMembership({ address: staker.address, network }))?.bondIndex).toBe(bondIndex);
@@ -256,6 +259,7 @@ test('update-bond-registration to the SAME signer aborts UpdateBondSameSigner (u
     fee: FEE,
     nonce: await getNextNonce(staker.address),
     network,
+    postConditionMode: 'allow',
   });
   expectAbort(
     await broadcastAndWaitForTransaction(signTransaction(tx, staker.key), network),
@@ -272,6 +276,7 @@ test('unstake-sbtc from a non-participant aborts NotBondParticipant (u34)', asyn
     fee: FEE,
     nonce: await getNextNonce(outsider.address),
     network,
+    postConditionMode: 'allow',
   });
   expectAbort(
     await broadcastAndWaitForTransaction(signTransaction(tx, outsider.key), network),
@@ -280,12 +285,12 @@ test('unstake-sbtc from a non-participant aborts NotBondParticipant (u34)', asyn
 });
 
 test('register broadcast during the prepare phase aborts StakeInPreparePhase (u47)', async () => {
-  useFixtures('adversarial-u47');
   // Bypass the broadcast helpers' reward-phase guard on purpose: wait for the
   // prepare phase to START, then raw-broadcast so the tx mines inside it.
   // Open bond first: if the tx slips past the prepare phase, the abort must
   // not degrade into BondAlreadyStarted (u43) on a bond that began meanwhile.
-  await ensureOpenBond();
+  await ensureOpenBond('adversarial-u47');
+  useFixtures('adversarial-u47');
   await waitForPreparePhase(await getPoxInfo());
   // Must be the ALLOWLISTED staker: register-for-bond's let-bindings resolve the
   // allowance (u11) BEFORE the body's verify-not-prepare-phase (u47), so an
