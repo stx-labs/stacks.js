@@ -73,20 +73,20 @@ function nativeAddressToSegwitVersion(
 
 /** @internal */
 function bech32Decode(btcAddress: string) {
-  const { words } = bech32.decode(btcAddress as `${string}1${string}`);
+  const { prefix, words } = bech32.decode(btcAddress as `${string}1${string}`);
   const witnessVersion = words[0];
   if (witnessVersion > 0)
     throw new Error('Addresses with a witness version >= 1 should be encoded in bech32m');
-  return { witnessVersion, data: bech32.fromWords(words.slice(1)) };
+  return { prefix, witnessVersion, data: bech32.fromWords(words.slice(1)) };
 }
 
 /** @internal */
 function bech32MDecode(btcAddress: string) {
-  const { words } = bech32m.decode(btcAddress as `${string}1${string}`);
+  const { prefix, words } = bech32m.decode(btcAddress as `${string}1${string}`);
   const witnessVersion = words[0];
   if (witnessVersion === 0)
     throw new Error('Addresses with witness version 0 should be encoded in bech32');
-  return { witnessVersion, data: bech32m.fromWords(words.slice(1)) };
+  return { prefix, witnessVersion, data: bech32m.fromWords(words.slice(1)) };
 }
 
 /** @internal */
@@ -138,6 +138,10 @@ function fromPoxTuple(poxAddr: ClarityValue): BtcAddressRepr {
 /**
  * Parse a Bitcoin address string into its PoX version and hash bytes.
  *
+ * Pass `network` to also assert the address belongs to that network (base58
+ * version byte / bech32 prefix) — the parsed repr itself is network-less, so
+ * without it a wrong-network paste goes undetected.
+ *
  * @example
  * ```ts
  * import { BtcAddress } from '@stacks/bitcoin-staking';
@@ -146,10 +150,20 @@ function fromPoxTuple(poxAddr: ClarityValue): BtcAddressRepr {
  * // { version: PoXAddressVersion.P2WPKH, data: Uint8Array(20) }
  * ```
  */
-export function parse(btcAddress: string): BtcAddressRepr {
+export function parse(
+  btcAddress: string,
+  network?: StacksNetworkName | StacksNetwork
+): BtcAddressRepr {
+  const networkName = network == null ? undefined : networkNameFrom(network);
   try {
     if (B58_ADDR_PREFIXES.test(btcAddress)) {
       const b58 = base58CheckDecode(btcAddress);
+      if (networkName != null) {
+        const versions = BitcoinNetworkVersion[networkName];
+        if (b58.version !== versions.P2PKH && b58.version !== versions.P2SH) {
+          throw new Error(`version byte 0x${b58.version.toString(16)} is not a ${networkName} one`);
+        }
+      }
       return {
         version: btcAddressVersionToLegacyHashMode(b58.version),
         data: b58.hash,
@@ -157,15 +171,21 @@ export function parse(btcAddress: string): BtcAddressRepr {
     }
     if (SEGWIT_ADDR_PREFIXES.test(btcAddress)) {
       const b32 = decodeNativeSegwitBtcAddress(btcAddress);
+      if (networkName != null && b32.prefix.toLowerCase() !== SegwitPrefix[networkName]) {
+        throw new Error(
+          `prefix '${b32.prefix}' is not the ${networkName} one ('${SegwitPrefix[networkName]}')`
+        );
+      }
       return {
         version: nativeAddressToSegwitVersion(b32.witnessVersion, b32.data.length),
         data: b32.data,
       };
     }
   } catch (cause) {
-    throw new Error(`'${btcAddress}' is not a valid P2PKH/P2SH/P2WPKH/P2WSH/P2TR address`, {
-      cause,
-    });
+    throw new Error(
+      `'${btcAddress}' is not a valid${networkName ? ` ${networkName}` : ''} P2PKH/P2SH/P2WPKH/P2WSH/P2TR address`,
+      { cause }
+    );
   }
   throw new Error(`'${btcAddress}' is not a valid P2PKH/P2SH/P2WPKH/P2WSH/P2TR address`);
 }

@@ -238,6 +238,11 @@ export interface SignerCalldataL1Payout {
   poxAddress: string | BtcAddressRepr;
   /** Max sBTC fee (sats) the staker tolerates on the L1 BTC withdrawal. */
   maxFeeSats: IntegerType;
+  /**
+   * When given (and `poxAddress` is a string), assert the address belongs to
+   * this network — catches a wrong-network payout-address paste.
+   */
+  network?: StacksNetworkName | StacksNetwork;
 }
 
 /** Arguments for {@link buildGrantSignerKey} — wraps pox-5 `grant-signer-key`. */

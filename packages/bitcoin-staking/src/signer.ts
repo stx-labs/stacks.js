@@ -118,7 +118,9 @@ export function verifySignerGrant(
  */
 export function buildSignerCalldata(opts: SignerCalldataL1Payout): Uint8Array {
   const { version, data } =
-    typeof opts.poxAddress === 'string' ? parseBtcAddress(opts.poxAddress) : opts.poxAddress;
+    typeof opts.poxAddress === 'string'
+      ? parseBtcAddress(opts.poxAddress, opts.network)
+      : opts.poxAddress;
   return serializeCVBytes(
     Cl.tuple({
       'pox-addr': Cl.tuple({

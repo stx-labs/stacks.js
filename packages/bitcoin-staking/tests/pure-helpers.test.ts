@@ -138,6 +138,24 @@ describe('BtcAddress parse/stringify', () => {
     expect(() => BtcAddress.parse('not-an-address')).toThrow();
   });
 
+  test('parse with network asserts the address belongs to it', () => {
+    const mainnetSegwit = 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4';
+    const mainnetB58 = '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2';
+    const testnetB58 = 'mzxXgV6e4BZSsz8zVHm3TmqbECt7mbuErt';
+    // matching network parses
+    expect(() => BtcAddress.parse(mainnetSegwit, 'mainnet')).not.toThrow();
+    expect(() => BtcAddress.parse(mainnetB58, 'mainnet')).not.toThrow();
+    expect(() => BtcAddress.parse(testnetB58, 'testnet')).not.toThrow();
+    // wrong network throws
+    expect(() => BtcAddress.parse(mainnetSegwit, 'testnet')).toThrow(/testnet/);
+    expect(() => BtcAddress.parse(mainnetB58, 'testnet')).toThrow(/testnet/);
+    expect(() => BtcAddress.parse(testnetB58, 'mainnet')).toThrow(/mainnet/);
+    // devnet/regtest expects the bcrt prefix, not tb
+    expect(() => BtcAddress.parse(mainnetSegwit, 'devnet')).toThrow(/devnet/);
+    // omitted network keeps the permissive behavior
+    expect(() => BtcAddress.parse(mainnetSegwit)).not.toThrow();
+  });
+
   // P2SH-wrapped segwit versions are indistinguishable from plain P2SH on-chain,
   // so they only exist on the stringify side.
   test('stringify covers every PoX version variant', () => {

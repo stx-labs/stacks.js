@@ -159,6 +159,16 @@ describe('signer calldata', () => {
     expect(BtcAddress.stringify(decoded.poxAddress, 'mainnet')).toBe(addr);
   });
 
+  it('rejects a payout address from the wrong network when one is given', () => {
+    const mainnetAddr = 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4';
+    expect(() =>
+      buildSignerCalldata({ poxAddress: mainnetAddr, maxFeeSats: 1000n, network: 'testnet' })
+    ).toThrow(/testnet/);
+    expect(() =>
+      buildSignerCalldata({ poxAddress: mainnetAddr, maxFeeSats: 1000n, network: 'mainnet' })
+    ).not.toThrow();
+  });
+
   it('accepts pre-parsed address components and Uint8Array | hex calldata', () => {
     const parsed = BtcAddress.parse('bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4');
     const bytes = buildSignerCalldata({ poxAddress: parsed, maxFeeSats: 0n });
