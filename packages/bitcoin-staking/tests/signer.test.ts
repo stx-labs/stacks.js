@@ -127,8 +127,26 @@ describe('signSignerGrant + verifySignerGrant', () => {
     });
     expect(ok).toBe(false);
   });
+
+  it('returns false (does not throw) for malformed signatures', () => {
+    const base = {
+      signerManager: SIGNER_MANAGER,
+      authId: 7n,
+      chainId: CHAIN_ID,
+      publicKey: privateKeyToPublic(PRIVATE_KEY),
+    };
+    expect(verifySignerGrant({ ...base, signature: '' })).toBe(false);
+    expect(verifySignerGrant({ ...base, signature: 'ab'.repeat(64) })).toBe(false); // 64 bytes
+    expect(verifySignerGrant({ ...base, signature: new Uint8Array(10) })).toBe(false);
+  });
 });
 
+// TODO(coverage): add a golden vector freezing the SIP-018 grant hash — a fixed
+// (signerManager, authId, chainId) asserting the exact computeSignerGrantHash
+// hex. The domain/message literals were verified against
+// pox-5.get-signer-grant-message-hash on 2026-07-06; a golden pins them so any
+// drift (topic, domain name/version, tuple keys) fails offline instead of
+// breaking grant recovery on-chain.
 describe('signer calldata', () => {
   it.each([
     'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4', // P2WPKH

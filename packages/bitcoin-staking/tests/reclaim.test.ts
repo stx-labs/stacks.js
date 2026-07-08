@@ -1,3 +1,13 @@
+// TODO(coverage): nothing in CI executes the lockup script against Bitcoin
+// consensus — these tests assert witness STRUCTURE only (item counts, isFinal,
+// cross-variant byte equality), and reclaim builds with disableScriptCheck.
+// Needed (regtest suite, recorded): fund a lockup P2WSH, then
+//   1. early-exit spend accepted (staker sig + cosigner sig + preimage)
+//   2. locktime spend accepted after maturing the CLTV height
+//   3. negatives rejected by bitcoind: CLTV-immature broadcast (non-final),
+//      wrong preimage, swapped staker/cosigner sigs
+// bitcoind JSON-RPC fixture keys hash the request body, so recorded
+// sendrawtransaction fixtures fail loudly if any witness byte regresses.
 import * as btc from '@scure/btc-signer';
 import { secp256k1 } from '@noble/curves/secp256k1.js';
 import { bytesToHex, hexToBytes } from '@stacks/common';
@@ -12,7 +22,7 @@ import {
   type Utxo,
 } from '../src';
 
-// Deterministic raw BTC keys (32-byte) for the staker and the early-unlock cosigner.
+// Deterministic raw BTC keys (32-byte) for the staker and the early-exit cosigner.
 const STAKER_PRIV = hexToBytes('cb3df38053d132895220b9ce471f6b676db5b9bf0b4adefb55f2118ece2478df');
 const COSIGNER_PRIV = hexToBytes('5b8303150239eceaba43892af7cdd1fa7fc26eda5182ebaaa568e3341d54a4d0');
 const STAKER_PUB = secp256k1.getPublicKey(STAKER_PRIV, true);

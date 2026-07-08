@@ -1,7 +1,7 @@
 // Pure helpers — no network, runs everywhere. Round-trips and known vectors;
 // the regtest reads-sweep cross-checks the on-chain mirrors of the math.
 import { Cl } from '@stacks/transactions';
-import { BtcAddress, PoXAddressVersion } from '../src';
+import { BtcAddress, PoXAddressVersion, fetchEligibleCalculateRewards } from '../src';
 import {
   bondPeriodToBurnHeight,
   bondPeriodToRewardCycle,
@@ -105,6 +105,18 @@ describe('cycle math', () => {
   });
 });
 
+describe('fetchEligibleCalculateRewards guards', () => {
+  test('throws a descriptive error during distribution cycle 0 (no fetches issued)', async () => {
+    // Burn height inside the first distribution cycle (length = 20 / 2 = 10).
+    const early = { ...(poxInfo as object), currentBurnchainBlockHeight: 5 } as PoxInfo;
+    await expect(
+      fetchEligibleCalculateRewards({ bondIndices: [0], poxInfo: early, network: 'devnet' })
+    ).rejects.toThrow(/distribution cycle 0/);
+  });
+});
+
+// TODO(coverage): add testnet/devnet segwit round-trips (tb1q/tb1p/bcrt1q) and
+// per-branch reject vectors (bad checksum, witness version >1, mixed-case).
 describe('BtcAddress parse/stringify', () => {
   // One known vector per script family, both directions.
   const vectors: { address: string; network: 'mainnet' | 'testnet'; version: PoXAddressVersion }[] = [

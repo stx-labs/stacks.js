@@ -45,9 +45,18 @@ export interface CovenantKey {
   network: string;
 }
 
-/** Fetch the covenant xpub + metadata. Returns null if the endpoint is absent (honest skip). */
+/**
+ * Fetch the covenant xpub + metadata. Returns null if the endpoint is absent OR
+ * unreachable (firewall/offline) — so mock-mode / no-network suite runs honest-SKIP
+ * instead of failing. Live (reachable) runs return the real key.
+ */
 export async function fetchCovenantKey(): Promise<CovenantKey | null> {
-  const res = await fetch(`${COVENANT_API}/public-key`);
+  let res: Response;
+  try {
+    res = await fetch(`${COVENANT_API}/public-key`);
+  } catch {
+    return null; // network unreachable (offline / firewall) → skip
+  }
   if (!res.ok) return null;
   const j = (await res.json()) as {
     key_id: number;
@@ -112,21 +121,26 @@ export async function signViaCovenantApi(opts: {
   witnessScriptHex: string;
   sighashTypeHex?: string;
 }): Promise<CovenantSignResult | null> {
-  const res = await fetch(`${COVENANT_API}/sign`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      tx: opts.txHex,
-      input_index: opts.inputIndex,
-      sighash_type: opts.sighashTypeHex ?? '01',
-      bip32_derivation: opts.bip32Derivation,
-      prevout: {
-        script_pub_key: opts.prevoutScriptPubKeyHex,
-        value: Number(opts.prevoutValueSats),
-      },
-      witness_script: opts.witnessScriptHex,
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${COVENANT_API}/sign`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        tx: opts.txHex,
+        input_index: opts.inputIndex,
+        sighash_type: opts.sighashTypeHex ?? '01',
+        bip32_derivation: opts.bip32Derivation,
+        prevout: {
+          script_pub_key: opts.prevoutScriptPubKeyHex,
+          value: Number(opts.prevoutValueSats),
+        },
+        witness_script: opts.witnessScriptHex,
+      }),
+    });
+  } catch {
+    return null; // network unreachable → skip
+  }
   if (!res.ok) return null;
   const j = (await res.json()) as {
     signature: string;

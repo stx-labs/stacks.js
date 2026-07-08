@@ -338,6 +338,9 @@ describe('validateEarlyUnlockBytes', () => {
   });
 });
 
+// TODO(coverage): assert one full golden lockup address literal (currently only
+// prefix regexes) so P2WSH derivation regressions fail on the exact string, and
+// a golden script hex for buildLockScript from fixed inputs.
 describe('buildLockAddress', () => {
   const unlockBytes = buildUnlockScript(TEST_PUBKEY);
   const baseOpts = {

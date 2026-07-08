@@ -27,6 +27,18 @@ import {
 } from '../src/build';
 import * as pkg from '../src';
 
+// TODO(coverage): these tests assert function name + arg count/ClarityType but
+// never the exact serialized bytes — and replay broadcasts match by path only,
+// so no test pins the wire encoding of any builder. Needed:
+//   1. Golden serialized-tx assertions per builder:
+//      expect(bytesToHex(tx.serialize())).toBe('<recorded golden>') — catches
+//      arg-order/type/post-condition regressions offline.
+//   2. A lockupToCV golden (tuple keys + ok/err polarity were verified against
+//      pox-5.clar on 2026-07-06 — freeze that with exact CV bytes).
+//   3. Missing entirely: buildStake, buildCalculateRewards, buildClaimRewards
+//      name/arg assertions; buildPauseRewards + buildSetPauseAdmin have ZERO
+//      test references anywhere (one-way pause + fund-adjacent admin rotation).
+//   4. A multisig variant for buildRegisterForBond (the fund-mover has none).
 const TEST_PUBKEY = '0316e35d38b52d4886e40065e4952a49535ce914e02294be58e252d1998f129b19';
 const STAKER = 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE';
 const SIGNER_MANAGER = 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.my-signer';
