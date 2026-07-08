@@ -45,6 +45,11 @@ export function buildUnlockScript(publicKey: Uint8Array | string): Uint8Array {
   if (pubBytes.length !== 33) {
     throw new Error('Expected a 33-byte compressed public key');
   }
+  if (pubBytes[0] !== 0x02 && pubBytes[0] !== 0x03) {
+    throw new Error(
+      `Expected a compressed public key starting with 0x02/0x03, got 0x${pubBytes[0].toString(16)}`
+    );
+  }
 
   return btc.Script.encode([pubBytes, 'CHECKSIG']);
 }
@@ -65,6 +70,7 @@ export function parseUnlockScript(unlockBytes: Uint8Array | string): Uint8Array 
       decoded.length === 2 &&
       decoded[0] instanceof Uint8Array &&
       decoded[0].length === 33 &&
+      (decoded[0][0] === 0x02 || decoded[0][0] === 0x03) &&
       decoded[1] === 'CHECKSIG'
     ) {
       return decoded[0];

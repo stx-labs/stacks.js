@@ -124,7 +124,7 @@ export async function fetchAccountStatus(
 ): Promise<AccountStatus> {
   const network = networkFrom(opts.network ?? 'mainnet');
   const client = Object.assign({}, clientFromNetwork(network), opts.client);
-  const url = `${client.baseUrl}/v2/accounts/${opts.address}?proof=0`;
+  const url = `${client.baseUrl}/v2/accounts/${encodeURIComponent(opts.address)}?proof=0`;
   const data = await fetchJson(client, url, 'account status');
 
   // No `?? 0` defaults: `unlockHeight: 0` already means "no active lock" and a
@@ -843,12 +843,15 @@ export async function fetchTotalUstxStacked(
 /**
  * Wraps the contract's `protocol-bond-allowances` map.
  *
- * Returns the staker's allowlisted sats allocation for a bond, or `0n` when
- * the staker is not on the bond's allowlist (no entry => not allowed).
+ * Returns the staker's allowlisted sats allocation for a bond, or `undefined`
+ * when the staker is not on the bond's allowlist. The contract distinguishes
+ * the two: a missing entry aborts `register-for-bond` with
+ * `ERR_NOT_ALLOWLISTED`, while an explicit `0` allowance passes that check and
+ * fails the amount check (`ERR_TOO_MUCH_SATS`).
  */
 export async function fetchBondAllowance(
   opts: { bondIndex: number; address: string } & NetworkClientParam
-): Promise<bigint> {
+): Promise<bigint | undefined> {
   const network = networkFrom(opts.network ?? 'mainnet');
   const entry = await fetchContractMapEntry({
     contractAddress: network.bootAddress,
@@ -863,7 +866,7 @@ export async function fetchBondAllowance(
   });
 
   const optional = entry as OptionalCV<UIntCV>;
-  if (optional.type === ClarityType.OptionalNone) return 0n;
+  if (optional.type === ClarityType.OptionalNone) return undefined;
   return BigInt(optional.value.value);
 }
 

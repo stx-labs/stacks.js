@@ -1,5 +1,5 @@
 import type { StacksNetwork, StacksNetworkName } from '@stacks/network';
-import { STACKS_DEVNET, STACKS_MAINNET } from '@stacks/network';
+import { STACKS_DEVNET, STACKS_MAINNET, STACKS_TESTNET } from '@stacks/network';
 
 /**
  * @internal
@@ -11,6 +11,10 @@ import { STACKS_DEVNET, STACKS_MAINNET } from '@stacks/network';
 export function networkNameFrom(network: StacksNetworkName | StacksNetwork): StacksNetworkName {
   if (typeof network === 'string') return network;
   if (network.chainId === STACKS_MAINNET.chainId) return 'mainnet';
+  if (network.magicBytes === STACKS_MAINNET.magicBytes) return 'mainnet';
   if (network.magicBytes === STACKS_DEVNET.magicBytes) return 'devnet';
-  return 'testnet';
+  if (network.magicBytes === STACKS_TESTNET.magicBytes) return 'testnet';
+  throw new Error(
+    `networkNameFrom: unrecognized network object (magicBytes '${network.magicBytes}')`
+  );
 }

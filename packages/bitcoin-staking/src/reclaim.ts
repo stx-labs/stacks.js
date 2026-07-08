@@ -19,6 +19,8 @@ import type { Utxo } from './types';
 export type ReclaimPath = 'locktime' | 'early-exit';
 
 const SIGHASH_ALL = 1;
+/** Conservative dust limit (the 546-sat P2PKH bound covers all output types). */
+const DUST_LIMIT_SATS = 546n;
 /** Empty witness item — selects the `OP_ELSE` (early-exit) branch. */
 const ELSE_SELECTOR = new Uint8Array(0);
 /** Truthy witness item — selects the `OP_IF` (CLTV) branch. */
@@ -127,6 +129,11 @@ export function buildReclaim(opts: BuildReclaimOpts): btc.Transaction {
   const sweepSats = amount - feeSats;
   if (sweepSats <= 0n) {
     throw new Error(`buildReclaim: fee (${feeSats}) >= utxo value (${amount})`);
+  }
+  if (sweepSats < DUST_LIMIT_SATS) {
+    throw new Error(
+      `buildReclaim: sweep of ${sweepSats} sats is below the ${DUST_LIMIT_SATS}-sat dust limit — nodes would not relay the tx`
+    );
   }
 
   const earlyExit = opts.path === 'early-exit';

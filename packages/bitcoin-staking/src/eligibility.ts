@@ -174,7 +174,9 @@ export async function fetchEligibleRegisterForBond(
   }
 
   if (!bond) reasons.push(Pox5ErrorCode.BondNotFound);
-  if (allowance === 0n) reasons.push(Pox5ErrorCode.NotAllowlisted);
+  // Missing entry vs explicit 0 allowance: the contract aborts with
+  // ERR_NOT_ALLOWLISTED for the former and ERR_TOO_MUCH_SATS for the latter.
+  if (allowance === undefined) reasons.push(Pox5ErrorCode.NotAllowlisted);
 
   if (isInPreparePhase({ burnHeight, poxInfo })) {
     reasons.push(Pox5ErrorCode.StakeInPreparePhase);
@@ -201,7 +203,9 @@ export async function fetchEligibleRegisterForBond(
     reasons.push(Pox5ErrorCode.AlreadyStaked);
   }
 
-  if (opts.satsTotal > allowance) reasons.push(Pox5ErrorCode.TooMuchSats);
+  if (allowance !== undefined && opts.satsTotal > allowance) {
+    reasons.push(Pox5ErrorCode.TooMuchSats);
+  }
 
   if (account.balance + account.locked < opts.amountUstx) {
     if (!reasons.includes(Pox5ErrorCode.InsufficientStx)) {
