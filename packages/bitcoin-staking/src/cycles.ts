@@ -273,8 +273,10 @@ export function bondPhaseRanges(opts: { bondIndex: number; poxInfo: PoxInfo }): 
   return [
     range('open', openStart, registrationEnd),
     range('locked', registrationEnd, unlockedStart),
-    range('unlocked', unlockedStart, closeBurnHeight),
-    range('finished', closeBurnHeight, closedEnd),
+    // +1: the contract's `is-bond-active-at-height` is INCLUSIVE at
+    // `closeBurnHeight` — the bond is still active on that exact block.
+    range('unlocked', unlockedStart, closeBurnHeight + 1),
+    range('finished', closeBurnHeight + 1, closedEnd),
   ];
 }
 
@@ -376,6 +378,8 @@ export function bondStatus(opts: {
   }
   if (burnHeight < registrationEnd) return 'open';
   if (burnHeight < unlockedStart) return 'locked';
-  if (burnHeight < closeBurnHeight) return 'unlocked';
+  // <=: the contract's `is-bond-active-at-height` is INCLUSIVE at
+  // `closeBurnHeight` — the bond is still active on that exact block.
+  if (burnHeight <= closeBurnHeight) return 'unlocked';
   return 'finished';
 }
