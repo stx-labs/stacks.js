@@ -36,7 +36,6 @@ function bondIndexCV(bondIndex: number | undefined) {
   return bondIndex === undefined ? Cl.none() : Cl.some(Cl.uint(bondIndex));
 }
 
-
 /** Wraps the `/v2/pox` node endpoint. */
 export async function fetchPoxInfo(opts: NetworkClientParam = {}): Promise<PoxInfo> {
   const network = networkFrom(opts.network ?? 'mainnet');
@@ -538,7 +537,7 @@ function unwrapResponseBuffer(
         (info ? ` — ${info.name}: ${info.description}` : '')
     );
   }
-  return hexToBytes(((result as { value: BufferCV }).value).value as string);
+  return hexToBytes((result as { value: BufferCV }).value.value as string);
 }
 
 /** @internal */
