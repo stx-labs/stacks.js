@@ -50,6 +50,17 @@ const COMMON_TX = {
   network: 'mainnet' as const,
 };
 
+// Compile-time assertion: TxParams is a discriminated union — an object built
+// via spreads carrying BOTH publicKey and publicKeys/numSignatures must not
+// type-check (it would silently route to single-sig and drop the multisig
+// fields, building a tx from the wrong origin).
+{
+  const multisig = { publicKeys: [TEST_PUBKEY], numSignatures: 1 };
+  // @ts-expect-error mixed single-sig + multisig params are rejected
+  const mixed: pkg.TxParams = { ...COMMON_TX, ...multisig };
+  void mixed;
+}
+
 /** Grab the contract-call payload from a built tx. */
 function payloadOf(tx: { payload: unknown }): ContractCallPayload {
   return tx.payload as ContractCallPayload;

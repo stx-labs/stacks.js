@@ -25,6 +25,8 @@ export interface TxParamsBase {
 export interface SingleSigTxParams extends TxParamsBase {
   /** Compressed/uncompressed secp256k1 public key of the (single) caller. */
   publicKey: string;
+  publicKeys?: never;
+  numSignatures?: never;
 }
 
 /**
@@ -35,7 +37,7 @@ export interface SingleSigTxParams extends TxParamsBase {
  * principal — e.g. a `bond-admin` held by a 2-of-3 multisig. The returned tx is
  * unsigned; sign it with `numSignatures` keys (plus `appendOrigin` for the rest).
  */
-export type MultiSigTxParams = TxParamsBase & UnsignedMultiSigOptions;
+export type MultiSigTxParams = TxParamsBase & UnsignedMultiSigOptions & { publicKey?: never };
 
 /**
  * Tx-level params for every `build*` helper — either {@link SingleSigTxParams}

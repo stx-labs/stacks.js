@@ -51,7 +51,7 @@ async function callPox5(
   // defaults to the non-sequential hashmode (order-independent signatures); pass
   // `useNonSequentialMultiSig: false` to opt back into the legacy sequential one.
   return makeUnsignedContractCall(
-    'publicKey' in tx
+    tx.publicKey !== undefined
       ? { ...base, publicKey: tx.publicKey }
       : {
           ...base,
