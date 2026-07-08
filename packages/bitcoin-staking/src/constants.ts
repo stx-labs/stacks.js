@@ -12,13 +12,6 @@ export const BOND_GAP_CYCLES = 2;
 export const MAX_NUM_CYCLES = 96;
 
 /**
- * Reserve ratio in basis points (1500 = 15%). Mirrors the pox-5 contract's
- * `RESERVE_RATIO` constant — the share of STX that must remain unbonded as
- * reserve when paired-BTC bonds are open.
- */
-export const RESERVE_RATIO_BPS = 1500;
-
-/**
  * Address versions corresponding to the pox-5 contract `pox-addr` tuple.
  * Used for client-side address parsing in `btc-address.ts`.
  */

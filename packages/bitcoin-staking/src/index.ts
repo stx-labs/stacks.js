@@ -26,3 +26,4 @@ export * from './signer';
  * ```
  */
 export * as BtcAddress from './btc-address';
+export type { BtcAddressRepr } from './btc-address';

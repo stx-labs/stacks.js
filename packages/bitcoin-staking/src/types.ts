@@ -188,21 +188,6 @@ export interface Bond {
  */
 export type EarnedRewards = bigint;
 
-/**
- * Per-bond reward leg of a staker's claimable rewards.
- *
- * Mirrors a `claim-rewards` response tuple
- * `{ earned, bond-index, rewards-per-token }`.
- */
-export interface BondRewardsLeg {
-  /** Earned micro-STX for this bond. */
-  earned: bigint;
-  /** Bond index the leg refers to. */
-  bondIndex: number;
-  /** Reward-per-token accumulator at claim time. */
-  rewardsPerToken: bigint;
-}
-
 export interface BuildSetBondAdminArgs {
   /** Principal to install as the new `bond-admin`. */
   newAdmin: string;
