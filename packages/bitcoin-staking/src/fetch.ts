@@ -36,13 +36,13 @@ function bondIndexCV(bondIndex: number | undefined) {
   return bondIndex === undefined ? Cl.none() : Cl.some(Cl.uint(bondIndex));
 }
 
+
 /** Wraps the `/v2/pox` node endpoint. */
 export async function fetchPoxInfo(opts: NetworkClientParam = {}): Promise<PoxInfo> {
   const network = networkFrom(opts.network ?? 'mainnet');
   const client = Object.assign({}, clientFromNetwork(network), opts.client);
   const url = `${client.baseUrl}/v2/pox`;
-  const response = await client.fetch(url);
-  const data = await response.json();
+  const data = await fetchJson(client, url, 'pox info');
 
   return {
     contractId: data.contract_id,
@@ -126,14 +126,16 @@ export async function fetchAccountStatus(
   const network = networkFrom(opts.network ?? 'mainnet');
   const client = Object.assign({}, clientFromNetwork(network), opts.client);
   const url = `${client.baseUrl}/v2/accounts/${opts.address}?proof=0`;
-  const response = await client.fetch(url);
-  const data = await response.json();
+  const data = await fetchJson(client, url, 'account status');
 
+  // No `?? 0` defaults: `unlockHeight: 0` already means "no active lock" and a
+  // missing nonce is not nonce 0. The node always sets these on a 200 response
+  // (stacks-core `AccountEntryResponse` has no optional fields here).
   return {
     balance: hexToBigInt(data.balance),
     locked: hexToBigInt(data.locked),
-    nonce: BigInt(data.nonce ?? 0),
-    unlockHeight: Number(data.unlock_height ?? 0),
+    nonce: BigInt(data.nonce),
+    unlockHeight: Number(data.unlock_height),
   };
 }
 
@@ -294,6 +296,32 @@ export async function fetchProtocolBond(
   return decodeBondTuple(opts.bondIndex, optional.value);
 }
 
+/** @internal */
+async function fetchJson(
+  client: { fetch: (url: string) => Promise<Response> },
+  url: string,
+  what: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<any> {
+  const response = await client.fetch(url);
+  if (!response.ok) {
+    const msg = await response.text().catch(() => '');
+    throw new Error(
+      `Error fetching ${what}. Response ${response.status}: ${response.statusText}. Attempted to fetch ${url} and failed with the message: "${msg}"`
+    );
+  }
+  return response.json();
+}
+
+/** @internal */
+async function fetchPox5DataVar(varName: string, opts: NetworkClientParam): Promise<unknown> {
+  const network = networkFrom(opts.network ?? 'mainnet');
+  const client = Object.assign({}, clientFromNetwork(network), opts.client);
+  const url = `${client.baseUrl}/v2/data_var/${network.bootAddress}/${POX5_CONTRACT_NAME}/${varName}?proof=0`;
+  const { data } = await fetchJson(client, url, varName);
+  return cvToValue(Cl.deserialize(data));
+}
+
 /**
  * Read the current `bond-admin` principal.
  *
@@ -301,12 +329,7 @@ export async function fetchProtocolBond(
  * the node's `/v2/data_var` endpoint directly.
  */
 export async function fetchBondAdmin(opts: NetworkClientParam = {}): Promise<string> {
-  const network = networkFrom(opts.network ?? 'mainnet');
-  const client = Object.assign({}, clientFromNetwork(network), opts.client);
-  const url = `${client.baseUrl}/v2/data_var/${network.bootAddress}/${POX5_CONTRACT_NAME}/bond-admin?proof=0`;
-  const response = await client.fetch(url);
-  const { data } = await response.json();
-  return cvToValue(Cl.deserialize(data)) as string;
+  return (await fetchPox5DataVar('bond-admin', opts)) as string;
 }
 
 /**
@@ -317,12 +340,7 @@ export async function fetchBondAdmin(opts: NetworkClientParam = {}): Promise<str
  * reads the node's `/v2/data_var` endpoint directly.
  */
 export async function fetchPauseAdmin(opts: NetworkClientParam = {}): Promise<string> {
-  const network = networkFrom(opts.network ?? 'mainnet');
-  const client = Object.assign({}, clientFromNetwork(network), opts.client);
-  const url = `${client.baseUrl}/v2/data_var/${network.bootAddress}/${POX5_CONTRACT_NAME}/pause-admin?proof=0`;
-  const response = await client.fetch(url);
-  const { data } = await response.json();
-  return cvToValue(Cl.deserialize(data)) as string;
+  return (await fetchPox5DataVar('pause-admin', opts)) as string;
 }
 
 /**
@@ -333,12 +351,7 @@ export async function fetchPauseAdmin(opts: NetworkClientParam = {}): Promise<st
  * node's `/v2/data_var` endpoint directly (no read-only accessor exists).
  */
 export async function fetchRewardsPaused(opts: NetworkClientParam = {}): Promise<boolean> {
-  const network = networkFrom(opts.network ?? 'mainnet');
-  const client = Object.assign({}, clientFromNetwork(network), opts.client);
-  const url = `${client.baseUrl}/v2/data_var/${network.bootAddress}/${POX5_CONTRACT_NAME}/rewards-paused?proof=0`;
-  const response = await client.fetch(url);
-  const { data } = await response.json();
-  return cvToValue(Cl.deserialize(data)) as boolean;
+  return (await fetchPox5DataVar('rewards-paused', opts)) as boolean;
 }
 
 /**
