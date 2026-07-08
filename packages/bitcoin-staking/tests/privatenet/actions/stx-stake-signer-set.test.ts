@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * Privatenet STX-only stake -> SIGNER-SET INCLUSION probe.
  *
@@ -40,12 +39,10 @@
  *     npx jest tests/privatenet/actions/stx-stake-signer-set.test.ts --runInBand --collectCoverage=false --verbose
  */
 import { Cl, ClarityType, broadcastTransaction, fetchCallReadOnlyFunction } from '@stacks/transactions';
-import fetchMock from 'jest-fetch-mock';
 import { buildStake, fetchStakerInfo, fetchSignerSharesStakedForCycle, fetchTotalSharesStakedForCycle } from '../../../src';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
-  ensurePox5,
   getNextNonce,
   getPoxInfo,
   getTransaction,
@@ -55,8 +52,8 @@ import {
   waitForRewardPhase,
 } from '../../helpers/wait';
 import { signTransaction } from '../../helpers/sign';
+import { useFixtures } from '../../helpers/mock';
 
-fetchMock.disableMocks();
 jest.setTimeout(60 * 60_000);
 
 const network = getNetwork();
@@ -112,10 +109,10 @@ async function snapshot(label: string, cycle: number) {
 }
 
 beforeAll(async () => {
-  await ensurePox5();
 }, 60 * 60_000);
 
-test.skip('stake >= SIGNER_SET_MIN_USTX (50k STX) makes the signer count toward the set', async () => {
+test('stake >= SIGNER_SET_MIN_USTX (50k STX) makes the signer count toward the set', async () => {
+  useFixtures('stx-stake-signer-set');
   let poxInfo = await getPoxInfo();
 
   // stake reverts in the prepare phase (verify-not-prepare-phase -> u47). The tx
@@ -172,6 +169,7 @@ test.skip('stake >= SIGNER_SET_MIN_USTX (50k STX) makes the signer count toward 
       fee: FEE,
       nonce: await getNextNonce(staker.address),
       network,
+      postConditionMode: 'allow',
     });
     const transaction = signTransaction(unsigned, staker.key);
     const res = await broadcastTransaction({ transaction, network });

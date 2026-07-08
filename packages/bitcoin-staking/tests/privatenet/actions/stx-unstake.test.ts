@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * Privatenet STX-only UNSTAKE action — exercises pox-5.unstake (L1315).
  *
@@ -28,12 +27,10 @@
  *     npx jest tests/privatenet/actions/stx-unstake.test.ts --runInBand --collectCoverage=false --verbose
  */
 import { broadcastTransaction } from '@stacks/transactions';
-import fetchMock from 'jest-fetch-mock';
 import { buildUnstake, fetchStakerInfo, describePox5Error } from '../../../src';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
-  ensurePox5,
   getNextNonce,
   getPoxInfo,
   getStxBalance,
@@ -44,8 +41,8 @@ import {
   waitForRewardPhase,
 } from '../../helpers/wait';
 import { signTransaction } from '../../helpers/sign';
+import { useFixtures } from '../../helpers/mock';
 
-fetchMock.disableMocks();
 jest.setTimeout(60 * 60_000);
 
 const network = getNetwork();
@@ -60,10 +57,10 @@ function parseErrCode(repr: string | undefined): number | undefined {
 }
 
 beforeAll(async () => {
-  await ensurePox5();
+  useFixtures('stx-unstake');
 }, 60 * 60_000);
 
-test.skip('unstake rewrites account6 STX-only position to unlock next cycle (STX stays locked until then)', async () => {
+test('unstake rewrites account6 STX-only position to unlock next cycle (STX stays locked until then)', async () => {
   let poxInfo = await getPoxInfo();
 
   // unstake reverts in the prepare phase (u28). Wait out, with a 2-block margin
@@ -105,6 +102,7 @@ test.skip('unstake rewrites account6 STX-only position to unlock next cycle (STX
     fee: FEE,
     nonce: await getNextNonce(staker.address),
     network,
+    postConditionMode: 'allow',
   });
 
   const transaction = signTransaction(unsigned, staker.key);
@@ -124,6 +122,7 @@ test.skip('unstake rewrites account6 STX-only position to unlock next cycle (STX
     burn_block_height: tx.burn_block_height,
   });
 
+  useFixtures('stx-unstake-after'); // phase: reads differ after unstake
   const after = await fetchStakerInfo({ address: staker.address, network });
   console.log('AFTER staker-info:', after.staked ? { ...after.details, amountUstx: after.details.amountUstx.toString() } : after);
 

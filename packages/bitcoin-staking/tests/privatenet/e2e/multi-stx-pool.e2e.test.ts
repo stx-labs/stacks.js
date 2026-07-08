@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * E2E: Multi-staker STX-only pooling into the same signer-manager.
  *
@@ -25,7 +24,6 @@ import { buildStake, fetchSignerSharesStakedForCycle } from '../../../src';
 import type { Account } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
-  ensurePox5,
   getNextNonce,
   getPoxInfo,
   getTransaction,
@@ -61,6 +59,7 @@ async function doStxStake(
   startBurnHt: number,
 ): Promise<bigint> {
   const network = getNetwork();
+  useFixtures(`e2e-multi-stx-pool-${staker.name}`); // isolate each stake broadcast
   console.log(`\n--- [${staker.name}] staking ${AMOUNT_USTX} uSTX to ${SIGNER_MANAGER} ---`);
 
   const nonce = await getNextNonce(staker.account.address);
@@ -74,6 +73,7 @@ async function doStxStake(
     fee: FEE_USTX,
     nonce,
     network,
+    postConditionMode: 'allow',
   });
 
   const transaction = signTransaction(unsigned, staker.account.key);
@@ -101,16 +101,16 @@ async function doStxStake(
 
 beforeAll(async () => {
   useFixtures('e2e-multi-stx-pool');
-  await ensurePox5();
   // Derive + fund N fresh random stakers (no collisions, no allowlist needed).
   const network = getNetwork();
   for (let i = 0; i < NUM_STAKERS; i++) {
-    const account = await freshFundedStxAccount({ network, amountUstx: FUND_USTX });
+    useFixtures(`e2e-multi-stx-pool-fund${i}`); // isolate each funding broadcast
+    const account = await freshFundedStxAccount({ network, amountUstx: FUND_USTX, label: `pool-${i}` });
     STAKERS.push({ name: `fresh${i + 1}`, account });
   }
 }, 6 * 180_000);
 
-test.skip('multi-staker STX pooling: account5+6+7 all stake to the same signer-manager', async () => {
+test('multi-staker STX pooling: three fresh stakers pool to the same signer-manager', async () => {
   useFixtures('e2e-multi-stx-pool');
   const network = getNetwork();
 

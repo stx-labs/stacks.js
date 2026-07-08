@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * Privatenet STX-only EXTEND / re-stake action — exercises `stake-update`.
  *
@@ -25,12 +24,10 @@
  *     npx jest tests/privatenet/actions/stx-extend.test.ts --runInBand --collectCoverage=false --verbose
  */
 import { broadcastTransaction } from '@stacks/transactions';
-import fetchMock from 'jest-fetch-mock';
 import { buildStakeUpdate, fetchStakerInfo, describePox5Error } from '../../../src';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
-  ensurePox5,
   getNextNonce,
   getPoxInfo,
   getTransaction,
@@ -39,8 +36,8 @@ import {
   waitForRewardPhase,
 } from '../../helpers/wait';
 import { signTransaction } from '../../helpers/sign';
+import { useFixtures } from '../../helpers/mock';
 
-fetchMock.disableMocks();
 jest.setTimeout(60 * 60_000);
 
 const network = getNetwork();
@@ -59,10 +56,10 @@ function parseErrCode(repr: string | undefined): number | undefined {
 }
 
 beforeAll(async () => {
-  await ensurePox5();
+  useFixtures('stx-extend');
 }, 60 * 60_000);
 
-test.skip('stake-update extends account6 STX-only stake by another cycle', async () => {
+test('stake-update extends account6 STX-only stake by another cycle', async () => {
   let poxInfo = await getPoxInfo();
 
   const posOf = () =>
@@ -102,6 +99,9 @@ test.skip('stake-update extends account6 STX-only stake by another cycle', async
     fee: FEE,
     nonce: await getNextNonce(staker.address),
     network,
+    // stake-update touches locked STX — allow asset moves so it doesn't
+    // abort_by_post_condition under default Deny mode.
+    postConditionMode: 'allow',
   });
 
   const transaction = signTransaction(unsigned, staker.key);
@@ -121,6 +121,10 @@ test.skip('stake-update extends account6 STX-only stake by another cycle', async
     burn_block_height: tx.burn_block_height,
   });
 
+  // Phase switch: the same get-stacker-info path returns a DIFFERENT body after
+  // the extend (num-cycles 1 → 2). Route the after-read to its own fixture key so
+  // replay doesn't collapse before/after to one value.
+  useFixtures('stx-extend-after');
   const after = await fetchStakerInfo({ address: staker.address, network });
   console.log('AFTER staker-info:', after.staked ? { ...after.details, amountUstx: after.details!.amountUstx.toString() } : after);
 

@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * Privatenet STX-only stake action — empirical amount-floor probe.
  *
@@ -19,21 +18,17 @@
  *     npx jest tests/privatenet/actions/stx-stake.test.ts --runInBand --collectCoverage=false --verbose
  */
 import { broadcastTransaction } from "@stacks/transactions";
-import fetchMock from "jest-fetch-mock";
 import { buildStake } from "../../../src";
 import { REGTEST_KEYS, getAccount } from "../../regtest/regtest";
 import { getNetwork } from "../../helpers/utils";
 import {
-  ensurePox5,
   getNextNonce,
   getPoxInfo,
   getTransaction,
   waitForFulfilled,
 } from "../../helpers/wait";
 import { signTransaction } from "../../helpers/sign";
-
-// Live private testnet — opt out of the globally-enabled jest-fetch-mock.
-fetchMock.disableMocks();
+import { useFixtures } from "../../helpers/mock";
 
 jest.setTimeout(60 * 60_000);
 
@@ -51,10 +46,10 @@ const signerManager =
 const staker = getAccount(REGTEST_KEYS[STAKER as keyof typeof REGTEST_KEYS]);
 
 beforeAll(async () => {
-  await ensurePox5();
+  useFixtures("stx-stake");
 }, 60 * 60_000);
 
-test.skip("stake below API min is accepted on-chain (no contract amount floor)", async () => {
+test("stake below API min is accepted on-chain (no contract amount floor)", async () => {
   const poxInfo = await getPoxInfo();
 
   // The contract's `stake` replay guard requires
@@ -89,6 +84,9 @@ test.skip("stake below API min is accepted on-chain (no contract amount floor)",
     fee: FEE,
     nonce: await getNextNonce(staker.address),
     network,
+    // stake LOCKS amountUstx — an asset movement default Deny mode reverts
+    // (abort_by_post_condition). Allow transfers so the stake persists.
+    postConditionMode: "allow",
   });
 
   const transaction = signTransaction(unsigned, staker.key);

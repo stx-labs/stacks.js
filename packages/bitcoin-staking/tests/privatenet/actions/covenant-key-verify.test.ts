@@ -40,12 +40,13 @@ import {
   verifyCovenantSig,
 } from '../../helpers/covenant';
 import { REGTEST } from '../../helpers/btc-wallet';
-import fetchMock from 'jest-fetch-mock';
-
-// Live test — disable the global jest-fetch-mock so real HTTP reaches the API.
-fetchMock.disableMocks();
+import { useFixtures } from '../../helpers/mock';
 
 jest.setTimeout(120_000);
+
+// Record/replay: RECORD=1 hits the live API and captures to
+// fixtures-covenant-key-verify.json; default (mock) mode replays it offline.
+beforeAll(() => useFixtures('covenant-key-verify'));
 
 const STAKER_STX = 'ST1MV5EGTM2NSPF3MSZ2SMYRXJJH1GG6CEMP9N117';
 const STAKER_BTC_PUB = secp256k1.getPublicKey(hexToBytes('11'.repeat(32)), true);

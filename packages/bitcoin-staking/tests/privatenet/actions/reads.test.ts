@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * Read-only smoke tests against the private testnet. Waits for pox-5 to be
  * active (no reset — it's a live chain). Only tests what this node CAN execute:
@@ -20,7 +19,7 @@ import {
 } from "../../../src";
 import { REGTEST_KEYS, getAccount } from "../../regtest/regtest";
 import { getNetwork } from "../../helpers/utils";
-import { ensurePox5 } from "../../helpers/wait";
+import { useFixtures } from "../../helpers/mock";
 
 // Long timeout: on this net we don't know how far away pox-5 activation is.
 jest.setTimeout(30 * 60_000);
@@ -30,12 +29,12 @@ const network = getNetwork();
 const account = getAccount(REGTEST_KEYS.account4);
 
 beforeAll(async () => {
+  useFixtures("reads");
   // Reuses the live chain if pox-5 is already active; otherwise polls.
   // On devnet this would reset; here NETWORK=testnet so it just waits.
-  await ensurePox5();
 }, 30 * 60_000);
 
-test.skip("fetchAccountStatus: funded and unlocked", async () => {
+test("fetchAccountStatus: funded and unlocked", async () => {
   const status = await fetchAccountStatus({ address: account.address, network });
   console.log("account status", status);
   expect(status.balance).toBeGreaterThan(0n);
@@ -43,7 +42,7 @@ test.skip("fetchAccountStatus: funded and unlocked", async () => {
   expect(status.unlockHeight).toBe(0);
 });
 
-test.skip("fetchPoxInfo: pox-5 active", async () => {
+test("fetchPoxInfo: pox-5 active", async () => {
   const pox = await fetchPoxInfo({ network });
   console.log("pox info", { contractId: pox.contractId, cycle: pox.rewardCycleId, isPoxActive: pox.currentCycle.isPoxActive });
   expect(pox.contractId).toContain("pox-5");
@@ -52,13 +51,13 @@ test.skip("fetchPoxInfo: pox-5 active", async () => {
 
 // pox-5 read-only calls may hit the node's 100 KB read_length cap once the
 // contract accumulates stacker/bond state. On a fresh chain they succeed fine.
-test.skip("fetchStakerInfo: account4 not staked", async () => {
+test("fetchStakerInfo: account4 not staked", async () => {
   const info = await fetchStakerInfo({ address: account.address, network });
   console.log("staker info", info);
   expect(info.staked).toBe(false);
 });
 
-test.skip("fetchBondMembership: account4 has no bond", async () => {
+test("fetchBondMembership: account4 has no bond", async () => {
   const membership = await fetchBondMembership({ address: account.address, network });
   console.log("bond membership", membership);
   expect(membership).toBeUndefined();

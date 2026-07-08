@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * E2E Negative / Edge-case Matrix
  *
@@ -43,7 +42,6 @@ import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
   broadcastAndWait,
-  ensurePox5,
   getNextNonce,
   getTransaction,
   getPoxInfo,
@@ -71,12 +69,11 @@ function extractErrCode(repr: string | undefined): number | null {
 }
 
 beforeAll(async () => {
-  await ensurePox5();
 }, 60_000);
 
 // Case 1: register-for-bond with amountSats > allowance cap -> TooMuchSats (u10)
 
-test.skip('case 1 — over-cap sats: TooMuchSats (u10)', async () => {
+test('case 1 — over-cap sats: TooMuchSats (u10)', async () => {
   useFixtures('e2e-negative-matrix-case1');
   const network = getNetwork();
   const staker = getAccount(REGTEST_KEYS.account6); // Tester A — funded, no enrollment
@@ -132,6 +129,7 @@ test.skip('case 1 — over-cap sats: TooMuchSats (u10)', async () => {
     fee: FEE,
     nonce,
     network,
+    postConditionMode: 'allow',
   });
 
   const tx = signTransaction(unsigned, staker.key);
@@ -181,7 +179,7 @@ test.skip('case 1 — over-cap sats: TooMuchSats (u10)', async () => {
 //
 // REQUIRES PRIOR STATE: an enrolled staker. Skips gracefully if none found.
 
-test.skip('case 2 — double-register: AlreadyRegistered (u9) / StakerAlreadyAdded (u5)', async () => {
+test('case 2 — double-register: AlreadyRegistered (u9) / StakerAlreadyAdded (u5)', async () => {
   useFixtures('e2e-negative-matrix-case2');
   const network = getNetwork();
   const staker = getAccount(REGTEST_KEYS.account5); // PoolXYZ — may be enrolled
@@ -228,6 +226,7 @@ test.skip('case 2 — double-register: AlreadyRegistered (u9) / StakerAlreadyAdd
     fee: FEE,
     nonce,
     network,
+    postConditionMode: 'allow',
   });
 
   const tx = signTransaction(unsigned, staker.key);
@@ -272,7 +271,7 @@ test.skip('case 2 — double-register: AlreadyRegistered (u9) / StakerAlreadyAdd
 // Discovers (or constructs) a bond whose start height is in the PAST.
 // No prior state required — we pick a bond that has already started.
 
-test.skip('case 3 — register after window closed: BondAlreadyStarted (u43)', async () => {
+test('case 3 — register after window closed: BondAlreadyStarted (u43)', async () => {
   useFixtures('e2e-negative-matrix-case3');
   const network = getNetwork();
   // account4 — RICH (~10B STX), NEVER staked (no membership), uncontended.
@@ -351,6 +350,7 @@ test.skip('case 3 — register after window closed: BondAlreadyStarted (u43)', a
     fee: FEE,
     nonce,
     network,
+    postConditionMode: 'allow',
   });
 
   const tx = signTransaction(unsigned, staker.key);
@@ -434,7 +434,7 @@ interface BtcLockArtifact {
   txCount: number;
 }
 
-test.skip('case 4 — CLTV reclaim before unlockHeight: mempool rejects (non-final)', async () => {
+test('case 4 — CLTV reclaim before unlockHeight: mempool rejects (non-final)', async () => {
   useFixtures('e2e-negative-matrix-case4');
   // Read artifact written by btc-lock.test.ts
   const BOND_INDEX_ENV = Number(process.env.BOND_INDEX ?? 4);
@@ -553,7 +553,7 @@ test.skip('case 4 — CLTV reclaim before unlockHeight: mempool rejects (non-fin
 
 import { buildAnnounceL1EarlyExit } from '../../../src';
 
-test.skip('case 5 — announce-l1-early-exit with no membership: NotBondParticipant (u34)', async () => {
+test('case 5 — announce-l1-early-exit with no membership: NotBondParticipant (u34)', async () => {
   useFixtures('e2e-negative-matrix-case5');
   const network = getNetwork();
   // account4 — RICH (~10B STX), NEVER staked (no bond membership), uncontended.
@@ -587,6 +587,7 @@ test.skip('case 5 — announce-l1-early-exit with no membership: NotBondParticip
     fee: FEE,
     nonce,
     network,
+    postConditionMode: 'allow',
   });
 
   const tx = signTransaction(unsigned, staker.key);
@@ -633,7 +634,7 @@ test.skip('case 5 — announce-l1-early-exit with no membership: NotBondParticip
 //
 // No prior state required — always runnable.
 
-test.skip('case 6 — stake with next-cycle startBurnHt: InvalidStartBurnHeight (u24)', async () => {
+test('case 6 — stake with next-cycle startBurnHt: InvalidStartBurnHeight (u24)', async () => {
   useFixtures('e2e-negative-matrix-case6');
   const network = getNetwork();
   // account4 — RICH (~10B STX), uncontended. Staking 1000 STX from the
@@ -662,6 +663,7 @@ test.skip('case 6 — stake with next-cycle startBurnHt: InvalidStartBurnHeight 
     fee: FEE,
     nonce,
     network,
+    postConditionMode: 'allow',
   });
 
   const tx = signTransaction(unsigned, staker.key);

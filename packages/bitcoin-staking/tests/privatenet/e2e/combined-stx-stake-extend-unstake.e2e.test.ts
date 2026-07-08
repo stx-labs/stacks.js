@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * E2E — Combined STX lifecycle: stake -> stake-update (extend +cycle, +amount) -> unstake (early exit).
  *
@@ -37,7 +36,6 @@ import type { Account } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import { freshFundedStxAccount } from '../../helpers/fresh-account';
 import {
-  ensurePox5,
   getNextNonce,
   getPoxInfo,
   getTransaction,
@@ -86,12 +84,11 @@ async function ensureRewardPhase(): Promise<Awaited<ReturnType<typeof getPoxInfo
 }
 
 beforeAll(async () => {
-  useFixtures('e2e-combined-stx');
-  await ensurePox5();
-  staker = await freshFundedStxAccount({ network, amountUstx: FUND_USTX });
+  useFixtures('e2e-combined-stx-fund'); // isolate the funding broadcast from the stake broadcast
+  staker = await freshFundedStxAccount({ network, amountUstx: FUND_USTX, label: 'combined' });
 }, 4 * 180_000);
 
-test.skip('account2: full STX lifecycle — stake → extend → unstake (early exit)', async () => {
+test('account2: full STX lifecycle — stake → extend → unstake (early exit)', async () => {
   useFixtures('e2e-combined-stx');
 
   console.log('\n=== E2E: combined-stx-stake-extend-unstake ===');
@@ -137,6 +134,7 @@ test.skip('account2: full STX lifecycle — stake → extend → unstake (early 
     fee: FEE,
     nonce: await getNextNonce(staker.address),
     network,
+    postConditionMode: 'allow',
   });
 
   const stakeTxRaw = signTransaction(unsignedStake, staker.key);
@@ -158,6 +156,10 @@ test.skip('account2: full STX lifecycle — stake → extend → unstake (early 
     throw new Error(`stake aborted (err u${code}): ${describePox5Error(code ?? -1)?.name ?? 'unknown'}`);
   }
 
+  // Phase switch: same get-staker-info path returns a different body after the
+  // stake; route the after-read to its own fixture key.
+  useFixtures('e2e-combined-stx-staked');
+
   // Assert: staker-info now reflects the new position
   const afterStake = await fetchStakerInfo({ address: staker.address, network });
   console.log('AFTER stake:', afterStake.staked
@@ -173,7 +175,7 @@ test.skip('account2: full STX lifecycle — stake → extend → unstake (early 
     console.log('=== STAKE CONFIRMED ✓ ===');
   }
 
-  useFixtures('e2e-combined-stx');
+  useFixtures('e2e-combined-stx-extend');
 
   // PHASE 2: EXTEND (stake-update)
   console.log('\n─── PHASE 2: EXTEND (stake-update) ───');
@@ -201,6 +203,7 @@ test.skip('account2: full STX lifecycle — stake → extend → unstake (early 
     fee: FEE,
     nonce: await getNextNonce(staker.address),
     network,
+    postConditionMode: 'allow',
   });
 
   const extendTxRaw = signTransaction(unsignedExtend, staker.key);
@@ -221,6 +224,10 @@ test.skip('account2: full STX lifecycle — stake → extend → unstake (early 
     const code = parseErrCode(extendTx.tx_result?.repr);
     throw new Error(`extend aborted (err u${code}): ${describePox5Error(code ?? -1)?.name ?? 'unknown'}`);
   }
+
+  // Phase switch: same get-staker-info path returns a different body after the
+  // extend; route the after-read to its own fixture key.
+  useFixtures('e2e-combined-stx-extended');
 
   // Assert: numCycles increased by CYCLES_TO_EXTEND; amount increased by EXTEND_AMOUNT_USTX
   const afterExtend = await fetchStakerInfo({ address: staker.address, network });
@@ -261,6 +268,7 @@ test.skip('account2: full STX lifecycle — stake → extend → unstake (early 
     fee: FEE,
     nonce: await getNextNonce(staker.address),
     network,
+    postConditionMode: 'allow',
   });
 
   const unstakeTxRaw = signTransaction(unsignedUnstake, staker.key);
@@ -287,6 +295,9 @@ test.skip('account2: full STX lifecycle — stake → extend → unstake (early 
   const expectedUnlockCycle = pox.rewardCycleId + 1;
   const expectedUnlockBurnHt = rewardCycleToBurnHeight(expectedUnlockCycle, pox);
 
+  // Phase switch: same get-staker-info path returns a different body after the
+  // unstake; route the after-read to its own fixture key.
+  useFixtures('e2e-combined-stx-unstaked');
   const afterUnstake = await fetchStakerInfo({ address: staker.address, network });
   console.log('AFTER unstake:', afterUnstake.staked
     ? { amountUstx: afterUnstake.details.amountUstx.toString(), numCycles: afterUnstake.details.numCycles, firstRewardCycle: afterUnstake.details.firstRewardCycle }

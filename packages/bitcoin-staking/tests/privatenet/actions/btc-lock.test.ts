@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * ACTION 1 — Fund a real P2WSH L1 lockup output on regtest Bitcoin.
  *
@@ -24,11 +23,13 @@
 
 // @ts-ignore — @scure/btc-signer is ESM; ts-jest transforms it via jest.config.js
 import * as btc from '@scure/btc-signer';
+import { useFixtures } from '../../helpers/mock';
+import { waitForBondWithRunway } from '../../helpers/bond';
 // @ts-ignore — same ESM transform
 import { secp256k1 } from '@noble/curves/secp256k1.js';
 import { bytesToHex, hexToBytes } from '@stacks/common';
-import { writeFileSync } from 'node:fs';
-import fetchMock from 'jest-fetch-mock';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   buildUnlockScript,
   buildLockScript,
@@ -39,14 +40,15 @@ import {
 } from '../../../src';
 import { getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
-import { ensurePox5 } from '../../helpers/wait';
 
 // This test hits live networks — disable the global jest-fetch-mock.
-fetchMock.disableMocks();
 
 jest.setTimeout(30 * 60_000);
 
-const BOND_INDEX = Number(process.env.BOND_INDEX ?? 4);
+// BOND_INDEX unset -> discover the currently registration-open bond dynamically.
+const BOND_INDEX_ENV = process.env.BOND_INDEX ? Number(process.env.BOND_INDEX) : undefined;
+// Canonical artifact location (repo-visible so replays/CI can read it).
+const ARTIFACT_DIR = join(__dirname, '..', 'fixtures', 'artifacts');
 const AMOUNT_SATS = BigInt(process.env.AMOUNT_SATS ?? 30_000);
 // Flat fee for the funding tx (1 sat/vB × ~300 vB rounded up generously)
 const FEE_SATS = BigInt(process.env.FEE_SATS ?? 500);
@@ -271,14 +273,17 @@ async function fetchBlockTxCount(blockHash: string): Promise<number> {
   return data.tx_count;
 }
 
-test.skip(`fund P2WSH L1 lockup on regtest BTC for bond ${BOND_INDEX}`, async () => {
+beforeAll(() => useFixtures('btc-lock'));
+
+test('fund P2WSH L1 lockup on regtest BTC (dynamic bond)', async () => {
+  const { bondIndex: BOND_INDEX } =
+    BOND_INDEX_ENV != null ? { bondIndex: BOND_INDEX_ENV } : await waitForBondWithRunway(10);
   const network = getNetwork();
 
   // 1. Fetch bond + pox info, derive unlock height + lockup script
   console.log(`\n=== BTC-LOCK ACTION: bondIndex=${BOND_INDEX} amount=${AMOUNT_SATS} sats staker=${STAKER_NAME} ===`);
   console.log('staker STX address:', STAKER_STX_ADDRESS);
 
-  await ensurePox5();
 
   const bond = await fetchBond({ bondIndex: BOND_INDEX, network });
   if (!bond) throw new Error(`bond ${BOND_INDEX} not found on-chain`);
@@ -461,7 +466,8 @@ test.skip(`fund P2WSH L1 lockup on regtest BTC for bond ${BOND_INDEX}`, async ()
     txCount,
   };
 
-  const artifactPath = `/tmp/btc-lock-${BOND_INDEX}-${STAKER_NAME}.json`;
+  mkdirSync(ARTIFACT_DIR, { recursive: true });
+  const artifactPath = join(ARTIFACT_DIR, `btc-lock-${STAKER_NAME}.json`);
   writeFileSync(artifactPath, JSON.stringify(artifact, null, 2));
   console.log(`\n=== ARTIFACT WRITTEN: ${artifactPath} ===`);
   console.log(JSON.stringify(artifact, null, 2));

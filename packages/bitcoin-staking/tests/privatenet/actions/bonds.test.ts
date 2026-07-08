@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * Bond state reader — enumerates protocol-bonds and prints what the daemon
  * (or anyone) has set up on the current chain.
@@ -19,6 +18,7 @@ import {
 import { bondPhaseRanges, bondPeriodToBurnHeight } from "../../../src/cycles";
 import { REGTEST_KEYS, getAccount } from "../../regtest/regtest";
 import { getNetwork } from "../../helpers/utils";
+import { useFixtures } from "../../helpers/mock";
 
 jest.setTimeout(60_000);
 
@@ -27,7 +27,9 @@ const MAX_BOND_INDEX = Number(process.env.MAX_BOND_INDEX ?? 20);
 const membershipAddress =
   process.env.STACKS_ADDRESS ?? getAccount(REGTEST_KEYS.account4).address;
 
-test.skip("enumerate protocol-bonds", async () => {
+beforeAll(() => useFixtures("bonds"));
+
+test("enumerate protocol-bonds", async () => {
   const pox = await fetchPoxInfo({ network });
   console.log("pox info", {
     contract: pox.contractId,
@@ -63,9 +65,14 @@ test.skip("enumerate protocol-bonds", async () => {
   console.log(`found ${found.length} bond(s) in indices 0..${MAX_BOND_INDEX - 1}`);
 });
 
-test.skip("bond membership for address", async () => {
+test("bond membership for address", async () => {
   const membership = await fetchBondMembership({ address: membershipAddress, network });
   console.log(`bond membership for ${membershipAddress}:`, membership ?? "none");
-  // Not asserting — just observing state.
-  expect(true).toBe(true);
+  // account4 (bond-admin) holds no bond membership; if a member, the shape is well-formed.
+  if (membership) {
+    expect(typeof membership.bondIndex).toBe("number");
+    expect(typeof membership.isL1Lock).toBe("boolean");
+  } else {
+    expect(membership).toBeUndefined();
+  }
 });

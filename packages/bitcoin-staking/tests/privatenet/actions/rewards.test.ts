@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * Reward distribution + claiming probes against the private testnet.
  *
@@ -46,12 +45,12 @@ import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork, ENV } from '../../helpers/utils';
 import {
   broadcastAndWait,
-  ensurePox5,
   getNextNonce,
   getPoxInfo,
   getStxBalance,
   getTransaction,
 } from '../../helpers/wait';
+import { useFixtures } from '../../helpers/mock';
 import { signTransaction } from '../../helpers/sign';
 
 jest.setTimeout(30 * 60_000);
@@ -126,10 +125,6 @@ async function assertTolerableResult(
   return undefined;
 }
 
-beforeAll(async () => {
-  await ensurePox5();
-}, 20 * 60_000);
-
 // PROBE 1: calculate-rewards (anyone-callable).
 //
 // Targets reward codes:
@@ -144,7 +139,8 @@ beforeAll(async () => {
 // [4, 12, 19] — the contract is expected to reject with u29 or u33. Any of the
 // above is an acceptable discovery on this exploratory test.
 
-test.skip('rewards-probe-1: calculate-rewards from account5 (bond indices [4,12,19])', async () => {
+test('rewards-probe-1: calculate-rewards from account5 (bond indices [4,12,19])', async () => {
+  useFixtures('rewards-probe-1');
   const poxInfo = await getPoxInfo();
   console.log('probe-1 current reward cycle:', poxInfo.rewardCycleId);
   console.log('probe-1 bond indices:', PROBE_BOND_INDICES);
@@ -155,6 +151,7 @@ test.skip('rewards-probe-1: calculate-rewards from account5 (bond indices [4,12,
     fee: FEE,
     nonce: await getNextNonce(account5.address),
     network,
+    postConditionMode: 'allow',
   });
 
   const tx = signTransaction(unsigned, account5.key);
@@ -203,7 +200,8 @@ test.skip('rewards-probe-1: calculate-rewards from account5 (bond indices [4,12,
 //
 // Also checks STX balance before/after — no increase expected (tolerant).
 
-test.skip('rewards-probe-2: claim-rewards from account5 (allowlisted but never enrolled)', async () => {
+test('rewards-probe-2: claim-rewards from account5 (allowlisted but never enrolled)', async () => {
+  useFixtures('rewards-probe-2');
   const poxInfo = await getPoxInfo();
   // Common usage: claim the cycle just before the current one
   const rewardCycle = Math.max(0, poxInfo.rewardCycleId - 1);
@@ -227,6 +225,7 @@ test.skip('rewards-probe-2: claim-rewards from account5 (allowlisted but never e
     fee: FEE,
     nonce: await getNextNonce(account5.address),
     network,
+    postConditionMode: 'allow',
   });
 
   const tx = signTransaction(unsigned, account5.key);
@@ -287,7 +286,8 @@ test.skip('rewards-probe-2: claim-rewards from account5 (allowlisted but never e
 //   u34 NotBondParticipant    — primary: outer guard fires (not in any bond)
 //   u32 NoClaimableRewards    — alternative: participant check passes, legs empty
 
-test.skip('rewards-probe-3: claim-rewards from account6 (not allowlisted, never enrolled)', async () => {
+test('rewards-probe-3: claim-rewards from account6 (not allowlisted, never enrolled)', async () => {
+  useFixtures('rewards-probe-3');
   const poxInfo = await getPoxInfo();
   const rewardCycle = Math.max(0, poxInfo.rewardCycleId - 1);
   console.log('probe-3 current cycle:', poxInfo.rewardCycleId, '/ claiming cycle:', rewardCycle);
@@ -301,6 +301,7 @@ test.skip('rewards-probe-3: claim-rewards from account6 (not allowlisted, never 
     fee: FEE,
     nonce: await getNextNonce(account6.address),
     network,
+    postConditionMode: 'allow',
   });
 
   const tx = signTransaction(unsigned, account6.key);
@@ -343,7 +344,8 @@ test.skip('rewards-probe-3: claim-rewards from account6 (not allowlisted, never 
 // This probe demonstrates the two legs are independently addressable, and that
 // the STX-only leg can be claimed on its OWN (claim-rewards with bondIndices=[]).
 
-test.skip('rewards-probe-4: STX-only leg is addressable + claimable independently of bond legs', async () => {
+test('rewards-probe-4: STX-only leg is addressable + claimable independently of bond legs', async () => {
+  useFixtures('rewards-probe-4');
   const poxInfo = await getPoxInfo();
   const rewardCycle = Math.max(0, poxInfo.rewardCycleId - 1);
   console.log('probe-4 current cycle:', poxInfo.rewardCycleId, '/ probing cycle:', rewardCycle);
@@ -390,6 +392,7 @@ test.skip('rewards-probe-4: STX-only leg is addressable + claimable independentl
     fee: FEE,
     nonce: await getNextNonce(account5.address),
     network,
+    postConditionMode: 'allow',
   });
 
   const tx = signTransaction(unsigned, account5.key);

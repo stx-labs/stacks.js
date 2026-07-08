@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * Adversarial / robustness probes — pox-5 bond contract, batch 2.
  *
@@ -49,7 +48,6 @@ import { REGTEST_KEYS, getAccount } from "../../regtest/regtest";
 import { getNetwork, ENV } from "../../helpers/utils";
 import {
   broadcastAndWait,
-  ensurePox5,
   getNextNonce,
   getPoxInfo,
   getTransaction,
@@ -57,6 +55,7 @@ import {
 import { signTransaction } from "../../helpers/sign";
 import { getBondAdminAccount } from '../../helpers/bondAdmin';
 import { fetchFirstBondPeriodCycle } from "../pox";
+import { useFixtures } from "../../helpers/mock";
 
 // Reuse the daemon's deployed signer-manager — same approach as adversarial.test.ts
 // and register-for-bond.test.ts (deploying our own reliably times out beforeAll).
@@ -183,7 +182,6 @@ async function assertTolerableResult(
 
 beforeAll(async () => {
   admin = await getBondAdminAccount();
-  await ensurePox5();
 
   // Discover the lowest existing bond index for probe A
   console.log("Probing for existing bonds (0..11)...");
@@ -207,7 +205,8 @@ beforeAll(async () => {
 // account5 IS allowlisted on most bonds, so guard #2 is passed. Guard #1 and #3
 // depend on timing. All four codes are acceptable discoveries.
 
-test.skip("adversarial-2-A: register-for-bond against an open/active bond (account5, sBTC path)", async () => {
+test("adversarial-2-A: register-for-bond against an open/active bond (account5, sBTC path)", async () => {
+  useFixtures('adversarial-2-a');
   const bondIndex = lowestExistingBondIndex ?? 1;
   console.log("probe-A using bondIndex:", bondIndex);
 
@@ -228,6 +227,7 @@ test.skip("adversarial-2-A: register-for-bond against an open/active bond (accou
     fee: FEE,
     nonce: await getNextNonce(account5.address),
     network,
+    postConditionMode: 'allow',
   });
 
   const tx = signTransaction(unsigned, account5.key);
@@ -275,7 +275,8 @@ test.skip("adversarial-2-A: register-for-bond against an open/active bond (accou
 // or the same lock-sbtc (u1) / prepare-phase (u47) codes if those guards fire first.
 // No hard-pinned assertion on the code — just log it.
 
-test.skip("adversarial-2-B: register-for-bond with amountUstx = 0 (sBTC path, account5)", async () => {
+test("adversarial-2-B: register-for-bond with amountUstx = 0 (sBTC path, account5)", async () => {
+  useFixtures('adversarial-2-b');
   const bondIndex = lowestExistingBondIndex ?? 1;
   console.log("probe-B using bondIndex:", bondIndex, "amountUstx: 0");
 
@@ -294,6 +295,7 @@ test.skip("adversarial-2-B: register-for-bond with amountUstx = 0 (sBTC path, ac
     fee: FEE,
     nonce: await getNextNonce(account5.address),
     network,
+    postConditionMode: 'allow',
   });
 
   const tx = signTransaction(unsigned, account5.key);
@@ -321,7 +323,8 @@ test.skip("adversarial-2-B: register-for-bond with amountUstx = 0 (sBTC path, ac
 // The contract likely validates that minUstxRatioBps <= 10000. Expected: some
 // validation abort. Unknown code — log and accept abort OR success.
 
-test.skip("adversarial-2-C1: setup-bond fuzz — minUstxRatioBps = 20000 (> 100%)", async () => {
+test("adversarial-2-C1: setup-bond fuzz — minUstxRatioBps = 20000 (> 100%)", async () => {
+  useFixtures('adversarial-2-c1');
   const { bondIndex, anchorCycle, currentCycle } =
     await computeNextBondIndex(1); // offset 1 -> next+1 bond
   console.log("probe-C1 bondIndex:", bondIndex, { anchorCycle, currentCycle });
@@ -356,7 +359,8 @@ test.skip("adversarial-2-C1: setup-bond fuzz — minUstxRatioBps = 20000 (> 100%
 // A zero ratio would make min-ustx-for-sats-amount return 0, but the contract
 // may validate ratio > 0 upfront. Exploratory.
 
-test.skip("adversarial-2-C2: setup-bond fuzz — stxValueRatio = 0", async () => {
+test("adversarial-2-C2: setup-bond fuzz — stxValueRatio = 0", async () => {
+  useFixtures('adversarial-2-c2');
   const { bondIndex, anchorCycle, currentCycle } =
     await computeNextBondIndex(2); // offset 2 -> distinct index
   console.log("probe-C2 bondIndex:", bondIndex, { anchorCycle, currentCycle });
@@ -392,7 +396,8 @@ test.skip("adversarial-2-C2: setup-bond fuzz — stxValueRatio = 0", async () =>
 // invalid per contract. Exploratory — could succeed (creating an un-enterable
 // bond), or fail with a validation guard.
 
-test.skip("adversarial-2-C3: setup-bond fuzz — empty allowlist []", async () => {
+test("adversarial-2-C3: setup-bond fuzz — empty allowlist []", async () => {
+  useFixtures('adversarial-2-c3');
   const { bondIndex, anchorCycle, currentCycle } =
     await computeNextBondIndex(3); // offset 3 -> distinct index
   console.log("probe-C3 bondIndex:", bondIndex, { anchorCycle, currentCycle });
@@ -427,7 +432,8 @@ test.skip("adversarial-2-C3: setup-bond fuzz — empty allowlist []", async () =
 // maxSats=0 means the staker's cap is zero — they could never deposit any BTC.
 // Unknown whether the contract validates this at setup time or at registration.
 
-test.skip("adversarial-2-C4: setup-bond fuzz — allowlist entry with maxSats = 0", async () => {
+test("adversarial-2-C4: setup-bond fuzz — allowlist entry with maxSats = 0", async () => {
+  useFixtures('adversarial-2-c4');
   const { bondIndex, anchorCycle, currentCycle } =
     await computeNextBondIndex(4); // offset 4 -> distinct index
   console.log("probe-C4 bondIndex:", bondIndex, { anchorCycle, currentCycle });
@@ -469,7 +475,8 @@ test.skip("adversarial-2-C4: setup-bond fuzz — allowlist entry with maxSats = 
 // reject the tx before it even reaches the VM. In that case broadcastAndWait
 // throws (broadcast rejected), and we catch and log it here instead.
 
-test.skip("adversarial-2-C5: setup-bond fuzz — earlyUnlockBytes oversized (700 bytes > 683)", async () => {
+test("adversarial-2-C5: setup-bond fuzz — earlyUnlockBytes oversized (700 bytes > 683)", async () => {
+  useFixtures('adversarial-2-c5');
   const { bondIndex, anchorCycle, currentCycle } =
     await computeNextBondIndex(5); // offset 5 -> distinct index
   console.log("probe-C5 bondIndex:", bondIndex, { anchorCycle, currentCycle });

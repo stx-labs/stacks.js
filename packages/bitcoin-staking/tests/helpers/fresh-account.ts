@@ -19,19 +19,28 @@
  * via the funder's nonce (see fundStx in wait.ts).
  */
 // @ts-ignore — ESM; ts-jest transforms via jest.config.js
-import { secp256k1 } from '@noble/curves/secp256k1.js';
+import { sha256 } from '@noble/hashes/sha2.js';
+// @ts-ignore — ESM; ts-jest transforms via jest.config.js
+import { utf8ToBytes } from '@noble/hashes/utils.js';
 import { bytesToHex } from '@stacks/common';
 import type { StacksNetwork } from '@stacks/network';
 import { getAccount, REGTEST_KEYS, type Account } from '../regtest/regtest';
 import { fundStx, getNextNonce } from './wait';
 import { isMocking } from './utils';
 
+// Deterministic key material so RECORD and replay derive the SAME accounts —
+// otherwise fixtures (keyed by address) never match on replay. Bump the seed to
+// mint a disjoint set (e.g. re-recording on a non-wiped chain where the prior
+// accounts are already staked).
+const FRESH_SEED = process.env.FRESH_ACCOUNT_SEED ?? 'privatenet-fresh-v1';
+
 /**
- * Derive a brand-new random account (never seen on-chain). Returns the same
- * shape as `getAccount` so it drops into existing build/sign call-sites.
+ * Derive an account deterministically from `label` (stable across runs). Same
+ * shape as `getAccount`, so it drops into existing build/sign call-sites. Give
+ * each account a distinct label (e.g. the loop index) to avoid collisions.
  */
-export function deriveFreshAccount(): Account {
-  const raw = secp256k1.utils.randomSecretKey() as Uint8Array;
+export function deriveFreshAccount(label: string | number = 0): Account {
+  const raw = sha256(utf8ToBytes(`${FRESH_SEED}:${label}`)); // 32 bytes → valid secp256k1 scalar
   // Stacks private keys carry a trailing `01` compression marker.
   const key = bytesToHex(raw) + '01';
   return getAccount(key);
@@ -42,17 +51,20 @@ export function deriveFreshAccount(): Account {
  * (default account1, rich + uncontended). Awaits funding confirmation.
  *
  * Under replay (`isMocking`) the funding tx is skipped — the fixture is the
- * already-funded state — but a fresh random account is still derived so the
- * test logic is identical online and offline.
+ * already-funded state — and the account is derived deterministically from
+ * `label`, so record and replay produce identical addresses.
  */
 export async function freshFundedStxAccount(opts: {
   network: StacksNetwork;
   amountUstx: bigint;
+  /** Stable label (e.g. loop index) so record and replay derive the same account. */
+  label?: string | number;
   funderName?: keyof typeof REGTEST_KEYS;
   fee?: bigint;
 }): Promise<Account> {
-  const account = deriveFreshAccount();
-  const funder = getAccount(REGTEST_KEYS[opts.funderName ?? 'account1']);
+  const account = deriveFreshAccount(opts.label ?? 0);
+  // account4: rich, nonce-stable, daemon-free (account1 is contended).
+  const funder = getAccount(REGTEST_KEYS[opts.funderName ?? 'account4']);
 
   if (!isMocking) {
     const nonce = await getNextNonce(funder.address);

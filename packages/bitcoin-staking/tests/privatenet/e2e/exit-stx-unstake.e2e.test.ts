@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * E2E — STX-only early exit (unstake).
  *
@@ -33,7 +32,6 @@ import {
 import { resolveAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
-  ensurePox5,
   getNextNonce,
   getPoxInfo,
   getTransaction,
@@ -61,10 +59,9 @@ function parseErrCode(repr: string | undefined): number | undefined {
 
 beforeAll(async () => {
   useFixtures('e2e-exit-stx-unstake');
-  await ensurePox5();
 }, 60_000);
 
-test.skip('account7: stake STX-only then early-exit (unstake) rewrites position to next cycle', async () => {
+test('stake STX-only then early-exit (unstake) rewrites position to next cycle', async () => {
   useFixtures('e2e-exit-stx-unstake');
   let poxInfo = await getPoxInfo();
   console.log('\n=== E2E: exit-stx-unstake ===');
@@ -106,6 +103,7 @@ test.skip('account7: stake STX-only then early-exit (unstake) rewrites position 
       fee: FEE,
       nonce: await getNextNonce(staker.address),
       network,
+      postConditionMode: 'allow',
     });
 
     const stakeTx = signTransaction(unsignedStake, staker.key);
@@ -181,6 +179,7 @@ test.skip('account7: stake STX-only then early-exit (unstake) rewrites position 
     fee: FEE,
     nonce: await getNextNonce(staker.address),
     network,
+    postConditionMode: 'allow',
   });
 
   const unstakeTx = signTransaction(unsignedUnstake, staker.key);

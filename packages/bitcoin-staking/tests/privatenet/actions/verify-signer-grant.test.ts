@@ -45,7 +45,7 @@ import {
 import { fetchSignerGrantMessageHash } from "../../../src/fetch";
 import { REGTEST_KEYS, getAccount, SIGNER_MANAGER } from "../../regtest/regtest";
 import { ENV, getNetwork } from "../../helpers/utils";
-import { ensurePox5 } from "../../helpers/wait";
+import { useFixtures } from "../../helpers/mock";
 
 jest.setTimeout(30 * 60_000);
 
@@ -64,11 +64,9 @@ const signer = getAccount(REGTEST_KEYS.account6);
 const signerPrivateKey = REGTEST_KEYS.account6.slice(0, 64);
 const signerKey = signer.publicKey; // compressed 33-byte hex
 
-beforeAll(async () => {
-  await ensurePox5();
-}, 30 * 60_000);
+beforeAll(() => useFixtures("verify-signer-grant"));
 
-describe.skip("SIP-018 signer-key-grant verification (read-only)", () => {
+describe("SIP-018 signer-key-grant verification (read-only)", () => {
   // (a) MESSAGE-HASH PARITY: off-chain SDK hash === on-chain read-only hash.
   test("message-hash parity: off-chain === on-chain", async () => {
     const offChain = bytesToHex(

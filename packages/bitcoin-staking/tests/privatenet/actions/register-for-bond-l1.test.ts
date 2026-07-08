@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * ACTION 2 — Register for a bond with a REAL L1 BTC lockup proof.
  *
@@ -24,7 +23,7 @@
  */
 
 import { readFileSync } from 'node:fs';
-import fetchMock from 'jest-fetch-mock';
+import { join } from 'node:path';
 import {
   buildLockProof,
   buildUnlockScript,
@@ -39,18 +38,16 @@ import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
   broadcastAndWait,
-  ensurePox5,
   getNextNonce,
   getTransaction,
 } from '../../helpers/wait';
 import { signTransaction } from '../../helpers/sign';
-
-// Live test — disable global jest-fetch-mock.
-fetchMock.disableMocks();
+import { useFixtures } from '../../helpers/mock';
 
 jest.setTimeout(30 * 60_000);
 
-const BOND_INDEX = Number(process.env.BOND_INDEX ?? 4);
+// BOND_INDEX unset -> taken from the btc-lock artifact (single source of truth).
+const BOND_INDEX_ENV = process.env.BOND_INDEX ? Number(process.env.BOND_INDEX) : undefined;
 const SIGNER_MANAGER =
   process.env.SIGNER_MANAGER ??
   'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
@@ -97,18 +94,18 @@ interface BtcLockArtifact {
 }
 
 beforeAll(async () => {
-  await ensurePox5();
 }, 30 * 60_000);
 
-test.skip(`register-for-bond (real L1 BTC proof) for bond ${BOND_INDEX}`, async () => {
+test('register-for-bond (real L1 BTC proof, artifact bond)', async () => {
+  useFixtures('register-for-bond-l1');
   const network = getNetwork();
 
-  console.log(`\n=== REGISTER-FOR-BOND-L1 ACTION: bondIndex=${BOND_INDEX} staker=${STAKER_NAME} ===`);
+  console.log(`\n=== REGISTER-FOR-BOND-L1 ACTION: staker=${STAKER_NAME} ===`);
   console.log('staker:', staker.address);
   console.log('signer-manager:', SIGNER_MANAGER);
 
   // 1. Read btc-lock artifact.
-  const artifactPath = `/tmp/btc-lock-${BOND_INDEX}-${STAKER_NAME}.json`;
+  const artifactPath = join(__dirname, '..', 'fixtures', 'artifacts', `btc-lock-${STAKER_NAME}.json`);
   let artifact: BtcLockArtifact;
   try {
     artifact = JSON.parse(readFileSync(artifactPath, 'utf8')) as BtcLockArtifact;
@@ -127,8 +124,8 @@ test.skip(`register-for-bond (real L1 BTC proof) for bond ${BOND_INDEX}`, async 
     txCount: artifact.txCount,
   }));
 
-  // Sanity: bondIndex must match
-  expect(artifact.bondIndex).toBe(BOND_INDEX);
+  const BOND_INDEX = BOND_INDEX_ENV ?? artifact.bondIndex;
+  expect(artifact.bondIndex).toBe(BOND_INDEX); // env override must match the artifact
 
   // 2. Fetch bond params (to compute minUstx).
   const bond = await fetchBond({ bondIndex: BOND_INDEX, network });

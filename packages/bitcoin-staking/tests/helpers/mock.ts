@@ -65,6 +65,12 @@ export function useFixtures(key?: string): void {
     if (hit === undefined) {
       throw new Error(`useFixtures: no fixture for "${k}"${key ? ` (file key: ${key})` : ''}`);
     }
+    // The recorder stores bodies only (no HTTP status). Node-level broadcast
+    // REJECTIONS are non-2xx live; replaying them as 200 makes the SDK parse the
+    // body as a txid and throw. Restore the status for rejection-shaped bodies.
+    if (k.startsWith('/v2/transactions') && hit.includes('"error"') && hit.includes('"reason"')) {
+      return { body: hit, init: { status: 400 } };
+    }
     return hit;
   });
 }

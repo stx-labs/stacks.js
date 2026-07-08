@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * E2E — calculate-rewards across multiple bond indices (waterfall).
  *
@@ -50,7 +49,6 @@ import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
   broadcastAndWait,
-  ensurePox5,
   getNextNonce,
   getTransaction,
 } from '../../helpers/wait';
@@ -73,10 +71,9 @@ function parseErrCode(repr: string | undefined): number | undefined {
 
 beforeAll(async () => {
   useFixtures('e2e-reward-waterfall');
-  await ensurePox5();
 }, 60_000);
 
-test.skip('calculate-rewards: full sorted waterfall across all active bonds', async () => {
+test('calculate-rewards: full sorted waterfall across all active bonds', async () => {
   useFixtures('e2e-reward-waterfall');
 
   console.log('\n=== E2E: multi-bond-reward-waterfall ===');
@@ -136,6 +133,7 @@ test.skip('calculate-rewards: full sorted waterfall across all active bonds', as
     fee: FEE,
     nonce: await getNextNonce(caller.address),
     network,
+    postConditionMode: 'allow',
   });
 
   const tx = signTransaction(unsigned, caller.key);

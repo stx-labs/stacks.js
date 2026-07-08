@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * ACTION — Prove the P2WSH lockup RECLAIM machinery end-to-end on the live
  * private-1 BTC network, INDEPENDENT of the bond contract (no Stacks txs).
@@ -69,9 +68,6 @@ import { useFixtures } from '../../helpers/mock';
 import { ENV } from '../../helpers/utils';
 
 jest.setTimeout(30 * 60_000);
-
-// Route record/replay to the per-test fixtures file.
-beforeAll(() => useFixtures('btc-lockup-roundtrip'));
 
 // Keys
 
@@ -147,7 +143,8 @@ async function fundP2wsh(p2wshScript: Uint8Array): Promise<{ txid: string; vout:
 
 // TEST 1: EARLY branch round trip
 
-test.skip('EARLY-branch (OP_ELSE) P2WSH lockup round trip', async () => {
+test('EARLY-branch (OP_ELSE) P2WSH lockup round trip', async () => {
+  useFixtures('btc-lockup-roundtrip-early');
   console.log('\n========== TEST 1: EARLY branch ==========');
   console.log('Roundtrip staker address:', ROUNDTRIP_ADDR);
   console.log('Staker STX address:', STAKER_STX_ADDRESS);
@@ -213,6 +210,7 @@ test.skip('EARLY-branch (OP_ELSE) P2WSH lockup round trip', async () => {
   sweepTx.updateInput(0, { finalScriptWitness: witnessItems }, true);
   expect(sweepTx.isFinal).toBe(true);
 
+  useFixtures('btc-lockup-roundtrip-early-sweep');
   console.log('sweep tx hex:', sweepTx.hex);
   const sweepTxid = await broadcastBtc(sweepTx.hex);
   console.log('=== EARLY SWEEP TXID:', sweepTxid, '===');
@@ -228,7 +226,8 @@ test.skip('EARLY-branch (OP_ELSE) P2WSH lockup round trip', async () => {
 
 // TEST 2: TIMELOCK / CLTV branch round trip
 
-test.skip('TIMELOCK-branch (OP_IF / CLTV) P2WSH lockup round trip', async () => {
+test('TIMELOCK-branch (OP_IF / CLTV) P2WSH lockup round trip', async () => {
+  useFixtures('btc-lockup-roundtrip-timelock');
   console.log('\n========== TEST 2: TIMELOCK branch ==========');
   console.log('Roundtrip staker address:', ROUNDTRIP_ADDR);
   console.log('Staker STX address:', STAKER_STX_ADDRESS);
@@ -283,6 +282,7 @@ test.skip('TIMELOCK-branch (OP_IF / CLTV) P2WSH lockup round trip', async () => 
   sweepTx.updateInput(0, { finalScriptWitness: witnessItems }, true);
   expect(sweepTx.isFinal).toBe(true);
 
+  useFixtures('btc-lockup-roundtrip-timelock-sweep');
   console.log('sweep tx lockTime:', unlockHeight, 'sequence: 0xFFFFFFFE');
   console.log('sweep tx hex:', sweepTx.hex);
   const sweepTxid = await broadcastBtc(sweepTx.hex);

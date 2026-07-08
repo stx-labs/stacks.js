@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * E2E — sBTC unstake: serialize + expected abort coverage.
  *
@@ -36,7 +35,6 @@ import {
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
-  ensurePox5,
   getNextNonce,
   getTransaction,
   waitForFulfilled,
@@ -49,12 +47,14 @@ const FEE = 10_000n;
 const SIGNER_MANAGER = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 
 // account8 — "Someone", funded ~1000 STX, no sBTC position.
-const staker = getAccount(REGTEST_KEYS['account8']);
+const staker = getAccount(REGTEST_KEYS['account6']); // funded, no sBTC -> abort
 
 // Expected abort codes for "no sBTC position":
 //   u43 ERR_CANNOT_UNSTAKE_SBTC — staker has no sBTC shares
 //   u27 ERR_NOT_STAKING          — staker has no position at all
-const EXPECTED_ABORT_CODES = new Set([27, 43]);
+// u27 NotStaking / u43 CannotUnstakeSbtc (no position); u34 NotBondParticipant
+// (staker holds an STX-only position, so it's not an sBTC bond participant).
+const EXPECTED_ABORT_CODES = new Set([27, 43, 34]);
 
 function parseErrCode(repr: string | undefined): number | undefined {
   const m = repr?.match(/^\(err u(\d+)\)$/);
@@ -63,10 +63,9 @@ function parseErrCode(repr: string | undefined): number | undefined {
 
 beforeAll(async () => {
   useFixtures('e2e-exit-sbtc-unstake-abort');
-  await ensurePox5();
 }, 60_000);
 
-test.skip('unstake-sbtc aborts with expected error (no sBTC position on account8)', async () => {
+test('unstake-sbtc aborts with expected error (no sBTC position)', async () => {
   useFixtures('e2e-exit-sbtc-unstake-abort');
   console.log('\n=== E2E: exit-sbtc-unstake-abort ===');
   console.log('staker (account8):', staker.address);
@@ -83,6 +82,7 @@ test.skip('unstake-sbtc aborts with expected error (no sBTC position on account8
     fee: FEE,
     nonce: await getNextNonce(staker.address),
     network,
+    postConditionMode: 'allow', // reach the contract so it aborts by response, not post-condition
   });
 
   console.log('unstake-sbtc tx built successfully (serialization check passed ✓)');

@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * E2E — L1 BTC timelock (CLTV / IF-branch) reclaim.
  *
@@ -38,7 +37,6 @@ import { readFileSync } from 'node:fs';
 import { fetchBondMembership } from '../../../src';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
-import { ensurePox5 } from '../../helpers/wait';
 import { useFixtures } from '../../helpers/mock';
 
 const STAKER_NAME = (process.env.STAKER ?? 'account7') as 'account5' | 'account6' | 'account7';
@@ -119,10 +117,9 @@ const stakerAccount = getAccount(REGTEST_KEYS[STAKER_NAME]);
 
 beforeAll(async () => {
   useFixtures('e2e-exit-l1-timelock-reclaim');
-  await ensurePox5();
 }, 60_000);
 
-test.skip(`L1 timelock-reclaim (IF/CLTV branch) for ${STAKER_NAME}`, async () => {
+test(`L1 timelock-reclaim (IF/CLTV branch) for ${STAKER_NAME}`, async () => {
   useFixtures('e2e-exit-l1-timelock-reclaim');
   console.log('\n=== E2E: exit-l1-timelock-reclaim ===');
   console.log('staker:', stakerAccount.address, `(${STAKER_NAME})`);

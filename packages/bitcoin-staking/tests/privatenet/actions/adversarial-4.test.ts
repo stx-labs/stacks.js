@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * Adversarial / robustness probes — pox-5 bond contract, batch 4.
  *
@@ -65,7 +64,6 @@ import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork, ENV } from '../../helpers/utils';
 import {
   broadcastAndWait,
-  ensurePox5,
   getNextNonce,
   getPoxInfo,
   getTransaction,
@@ -73,6 +71,7 @@ import {
 import { signTransaction } from '../../helpers/sign';
 import { getBondAdminAccount } from '../../helpers/bondAdmin';
 import { fetchFirstBondPeriodCycle } from '../pox';
+import { useFixtures } from '../../helpers/mock';
 
 jest.setTimeout(30 * 60_000);
 
@@ -219,7 +218,6 @@ async function findNonExistentBondIndex(
 
 beforeAll(async () => {
   admin = await getBondAdminAccount();
-  await ensurePox5();
   console.log('admin address:', admin.address);
   console.log('account5 address:', account5.address);
   console.log('signerManager:', SIGNER_MANAGER);
@@ -233,7 +231,8 @@ beforeAll(async () => {
 // future — ERR_CANNOT_SETUP_BOND_TOO_SOON (u2) expected.
 // Also tolerant of u4 (BondAlreadySetup) in case that index was previously set up.
 
-test.skip('adversarial-4-1: setup-bond skip-ahead (soonest+3) expects u2 CannotSetupBondTooSoon', async () => {
+test('adversarial-4-1: setup-bond skip-ahead (soonest+3) expects u2 CannotSetupBondTooSoon', async () => {
+  useFixtures('adversarial-4-1');
   const { bondIndex, anchorCycle, currentCycle } = await computeNextBondIndex(3);
   console.log('probe-1 bondIndex (soonest+3):', bondIndex, { anchorCycle, currentCycle });
 
@@ -288,7 +287,8 @@ test.skip('adversarial-4-1: setup-bond skip-ahead (soonest+3) expects u2 CannotS
 // cycles — it is long past. Expected: u3 ERR_CANNOT_SETUP_BOND_TOO_LATE.
 // Also tolerant of u4 (BondAlreadySetup) if bond 0 was successfully set up.
 
-test.skip('adversarial-4-2: setup-bond past index (bondIndex=0) expects u3 CannotSetupBondTooLate', async () => {
+test('adversarial-4-2: setup-bond past index (bondIndex=0) expects u3 CannotSetupBondTooLate', async () => {
+  useFixtures('adversarial-4-2');
   const { anchorCycle, currentCycle } = await computeNextBondIndex(0);
   console.log('probe-2 bondIndex=0 (anchor cycle):', anchorCycle, 'currentCycle:', currentCycle);
 
@@ -351,7 +351,8 @@ test.skip('adversarial-4-2: setup-bond past index (bondIndex=0) expects u3 Canno
 //
 // Tolerant set: u29 (primary), u31, u33, u30, success.
 
-test.skip('adversarial-4-3: calculate-rewards WRONG ORDER (ascending stx-value-ratio) expects u29 InvalidBondPeriodOrdering', async () => {
+test('adversarial-4-3: calculate-rewards WRONG ORDER (ascending stx-value-ratio) expects u29 InvalidBondPeriodOrdering', async () => {
+  useFixtures('adversarial-4-3');
   // calculate-rewards is capped at (list 6 uint) AND requires the FULL active set.
   // Only the most-recent bonds are active at calc-height (earlier ones expired ~12
   // cycles after open), so probe the recent window only — passing >6 or expired
@@ -391,6 +392,7 @@ test.skip('adversarial-4-3: calculate-rewards WRONG ORDER (ascending stx-value-r
     fee: FEE,
     nonce: await getNextNonce(admin.address),
     network,
+    postConditionMode: 'allow',
   });
 
   const tx = signTransaction(unsigned, admin.key);
@@ -444,7 +446,8 @@ test.skip('adversarial-4-3: calculate-rewards WRONG ORDER (ascending stx-value-r
 //
 // Tolerant: u33 (primary), u31, u29, u30, success.
 
-test.skip('adversarial-4-4: calculate-rewards INCOMPLETE active set (single bond) expects u33 ActiveBondNotIncluded', async () => {
+test('adversarial-4-4: calculate-rewards INCOMPLETE active set (single bond) expects u33 ActiveBondNotIncluded', async () => {
+  useFixtures('adversarial-4-4');
   // Pick a single bond index to include — prefer one we know exists
   // Try indices from the known-active range (bonds set up for the current epoch)
   const singleCandidates = [47, 48, 49, 50, 4, 12, 19];
@@ -479,6 +482,7 @@ test.skip('adversarial-4-4: calculate-rewards INCOMPLETE active set (single bond
     fee: FEE,
     nonce: await getNextNonce(admin.address),
     network,
+    postConditionMode: 'allow',
   });
 
   const tx = signTransaction(unsigned, admin.key);
@@ -538,7 +542,8 @@ test.skip('adversarial-4-4: calculate-rewards INCOMPLETE active set (single bond
 // We try indices 9, 25, 999 in order — taking the first non-existent one.
 // Tolerant: u7 (primary), u47 (prepare-phase guard fires first), u1 (lock-sbtc).
 
-test.skip('adversarial-4-5: register-for-bond against non-existent bond index expects u7 BondNotFound', async () => {
+test('adversarial-4-5: register-for-bond against non-existent bond index expects u7 BondNotFound', async () => {
+  useFixtures('adversarial-4-5');
   // Find a non-existent bond index from the candidate list
   const nonExistentIndex = await findNonExistentBondIndex([9, 25, 999]);
 
@@ -561,6 +566,7 @@ test.skip('adversarial-4-5: register-for-bond against non-existent bond index ex
     fee: FEE,
     nonce: await getNextNonce(account5.address),
     network,
+    postConditionMode: 'allow',
   });
 
   const tx = signTransaction(unsigned, account5.key);

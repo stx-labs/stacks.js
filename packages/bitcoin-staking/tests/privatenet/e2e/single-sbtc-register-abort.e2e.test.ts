@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * E2E: Single-staker sBTC register — serialize + abort coverage.
  *
@@ -31,7 +30,6 @@ import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork, ENV } from '../../helpers/utils';
 import {
   broadcastAndWait,
-  ensurePox5,
   getNextNonce,
   getTransaction,
 } from '../../helpers/wait';
@@ -48,17 +46,16 @@ const SIGNER_MANAGER =
   'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 
 // account5: STB44HYPYAT2BB2QE513NSP81HTMYWBJP02HPGK6 — allowlisted, 0 sBTC
-const staker = getAccount(REGTEST_KEYS.account5);
+const staker = getAccount(REGTEST_KEYS.account6); // unenrolled, 0 sBTC -> abort
 
 // The known abort codes this path may produce (see file-level comment)
 const EXPECTED_ABORTS = new Set(['(err u1)', '(err u11)', '(err u43)', '(err u47)']);
 
 beforeAll(async () => {
   useFixtures('e2e-single-sbtc-register-abort');
-  await ensurePox5();
 }, 60_000);
 
-test.skip('single-staker sBTC register: aborts with expected error (serialize+abort coverage)', async () => {
+test('single-staker sBTC register: aborts with expected error (serialize+abort coverage)', async () => {
   useFixtures('e2e-single-sbtc-register-abort');
   const network = getNetwork();
 

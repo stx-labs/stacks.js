@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * E2E — claim-staker-rewards-for-signer: happy-path (ok ...) coverage.
  *
@@ -33,7 +32,6 @@ import { buildClaimStakerRewardsForSigner } from '../../../src';
 import { REGTEST_KEYS, getAccount, resolveAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
-  ensurePox5,
   getNextNonce,
   getPoxInfo,
   getTransaction,
@@ -47,18 +45,17 @@ const FEE = 10_000n;
 
 // Broadcaster (override via CALLER env). Default account1 -> shares Lane A with the
 // other account1 signer tests, so it never collides with a parallel lane.
-const caller = resolveAccount('CALLER', 'account1');
+const caller = resolveAccount('CALLER', 'account6'); // clean
 
 // The staker principal whose reward claim we're asserting (read-only subject).
 // (Any funded address works — with no accrued rewards the call returns ok/earned 0.)
-const staker = getAccount(REGTEST_KEYS.account1);
+const staker = getAccount(REGTEST_KEYS.account6);
 
 beforeAll(async () => {
   useFixtures('e2e-claim-staker-rewards');
-  await ensurePox5();
 }, 60_000);
 
-test.skip('claim-staker-rewards-for-signer succeeds with (ok ...) from an EOA (STX-only leg)', async () => {
+test('claim-staker-rewards-for-signer succeeds with (ok ...) from an EOA (STX-only leg)', async () => {
   useFixtures('e2e-claim-staker-rewards');
   console.log('\n=== E2E: claim-staker-rewards-for-signer ===');
   console.log('caller:', caller.address);
@@ -85,6 +82,7 @@ test.skip('claim-staker-rewards-for-signer succeeds with (ok ...) from an EOA (S
     fee: FEE,
     nonce,
     network,
+    postConditionMode: 'allow',
   });
 
   console.log('claim-staker-rewards-for-signer tx built via buildClaimStakerRewardsForSigner ✓');
@@ -120,8 +118,8 @@ test.skip('claim-staker-rewards-for-signer succeeds with (ok ...) from an EOA (S
   console.log(`\n=== CONFIRMED: EOA claim succeeded with (ok ...) — earned 0 is expected (no rewards) ✓ ===`);
 }, 180_000);
 
-test.skip('claim-staker-rewards-for-signer with bond index: also succeeds with (ok ...)', async () => {
-  useFixtures('e2e-claim-staker-rewards');
+test('claim-staker-rewards-for-signer with bond index: also succeeds with (ok ...)', async () => {
+  useFixtures('e2e-claim-staker-rewards-bond'); // own phase: 2nd broadcast must not collide with test 1
   console.log('\n=== E2E: claim-staker-rewards-for-signer (bond-index leg) ===');
   console.log('caller:', caller.address);
   console.log('staker (account1):', staker.address);

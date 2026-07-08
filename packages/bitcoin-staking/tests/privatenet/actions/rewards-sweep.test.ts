@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * Read-only sweep: claimable rewards across EVERY bond on the private testnet.
  *
@@ -22,6 +21,7 @@ import {
   fetchEarned,
 } from '../../../src';
 import { getNetwork } from '../../helpers/utils';
+import { useFixtures } from '../../helpers/mock';
 
 jest.setTimeout(30 * 60_000);
 
@@ -31,7 +31,9 @@ const SIGNER_MANAGER =
 const MAX_BOND_INDEX = Number(process.env.MAX_BOND_INDEX ?? 50);
 const CYCLE_LOOKBACK = Number(process.env.CYCLE_LOOKBACK ?? 12);
 
-test.skip('rewards sweep: get-earned across all bonds + recent STX-only cycles', async () => {
+beforeAll(() => useFixtures('rewards-sweep'));
+
+test('rewards sweep: get-earned across all bonds + recent STX-only cycles', async () => {
   const pox = await fetchPoxInfo({ network });
   console.log('=== rewards sweep ===');
   console.log('signer-manager:', SIGNER_MANAGER);

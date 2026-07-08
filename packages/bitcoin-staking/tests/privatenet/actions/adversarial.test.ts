@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * Adversarial / robustness probes for the pox-5 bond contract on the private testnet.
  *
@@ -49,7 +48,6 @@ import { REGTEST_KEYS, getAccount } from "../../regtest/regtest";
 import { getNetwork, ENV } from "../../helpers/utils";
 import {
   broadcastAndWait,
-  ensurePox5,
   getNextNonce,
   getPoxInfo,
   getTransaction,
@@ -58,6 +56,7 @@ import {
 import { signTransaction } from "../../helpers/sign";
 import { getBondAdminAccount } from '../../helpers/bondAdmin';
 import { fetchFirstBondPeriodCycle } from "../pox";
+import { useFixtures } from "../../helpers/mock";
 
 // Reuse the daemon's deployed signer-manager — deploying our own reliably times
 // out beforeAll under this net's rate limits (see register-for-bond.test.ts).
@@ -114,7 +113,6 @@ async function findHighestExistingBondIndex(
 
 beforeAll(async () => {
   admin = await getBondAdminAccount();
-  await ensurePox5();
 
   // Discover an existing bond to reuse for probes 1 and 3 (cap probes to limit
   // rate-limited reads).
@@ -129,7 +127,8 @@ beforeAll(async () => {
 
 // PROBE 1: Duplicate setup-bond -> ERR_BOND_ALREADY_SETUP (err u4)
 
-test.skip("adversarial-1: duplicate setup-bond aborts with ERR_BOND_ALREADY_SETUP (err u4)", async () => {
+test("adversarial-1: duplicate setup-bond aborts with ERR_BOND_ALREADY_SETUP (err u4)", async () => {
+  useFixtures("adversarial-1");
   if (existingBondIndex === undefined) {
     console.warn("No existing bond found — skipping duplicate-setup probe");
     // Mark as skipped rather than failing: the chain may be freshly wiped.
@@ -206,7 +205,8 @@ test.skip("adversarial-1: duplicate setup-bond aborts with ERR_BOND_ALREADY_SETU
 
 // PROBE 2: setup-bond too late -> ERR_CANNOT_SETUP_BOND_TOO_LATE (err u3)
 
-test.skip("adversarial-2: setup-bond with a past bondIndex aborts with ERR_CANNOT_SETUP_BOND_TOO_LATE (err u3)", async () => {
+test("adversarial-2: setup-bond with a past bondIndex aborts with ERR_CANNOT_SETUP_BOND_TOO_LATE (err u3)", async () => {
+  useFixtures("adversarial-2");
   const poxInfo = await getPoxInfo();
   const anchorCycle = await fetchFirstBondPeriodCycle();
 
@@ -296,7 +296,8 @@ test.skip("adversarial-2: setup-bond with a past bondIndex aborts with ERR_CANNO
 
 // PROBE 3: non-allowlisted register-for-bond (sBTC path)
 
-test.skip("adversarial-3: register-for-bond from non-allowlisted account6 aborts (sbtc path)", async () => {
+test("adversarial-3: register-for-bond from non-allowlisted account6 aborts (sbtc path)", async () => {
+  useFixtures("adversarial-3");
   const bondIndex = existingBondIndex ?? 1; // fallback to bond 1 if none discovered
   console.log("probe-3 using bondIndex:", bondIndex);
 
@@ -316,6 +317,7 @@ test.skip("adversarial-3: register-for-bond from non-allowlisted account6 aborts
     fee: FEE,
     nonce: await getNextNonce(account6.address),
     network,
+    postConditionMode: "allow",
   });
 
   const tx = signTransaction(unsigned, account6.key);

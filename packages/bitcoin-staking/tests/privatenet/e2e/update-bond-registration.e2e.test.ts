@@ -38,7 +38,6 @@ import {
 import { REGTEST_KEYS, getAccount, SIGNER_MANAGER, SIGNER_MANAGER_2 } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
-  ensurePox5,
   getNextNonce,
   getPoxInfo,
   getTransaction,
@@ -65,10 +64,9 @@ function parseErrCode(repr: string | undefined): number | undefined {
 
 beforeAll(async () => {
   useFixtures('e2e-update-bond-registration');
-  await ensurePox5();
 }, 60_000);
 
-test.skip('update-bond-registration: rotate signer-manager on an existing membership', async () => {
+test('update-bond-registration: rotate signer-manager on an existing membership', async () => {
   useFixtures('e2e-update-bond-registration');
   const network = getNetwork();
 

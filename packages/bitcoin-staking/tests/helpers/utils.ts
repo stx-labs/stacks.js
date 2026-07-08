@@ -83,7 +83,11 @@ export const ENV = {
   // loudly. Live testnets override via env (e.g. STACKS_TX_TIMEOUT=300000 for
   // ~2 min block times on the hosted private testnet).
   STACKS_TX_TIMEOUT: Number(process.env.STACKS_TX_TIMEOUT ?? 30_000),
-  BITCOIN_TX_TIMEOUT: Number(process.env.BITCOIN_TX_TIMEOUT ?? 10_000),
+  // Burn-height stall guard — deliberately short so stalls abort fast instead of
+  // grinding for minutes. With the flooder running, burn advances ~2s, so 15s is
+  // ample; if the chain freezes (node quiet → 30s miner fallback) we fail fast
+  // and retry rather than wait it out. Override up for slow live nets.
+  BITCOIN_TX_TIMEOUT: Number(process.env.BITCOIN_TX_TIMEOUT ?? 15_000),
 
   /**
    * The canonical fixtures store the recorder maintains (relative to cwd, the
@@ -217,6 +221,12 @@ export function fixtureKey(
   } catch {
     // not JSON — fall through to path keying
   }
+  // TODO(coverage): Stacks broadcasts (/v2/transactions) are keyed by PATH ONLY
+  // (the POST body is binary, caught by the `!body` early-return above), so in
+  // replay mode ANY serialized tx matches the recorded success — a regression in
+  // Clarity args, post-conditions, or proof encoding still "broadcasts" green.
+  // Fix: hash Uint8Array bodies into the key (like bitcoind JSON-RPC above), then
+  // re-record; and/or pin builders with golden serialized-tx unit assertions.
   return path; // e.g. /v2/transactions (broadcast body varies; response unused)
 }
 

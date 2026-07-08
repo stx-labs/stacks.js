@@ -189,12 +189,16 @@ async function currentBurnHeight(): Promise<number | null> {
 export async function ensurePox5({
   env = {},
 }: { env?: Record<string, string> } = {}): Promise<void> {
-  const burn = await currentBurnHeight();
-  if (burn === null) {
-    console.log('node not ready — starting fresh chain');
-    await networkReset(env);
-  } else {
-    console.log(`chain up (burn ${burn}) — reusing`);
+  // Replay never touches the chain lifecycle — the fixture IS the chain state.
+  // (Guards against a null burn-height read triggering networkReset/docker wipe.)
+  if (!isMocking) {
+    const burn = await currentBurnHeight();
+    if (burn === null) {
+      console.log('node not ready — starting fresh chain');
+      await networkReset(env);
+    } else {
+      console.log(`chain up (burn ${burn}) — reusing`);
+    }
   }
   await waitForNetwork();
   await waitForPox5();
@@ -259,7 +263,7 @@ export async function waitForPreparePhase(poxInfo: PoxInfo, diff = 0): Promise<v
  * is not enough near the phase edge. Call before broadcasting any
  * stake/register/unstake/update bond op.
  */
-export async function waitForRewardPhase(poxInfo: PoxInfo, margin = 4): Promise<void> {
+export async function waitForRewardPhase(poxInfo: PoxInfo, margin = 8): Promise<void> {
   if (isMocking) return;
   let pox = poxInfo;
   while (true) {

@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * Privatenet action: rotate the pox-5 `bond-admin` data-var to a new principal.
  *
@@ -35,9 +34,10 @@ import { getPublicKeyFromPrivate } from "@stacks/encryption";
 import { generateNewAccount, generateWallet } from "@stacks/wallet-sdk";
 import { buildSetBondAdmin } from "../../../src";
 import { getNetwork } from "../../helpers/utils";
-import { ensurePox5, getNextNonce, waitForTransaction } from "../../helpers/wait";
+import { getNextNonce, waitForTransaction } from "../../helpers/wait";
 import { signTransaction, signMultiSigTransaction } from "../../helpers/sign";
 import { getBondAdminAccount } from "../../helpers/bondAdmin";
+import { useFixtures } from "../../helpers/mock";
 
 jest.setTimeout(60 * 60_000);
 
@@ -60,7 +60,7 @@ async function deriveMultisig(seed: string) {
 }
 
 test.skip("set-bond-admin: rotate bond-admin to NEW_ADMIN", async () => {
-  await ensurePox5();
+  useFixtures("set-bond-admin");
 
   if (MULTISIG_SEED) {
     // Multisig current admin (e.g. revert SN26 -> shared admin).

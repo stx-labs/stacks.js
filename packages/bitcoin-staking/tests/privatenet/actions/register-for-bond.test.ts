@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * Privatenet `register-for-bond` (sBTC path) — validation / abort test.
  *
@@ -34,12 +33,12 @@ import { buildRegisterForBond, fetchBondMembership } from "../../../src";
 import { getNetwork, ENV } from "../../helpers/utils";
 import {
   broadcastAndWait,
-  ensurePox5,
   getNextNonce,
   getTransaction,
 } from "../../helpers/wait";
 import { signTransaction } from "../../helpers/sign";
 import { REGTEST_KEYS, getAccount } from "../../regtest/regtest";
+import { useFixtures } from "../../helpers/mock";
 
 // Reuse the daemon's already-deployed signer-manager instead of deploying our
 // own. Deploying under this net's rate limits reliably times out the 20-min
@@ -65,16 +64,17 @@ const SBTC_SATS = 1_000n;
 const FEE = 10_000n;
 
 beforeAll(async () => {
-  await ensurePox5();
+  useFixtures("register-for-bond");
   // account5 (STB44HYPYAT2BB2QE513NSP81HTMYWBJP02HPGK6): allowlisted staker on
   // bond 1, funded for fees, holds 0 sBTC — will abort in lock-sbtc with (err u1).
-  staker = getAccount(REGTEST_KEYS.account5);
+  // account6: unenrolled (STX-staked ≠ bond member), funded for fees, 0 sBTC — aborts in lock-sbtc (err u1).
+  staker = getAccount(REGTEST_KEYS.account6);
   // Reuse an existing deployed signer-manager (see SIGNER_MANAGER above) — no
   // deploy round-trip, so beforeAll stays fast under rate limits.
   signerManager = SIGNER_MANAGER;
 }, 20 * 60_000);
 
-test.skip("buildRegisterForBond (sbtc): serializes against the real ABI, aborts in lock-sbtc", async () => {
+test("buildRegisterForBond (sbtc): serializes against the real ABI, aborts in lock-sbtc", async () => {
   // Precondition: staker is not enrolled in any bond.
   expect(
     await fetchBondMembership({ address: staker.address, network }),

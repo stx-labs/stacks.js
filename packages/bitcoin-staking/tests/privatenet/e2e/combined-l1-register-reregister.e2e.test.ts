@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * E2E — L1 register -> announce early exit (staker-signed) -> re-register in next bond.
  *
@@ -59,7 +58,6 @@ import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
   broadcastAndWait,
-  ensurePox5,
   getNextNonce,
   getTransaction,
 } from '../../helpers/wait';
@@ -364,6 +362,7 @@ async function executeRegisterL1(artifact: LockArtifact): Promise<string> {
     fee: FEE_USTX,
     nonce,
     network,
+    postConditionMode: 'allow',
   });
 
   const regTx = signTransaction(unsigned, staker.key);
@@ -374,10 +373,9 @@ async function executeRegisterL1(artifact: LockArtifact): Promise<string> {
 
 beforeAll(async () => {
   useFixtures('e2e-reregister');
-  await ensurePox5();
 }, 60_000);
 
-test.skip('account5: L1 register → announce early exit (staker-signed) → re-register in next bond', async () => {
+test('account5: L1 register → announce early exit (staker-signed) → re-register in next bond', async () => {
   useFixtures('e2e-reregister');
 
   console.log('\n=== E2E: combined-l1-register-reregister ===');
@@ -416,6 +414,7 @@ test.skip('account5: L1 register → announce early exit (staker-signed) → re-
 
   // Step 3: Register for bond 1
   console.log('\n[Step 3] register-for-bond (L1) into bond 1...');
+  useFixtures('e2e-reregister-reg1'); // isolate register-1 broadcast from the bond-1 BTC-lock broadcast
   const registerTxid1 = await executeRegisterL1(artifact1);
   console.log('register-l1 txid (bond 1):', registerTxid1);
 
@@ -431,6 +430,9 @@ test.skip('account5: L1 register → announce early exit (staker-signed) → re-
     );
   }
 
+  // Phase switch: same get-bond-membership path returns a different body after
+  // registration; route the after-read to its own fixture key.
+  useFixtures('e2e-reregister-registered');
   const membership1 = await fetchBondMembership({ address: staker.address, network });
   console.log('membership after first register:', JSON.stringify(membership1, (_k, v) => typeof v === 'bigint' ? v.toString() : v));
 
@@ -445,6 +447,7 @@ test.skip('account5: L1 register → announce early exit (staker-signed) → re-
   // The contract enforces contract-caller == tx-sender == staker.
   console.log('\n[Step 4] announce-l1-early-exit (staker-signed)...');
 
+  useFixtures('e2e-reregister-announce'); // isolate the announce broadcast from the register-1 broadcast
   const unsignedAnnounce = await buildAnnounceL1EarlyExit({
     staker: staker.address,
     oldSignerManager: SIGNER_MANAGER,
@@ -452,6 +455,7 @@ test.skip('account5: L1 register → announce early exit (staker-signed) → re-
     fee: FEE_USTX,
     nonce: await getNextNonce(staker.address),
     network,
+    postConditionMode: 'allow',
   });
   const announceTxRaw = signTransaction(unsignedAnnounce, staker.key);
   const announceTxid = await broadcastAndWait(announceTxRaw, staker.address, network);
@@ -482,10 +486,12 @@ test.skip('account5: L1 register → announce early exit (staker-signed) → re-
 
   // Step 6: BTC-lock into bond 2
   console.log('\n[Step 6] BTC lock into bond 2...');
+  useFixtures('e2e-reregister-lock2'); // isolate bond-2 BTC-lock broadcast from the announce broadcast
   const artifact2 = await executeBtcLock(bond2Index, LOCK_AMOUNT_SATS);
 
   // Step 7: Re-register into bond 2
   console.log('\n[Step 7] register-for-bond (L1) into bond 2 (re-registration)...');
+  useFixtures('e2e-reregister-reg2'); // isolate register-2 broadcast from the bond-2 BTC-lock broadcast
   const registerTxid2 = await executeRegisterL1(artifact2);
   console.log('register-l1 txid (bond 2):', registerTxid2);
 

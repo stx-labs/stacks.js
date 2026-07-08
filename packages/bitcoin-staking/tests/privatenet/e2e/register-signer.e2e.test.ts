@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * E2E — register-signer coverage.
  *
@@ -42,7 +41,6 @@ import { fetchSignerInfo, describePox5Error } from '../../../src';
 import { SIGNER_MANAGER, resolveAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
-  ensurePox5,
   getNextNonce,
   getTransaction,
   waitForFulfilled,
@@ -58,7 +56,7 @@ const FEE = 10_000n;
 
 // Dedicated lane account (override via CALLER env). Default account1 (Lane A).
 // Its public key is what we pass as the signer-key arg to register-signer.
-const caller = resolveAccount('CALLER', 'account1');
+const caller = resolveAccount('CALLER', 'account6'); // clean EOA -> u26
 
 // ERR_UNAUTHORIZED_SIGNER_REGISTRATION = u26
 const ERR_UNAUTHORIZED_SIGNER_REGISTRATION = 26;
@@ -70,12 +68,11 @@ function parseErrCode(repr: string | undefined): number | undefined {
 
 beforeAll(async () => {
   useFixtures('e2e-register-signer');
-  await ensurePox5();
 }, 60_000);
 
 // (A) Indirect coverage: daemon bootstrap already ran register-signer
 
-test.skip('register-signer (indirect): daemon signer-manager has a registered signer key', async () => {
+test('register-signer (indirect): daemon signer-manager has a registered signer key', async () => {
   useFixtures('e2e-register-signer');
   console.log('\n=== E2E: register-signer (indirect / already-registered path) ===');
   console.log('signerManager:', SIGNER_MANAGER);
@@ -96,7 +93,7 @@ test.skip('register-signer (indirect): daemon signer-manager has a registered si
 // No SDK builder exists for register-signer; we use makeUnsignedContractCall
 // directly (the same mechanism callPox5 uses internally).
 
-test.skip('register-signer (direct EOA call): aborts with ERR_UNAUTHORIZED_SIGNER_REGISTRATION (err u26)', async () => {
+test('register-signer (direct EOA call): aborts with ERR_UNAUTHORIZED_SIGNER_REGISTRATION (err u26)', async () => {
   useFixtures('e2e-register-signer');
   console.log('\n=== E2E: register-signer (direct call / abort path) ===');
   console.log('caller (account1):', caller.address);

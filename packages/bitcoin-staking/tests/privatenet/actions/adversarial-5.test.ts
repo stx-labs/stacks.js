@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * Adversarial / robustness probes — pox-5 bond contract, batch 5.
  *
@@ -29,14 +28,11 @@
  *     npx jest tests/privatenet/actions/adversarial-5.test.ts --runInBand --collectCoverage=false
  */
 
-import { readFileSync } from 'fs';
-import { join } from 'path';
 import {
   broadcastTransaction,
   Cl,
   fetchCallReadOnlyFunction,
 } from '@stacks/transactions';
-import fetchMock from 'jest-fetch-mock';
 import {
   buildStake,
   buildStakeUpdate,
@@ -46,18 +42,15 @@ import {
   fetchBondMembership,
   Pox5ErrorCode,
 } from '../../../src';
-import { getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
-  ensurePox5,
   getNextNonce,
   getPoxInfo,
   getTransaction,
 } from '../../helpers/wait';
 import { signTransaction } from '../../helpers/sign';
-
-// Live private testnet — opt out of the globally-enabled jest-fetch-mock.
-fetchMock.disableMocks();
+import { useFixtures } from '../../helpers/mock';
+import { deriveFreshAccount, freshFundedStxAccount } from '../../helpers/fresh-account';
 
 jest.setTimeout(60 * 60_000);
 
@@ -72,24 +65,10 @@ const SIGNER_MANAGER =
 // A syntactically-valid but UNREGISTERED signer-manager principal (bogus rotate target).
 const BOGUS_SIGNER_MANAGER = 'ST000000000000000000002AMW42H.not-a-signer-manager';
 
-const fresh = JSON.parse(
-  readFileSync(join(__dirname, '..', 'fresh-accounts.json'), 'utf8')
-) as { accounts: Array<{ id: string; rawKey: string; stxKey: string; stxAddr: string }> };
-
-function freshAccount(id: string) {
-  const a = fresh.accounts.find(x => x.id === id);
-  if (!a) throw new Error(`fresh account ${id} not found`);
-  // IMPORTANT: use the compressed (01-suffixed) stxKey — the bare rawKey derives
-  // a DIFFERENT (uncompressed) address that is NOT the funded one.
-  const acct = getAccount(a.stxKey);
-  if (acct.address !== a.stxAddr) {
-    throw new Error(`fresh account ${id}: derived ${acct.address} != funded ${a.stxAddr}`);
-  }
-  return acct;
-}
-
-const f0 = freshAccount('f0');
-const f1 = freshAccount('f1');
+// Deterministic, self-funded probe accounts (survive chain wipes: RECORD re-funds,
+// replay derives the same addresses). See tests/helpers/fresh-account.ts.
+const f0 = deriveFreshAccount('adv5-f0');
+const f1 = deriveFreshAccount('adv5-f1');
 
 function parseErrCode(repr: string | undefined): number | undefined {
   if (!repr) return undefined;
@@ -153,6 +132,7 @@ async function probe(
   build: (nonce: number, fee: bigint) => Promise<ReturnType<typeof signTransaction> | { wire: unknown }>,
   sign: (wire: any) => ReturnType<typeof signTransaction>
 ): Promise<Outcome> {
+  useFixtures(`adversarial-5-${label.toLowerCase()}`); // one fixture file per probe broadcast
   const mgr = nm(account.address);
   const nonce = await mgr.value();
   const fee = mgr.fee(FEE);
@@ -250,7 +230,11 @@ async function logStakerInfo(label: string, address: string) {
 }
 
 beforeAll(async () => {
-  await ensurePox5();
+  useFixtures('adversarial-5-fund0');
+  await freshFundedStxAccount({ network, amountUstx: 50_000_000_000n, label: 'adv5-f0' });
+  useFixtures('adversarial-5-fund1');
+  await freshFundedStxAccount({ network, amountUstx: 50_000_000_000n, label: 'adv5-f1' });
+  useFixtures('adversarial-5'); // base key: setup reads before per-test keys
   const poxInfo = await getPoxInfo();
   console.log('=== adversarial-5 setup ===');
   console.log('f0:', f0.address, '| f1:', f1.address);
@@ -286,6 +270,7 @@ function stakeProbe(
         fee,
         nonce,
         network,
+        postConditionMode: 'allow',
       }),
     wire => signTransaction(wire as any, acct.key),
   );
@@ -309,6 +294,7 @@ function updateProbe(
         fee,
         nonce,
         network,
+        postConditionMode: 'allow',
       }),
     wire => signTransaction(wire as any, acct.key),
   );
@@ -329,6 +315,7 @@ function unstakeProbe(
         fee,
         nonce,
         network,
+        postConditionMode: 'allow',
       }),
     wire => signTransaction(wire as any, acct.key),
   );
@@ -341,7 +328,8 @@ function unstakeProbe(
 // that is itself a (node-level) defense and is documented as such; it does NOT
 // consume the nonce, so the next probe reuses it with a fee bump.
 
-test.skip('A1: stake amount-ustx=0 (no contract min floor — node may drop)', async () => {
+test('A1: stake amount-ustx=0 (no contract min floor — node may drop)', async () => {
+  useFixtures('adversarial-5-a1');
   const poxInfo = await getPoxInfo();
   const o = await stakeProbe('A1-amount0', f1, {
     amountUstx: 0n,
@@ -359,7 +347,8 @@ test.skip('A1: stake amount-ustx=0 (no contract min floor — node may drop)', a
   expect(['success', 'abort', 'dropped', 'rejected', 'pending']).toContain(o.kind);
 });
 
-test.skip('A2: stake num-cycles=0 expects u20 InvalidNumCycles (or node-drop)', async () => {
+test('A2: stake num-cycles=0 expects u20 InvalidNumCycles (or node-drop)', async () => {
+  useFixtures('adversarial-5-a2');
   const poxInfo = await getPoxInfo();
   const o = await stakeProbe('A2-cycles0', f1, {
     amountUstx: 1_000_000n,
@@ -374,7 +363,8 @@ test.skip('A2: stake num-cycles=0 expects u20 InvalidNumCycles (or node-drop)', 
   expect(true).toBe(true);
 });
 
-test.skip('A3: stake num-cycles=100 expects u20 InvalidNumCycles', async () => {
+test('A3: stake num-cycles=100 expects u20 InvalidNumCycles', async () => {
+  useFixtures('adversarial-5-a3');
   const poxInfo = await getPoxInfo();
   const o = await stakeProbe('A3-cycles100', f1, {
     amountUstx: 1_000_000n,
@@ -392,7 +382,8 @@ test.skip('A3: stake num-cycles=100 expects u20 InvalidNumCycles', async () => {
   expect(true).toBe(true);
 });
 
-test.skip('A4: stake startBurnHt far in the PAST expects u24 InvalidStartBurnHeight', async () => {
+test('A4: stake startBurnHt far in the PAST expects u24 InvalidStartBurnHeight', async () => {
+  useFixtures('adversarial-5-a4');
   const poxInfo = await getPoxInfo();
   const past = Math.max(1, poxInfo.currentBurnchainBlockHeight - 3 * poxInfo.rewardCycleLength);
   const o = await stakeProbe('A4-pastHt', f1, { amountUstx: 1_000_000n, numCycles: 1, startBurnHt: past });
@@ -404,7 +395,8 @@ test.skip('A4: stake startBurnHt far in the PAST expects u24 InvalidStartBurnHei
   expect(true).toBe(true);
 });
 
-test.skip('A5: stake startBurnHt far in the FUTURE expects u24 InvalidStartBurnHeight', async () => {
+test('A5: stake startBurnHt far in the FUTURE expects u24 InvalidStartBurnHeight', async () => {
+  useFixtures('adversarial-5-a5');
   const poxInfo = await getPoxInfo();
   const future = poxInfo.currentBurnchainBlockHeight + 5 * poxInfo.rewardCycleLength;
   const o = await stakeProbe('A5-futureHt', f1, { amountUstx: 1_000_000n, numCycles: 1, startBurnHt: future });
@@ -416,7 +408,8 @@ test.skip('A5: stake startBurnHt far in the FUTURE expects u24 InvalidStartBurnH
   expect(true).toBe(true);
 });
 
-test.skip('A6: stake with BOGUS (unregistered) signer-manager aborts / drops', async () => {
+test('A6: stake with BOGUS (unregistered) signer-manager aborts / drops', async () => {
+  useFixtures('adversarial-5-a6');
   const poxInfo = await getPoxInfo();
   const o = await stakeProbe('A6-bogusSigner', f1, {
     amountUstx: 1_000_000n,
@@ -429,7 +422,8 @@ test.skip('A6: stake with BOGUS (unregistered) signer-manager aborts / drops', a
   expect(true).toBe(true);
 });
 
-test.skip('A7: stake with garbage signerCalldata', async () => {
+test('A7: stake with garbage signerCalldata', async () => {
+  useFixtures('adversarial-5-a7');
   const poxInfo = await getPoxInfo();
   const garbage = new Uint8Array(64).fill(0xab);
   const o = await stakeProbe('A7-garbageCalldata', f1, {
@@ -450,7 +444,8 @@ test.skip('A7: stake with garbage signerCalldata', async () => {
 
 // SECTION B — BASELINE STAKE on f0 (legit) + STAKE-UPDATE abuse
 
-test.skip('B0: f0 baseline stake (40k STX, 2 cycles)', async () => {
+test('B0: f0 baseline stake (40k STX, 2 cycles)', async () => {
+  useFixtures('adversarial-5-b0');
   const existing = await logStakerInfo('B0-pre', f0.address);
   if (existing) {
     console.log('B0: f0 already staked — reusing position.');
@@ -472,7 +467,8 @@ test.skip('B0: f0 baseline stake (40k STX, 2 cycles)', async () => {
   expect(true).toBe(true);
 });
 
-test.skip('B1: stake-update wrong oldSignerManager expects u36 InvalidOldSignerManager', async () => {
+test('B1: stake-update wrong oldSignerManager expects u36 InvalidOldSignerManager', async () => {
+  useFixtures('adversarial-5-b1');
   const o = await updateProbe('B1-wrongOldSigner', f0, {
     oldSignerManager: BOGUS_SIGNER_MANAGER,
     cyclesToExtend: 1,
@@ -485,7 +481,8 @@ test.skip('B1: stake-update wrong oldSignerManager expects u36 InvalidOldSignerM
   expect(true).toBe(true);
 });
 
-test.skip('B2: stake-update extend 0 / topup 0 / same signer — invariant watch', async () => {
+test('B2: stake-update extend 0 / topup 0 / same signer — invariant watch', async () => {
+  useFixtures('adversarial-5-b2');
   const poxInfo = await getPoxInfo();
   const before = await logStakerInfo('B2-pre', f0.address);
   const delBefore = await getAmountDelegatedForSigner(SIGNER_MANAGER, poxInfo.rewardCycleId + 1).catch(() => -1n);
@@ -494,6 +491,7 @@ test.skip('B2: stake-update extend 0 / topup 0 / same signer — invariant watch
   const o = await updateProbe('B2-noopUpdate', f0, { cyclesToExtend: 0, amountIncrease: 0n });
   console.log('B2 OUTCOME:', outStr(o));
 
+  useFixtures('adversarial-5-b2-after');
   const after = await logStakerInfo('B2-post', f0.address);
   const delAfter = await getAmountDelegatedForSigner(SIGNER_MANAGER, poxInfo.rewardCycleId + 1).catch(() => -1n);
   console.log('B2 delegated(next cycle) after:', delAfter.toString());
@@ -509,7 +507,8 @@ test.skip('B2: stake-update extend 0 / topup 0 / same signer — invariant watch
   expect(true).toBe(true);
 });
 
-test.skip('B3: stake-update cyclesToExtend=100 expects u20 InvalidNumCycles', async () => {
+test('B3: stake-update cyclesToExtend=100 expects u20 InvalidNumCycles', async () => {
+  useFixtures('adversarial-5-b3');
   const o = await updateProbe('B3-extend100', f0, { cyclesToExtend: 100, amountIncrease: 0n });
   console.log('B3 OUTCOME:', outStr(o));
   await logStakerInfo('B3-post', f0.address);
@@ -520,10 +519,12 @@ test.skip('B3: stake-update cyclesToExtend=100 expects u20 InvalidNumCycles', as
   expect(true).toBe(true);
 });
 
-test.skip('B4: stake-update rotate to BOGUS signer-manager (correct oldSignerManager)', async () => {
+test('B4: stake-update rotate to BOGUS signer-manager (correct oldSignerManager)', async () => {
+  useFixtures('adversarial-5-b4');
   const before = await logStakerInfo('B4-pre', f0.address);
   const o = await updateProbe('B4-rotateBogus', f0, { signerManager: BOGUS_SIGNER_MANAGER });
   console.log('B4 OUTCOME:', outStr(o));
+  useFixtures('adversarial-5-b4-after');
   const after = await logStakerInfo('B4-post', f0.address);
   if (o.kind === 'success' && before && after && after.signer !== before.signer) {
     console.warn(`B4 BUG?: signer rotated to bogus principal ${after.signer} — recorded signer now points at a non-existent contract!`);
@@ -531,7 +532,8 @@ test.skip('B4: stake-update rotate to BOGUS signer-manager (correct oldSignerMan
   expect(true).toBe(true);
 });
 
-test.skip('B5: stake-update on a NON-staking account expects u27 NotStaking', async () => {
+test('B5: stake-update on a NON-staking account expects u27 NotStaking', async () => {
+  useFixtures('adversarial-5-b5');
   const info = await fetchStakerInfo({ address: f1.address, network }).catch(() => undefined);
   if (info?.staked) console.log('B5 NOTE: f1 IS staking — update follows normal path.');
   const o = await updateProbe('B5-updateNonStaker', f1, { cyclesToExtend: 1 });
@@ -544,7 +546,8 @@ test.skip('B5: stake-update on a NON-staking account expects u27 NotStaking', as
 
 // SECTION C — DOUBLE / RACE
 
-test.skip('C1: re-stake f0 while already staked expects u19 AlreadyStaked', async () => {
+test('C1: re-stake f0 while already staked expects u19 AlreadyStaked', async () => {
+  useFixtures('adversarial-5-c1');
   const info = await fetchStakerInfo({ address: f0.address, network }).catch(() => undefined);
   if (!info?.staked) {
     console.warn('C1 SKIP: f0 not currently staked.');
@@ -565,7 +568,8 @@ test.skip('C1: re-stake f0 while already staked expects u19 AlreadyStaked', asyn
   expect(true).toBe(true);
 });
 
-test.skip('C2: two stakes from f1 at the SAME nonce — only one lands', async () => {
+test('C2: two stakes from f1 at the SAME nonce — only one lands', async () => {
+  useFixtures('adversarial-5-c2');
   const mgr = nm(f1.address);
   await mgr.resync();
   const nonce = await mgr.value();
@@ -582,13 +586,15 @@ test.skip('C2: two stakes from f1 at the SAME nonce — only one lands', async (
         fee,
         nonce,
         network,
+        postConditionMode: 'allow',
       }),
       f1.key,
     );
 
   const txA = await mk(1_000_000n, FEE);
-  const txB = await mk(2_000_000n, FEE + 7_000n); // higher fee, distinct txid, same nonce
   const rA = await broadcastTransaction({ transaction: txA, network });
+  useFixtures('adversarial-5-c2-txb'); // isolate the second same-nonce broadcast
+  const txB = await mk(2_000_000n, FEE + 7_000n); // higher fee, distinct txid, same nonce
   const rB = await broadcastTransaction({ transaction: txB, network });
   console.log('C2 broadcast A:', 'error' in rA ? `err:${rA.error}` : rA.txid);
   console.log('C2 broadcast B:', 'error' in rB ? `err:${rB.error}` : rB.txid);
@@ -619,7 +625,8 @@ test.skip('C2: two stakes from f1 at the SAME nonce — only one lands', async (
 
 // SECTION D — UNSTAKE
 
-test.skip('D1: unstake f0 wrong oldSignerManager expects u36 InvalidOldSignerManager', async () => {
+test('D1: unstake f0 wrong oldSignerManager expects u36 InvalidOldSignerManager', async () => {
+  useFixtures('adversarial-5-d1');
   const info = await fetchStakerInfo({ address: f0.address, network }).catch(() => undefined);
   if (!info?.staked) {
     console.warn('D1 SKIP: f0 not staked.');
@@ -635,7 +642,8 @@ test.skip('D1: unstake f0 wrong oldSignerManager expects u36 InvalidOldSignerMan
   expect(true).toBe(true);
 });
 
-test.skip('D2: unstake a NON-staking account expects u27 NotStaking (or u28 in prepare phase)', async () => {
+test('D2: unstake a NON-staking account expects u27 NotStaking (or u28 in prepare phase)', async () => {
+  useFixtures('adversarial-5-d2');
   const info = await fetchStakerInfo({ address: f1.address, network }).catch(() => undefined);
   if (info?.staked) console.log('D2 NOTE: f1 IS staking — unstake follows normal/prepare path.');
   const o = await unstakeProbe('D2-unstakeNonStaker', f1, {});
@@ -650,7 +658,8 @@ test.skip('D2: unstake a NON-staking account expects u27 NotStaking (or u28 in p
 
 // SECTION E — READ-ONLY INVARIANTS (post-attack consistency)
 
-test.skip('E1: post-attack invariants — delegated >= 0, no f0 bond membership, unlock-cycle sane', async () => {
+test('E1: post-attack invariants — delegated >= 0, no f0 bond membership, unlock-cycle sane', async () => {
+  useFixtures('adversarial-5-e1');
   const poxInfo = await getPoxInfo();
   for (const c of [poxInfo.rewardCycleId, poxInfo.rewardCycleId + 1]) {
     const d = await getAmountDelegatedForSigner(SIGNER_MANAGER, c).catch(() => -1n);

@@ -87,7 +87,7 @@ const TIMEOUT_MS = ENV.BITCOIN_TX_TIMEOUT > 10_000 ? ENV.BITCOIN_TX_TIMEOUT : 25
 
 beforeAll(() => useFixtures('early-exit-finalize'));
 
-test.skip('staker-initiated: cosign + broadcast a staker-signed partial', async () => {
+test('staker-initiated: cosign + broadcast a staker-signed partial', async () => {
   console.log('\n========== early-exit-finalize (STAKER-FIRST) ==========');
   console.log('staker:', staker.address);
 

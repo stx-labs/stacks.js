@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * E2E — L1 BTC early-exit: announce + P2WSH ELSE-branch reclaim (REAL spend).
  *
@@ -64,7 +63,6 @@ import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
   broadcastAndWait,
-  ensurePox5,
   getNextNonce,
   getTransaction,
 } from '../../helpers/wait';
@@ -242,10 +240,9 @@ async function fetchRawTxHex(txid: string): Promise<string> {
 
 beforeAll(async () => {
   useFixtures('e2e-exit-l1-announce-and-reclaim');
-  await ensurePox5();
 }, 60_000);
 
-test.skip('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5', async () => {
+test('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5', async () => {
   useFixtures('e2e-exit-l1-announce-and-reclaim');
   console.log('\n=== E2E: exit-l1-announce-and-reclaim ===');
   console.log('staker (account5):', staker.address);
@@ -464,6 +461,7 @@ test.skip('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5',
       fee: FEE_USTX,
       nonce: regNonce,
       network,
+      postConditionMode: 'allow',
     });
     const regTx = signTransaction(unsignedReg, staker.key);
     console.log('broadcasting register-for-bond (L1)...');
@@ -500,6 +498,7 @@ test.skip('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5',
   // Deployed pox-5 enforces contract-caller == tx-sender == staker -> the staker
   // themselves must announce (ERR_UNAUTHORIZED otherwise).
   console.log('\n--- Announcing L1 early exit (staker-signed) ---');
+  useFixtures('e2e-exit-l1-announce-and-reclaim-announce'); // isolate from the register-for-bond broadcast (if any)
   const announceNonce = await getNextNonce(staker.address); // late nonce before broadcast
   const unsignedAnnounce = await buildAnnounceL1EarlyExit({
     staker: staker.address,
@@ -508,6 +507,7 @@ test.skip('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5',
     fee: FEE_USTX,
     nonce: announceNonce,
     network,
+    postConditionMode: 'allow',
   });
   const announceTx = signTransaction(unsignedAnnounce, staker.key);
   const announceTxid = await broadcastAndWait(announceTx, staker.address, network);

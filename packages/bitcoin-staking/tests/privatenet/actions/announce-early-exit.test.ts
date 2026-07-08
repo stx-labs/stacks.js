@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * ACTION — Announce L1 early exit for a bond participant.
  *
@@ -34,27 +33,22 @@
  *   ERR_UNAUTHORIZED                    — caller is not the bond's early-unlock-admin
  */
 
-import fetchMock from 'jest-fetch-mock';
 import { buildAnnounceL1EarlyExit, describePox5Error } from '../../../src';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
   broadcastAndWait,
-  ensurePox5,
   getNextNonce,
   getTransaction,
 } from '../../helpers/wait';
 import { signTransaction } from '../../helpers/sign';
 import { getBondAdminAccount } from '../../helpers/bondAdmin';
-
-// Live test — disable global jest-fetch-mock.
-fetchMock.disableMocks();
+import { useFixtures } from '../../helpers/mock';
 
 jest.setTimeout(30 * 60_000);
 
 // Default matches the sibling actions (btc-lock/register-for-bond record their
 // artifacts/fixtures against bond 4); override with BOND_INDEX for other bonds.
-const BOND_INDEX = Number(process.env.BOND_INDEX ?? 4);
 
 // The signer-manager the staker is currently bound to (must equal oldSignerManager
 // in the contract call; the daemon registers this contract on the private testnet).
@@ -85,11 +79,11 @@ let bondAdmin: Awaited<ReturnType<typeof getBondAdminAccount>>;
 
 beforeAll(async () => {
   bondAdmin = await getBondAdminAccount();
-  await ensurePox5();
 }, 30 * 60_000);
 
-test.skip(`announce-l1-early-exit: bondIndex=${BOND_INDEX} staker=${STAKER_NAME}`, async () => {
-  console.log(`\n=== ANNOUNCE-EARLY-EXIT ACTION: bondIndex=${BOND_INDEX} staker=${STAKER_NAME} ===`);
+test(`announce-l1-early-exit: staker=${STAKER_NAME}`, async () => {
+  useFixtures('announce-early-exit');
+  console.log(`\n=== ANNOUNCE-EARLY-EXIT ACTION: staker=${STAKER_NAME} ===`);
   console.log('staker principal:', stakerAccount.address);
   console.log('bond admin (early-unlock-admin):', bondAdmin.address);
   console.log('oldSignerManager:', SIGNER_MANAGER);

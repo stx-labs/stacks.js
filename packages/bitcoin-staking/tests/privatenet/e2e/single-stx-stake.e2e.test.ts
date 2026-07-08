@@ -1,8 +1,7 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * E2E: Single-staker STX-only stake happy-path.
  *
- * Stakes account7 to the signer-manager with startBurnHt at the current cycle,
+ * Stakes a dedicated account to the signer-manager with startBurnHt at the current cycle,
  * then asserts fetchStakerInfo reflects the staked amount and
  * firstRewardCycle === currentCycle + 1.
  *
@@ -20,7 +19,6 @@ import { resolveAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
   broadcastAndWait,
-  ensurePox5,
   getNextNonce,
   getPoxInfo,
   waitForFulfilled,
@@ -36,16 +34,14 @@ const SIGNER_MANAGER =
   process.env.SIGNER_MANAGER ??
   'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 
-// Dedicated lane account (override via STAKER env). Default account3 (rich, uncontended).
-const staker = resolveAccount('STAKER', 'account3');
+// Dedicated lane account (override via STAKER env). Default account4: funded, daemon-free, nonce-stable.
+const staker = resolveAccount('STAKER', 'account4');
 
 beforeAll(async () => {
   useFixtures('e2e-single-stx-stake');
-  await ensurePox5();
 }, 60_000);
 
-test.skip('single-staker STX stake: account7 end-to-end', async () => {
-  useFixtures('e2e-single-stx-stake');
+test('single-staker STX stake: end-to-end', async () => {
   const network = getNetwork();
 
   console.log('\n=== E2E: single-stx-stake ===');
@@ -65,7 +61,7 @@ test.skip('single-staker STX stake: account7 end-to-end', async () => {
   // 2. Check if already staked
   const existingInfo = await fetchStakerInfo({ address: staker.address, network });
   if (existingInfo.staked) {
-    console.warn('account7 is already staked:', JSON.stringify(existingInfo, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)));
+    console.warn('staker is already staked:', JSON.stringify(existingInfo, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)));
     console.log('=== ALREADY STAKED — asserting existing info ===');
     expect(existingInfo.staked).toBe(true);
     expect(existingInfo.details.amountUstx).toBeGreaterThan(0n);
@@ -85,6 +81,7 @@ test.skip('single-staker STX stake: account7 end-to-end', async () => {
     fee: FEE,
     nonce,
     network,
+    postConditionMode: 'allow', // stake locks STX
   });
 
   const tx = signTransaction(unsigned, staker.key);
@@ -109,5 +106,5 @@ test.skip('single-staker STX stake: account7 end-to-end', async () => {
   // Relative assertion: first-reward-cycle === currentCycle + 1
   expect(stakerInfo.details.firstRewardCycle).toBe(currentCycle + 1);
 
-  console.log(`\n=== E2E single-stx-stake SUCCESS: account7 staked ${AMOUNT_USTX} uSTX, firstRewardCycle=${stakerInfo.details.firstRewardCycle} ✓ ===`);
+  console.log(`\n=== E2E single-stx-stake SUCCESS: staker staked ${AMOUNT_USTX} uSTX, firstRewardCycle=${stakerInfo.details.firstRewardCycle} ✓ ===`);
 }, 180_000);

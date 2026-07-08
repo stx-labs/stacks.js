@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * E2E: Multi-staker BTC L1 pooling into the same bond.
  *
@@ -46,7 +45,6 @@ import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
   broadcastAndWait,
-  ensurePox5,
   getNextNonce,
   getTransaction,
 } from '../../helpers/wait';
@@ -206,6 +204,7 @@ async function doL1LockupAndRegister(
   minUstxRatioBps: number,
 ): Promise<LockupResult> {
   const network = getNetwork();
+  useFixtures(`e2e-multi-l1-pool-${staker.name}`); // isolate each staker's BTC + register broadcasts
   const priv = hexToBytes(staker.rawPrivHex);
   const pub = secp256k1.getPublicKey(priv, true);
 
@@ -326,6 +325,7 @@ async function doL1LockupAndRegister(
     fee: FEE_USTX,
     nonce,
     network,
+    postConditionMode: 'allow',
   });
 
   const signedTx = signTransaction(unsigned, staker.account.key);
@@ -346,6 +346,7 @@ async function doL1LockupAndRegister(
     }
   }
 
+  useFixtures(`e2e-multi-l1-pool-${staker.name}-after`); // post-register membership differs from pre
   // Poll for membership
   let membership = await fetchBondMembership({ address: staker.account.address, network });
   const deadline = Date.now() + 2 * 60_000;
@@ -365,10 +366,9 @@ async function doL1LockupAndRegister(
 
 beforeAll(async () => {
   useFixtures('e2e-multi-l1-pool');
-  await ensurePox5();
 }, 60_000);
 
-test.skip('multi-staker BTC L1 pooling: account5+6 all register into the same bond', async () => {
+test('multi-staker BTC L1 pooling: account5+6 all register into the same bond', async () => {
   useFixtures('e2e-multi-l1-pool');
   const network = getNetwork();
 

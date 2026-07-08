@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * Privatenet REWARDS claim-and-RECEIVE action for account5 (enrolled in bond 65).
  *
@@ -38,7 +37,6 @@
  *     npx jest tests/privatenet/actions/rewards-claim-receive.test.ts --runInBand --collectCoverage=false --verbose
  */
 import { Cl, broadcastTransaction, fetchCallReadOnlyFunction } from '@stacks/transactions';
-import fetchMock from 'jest-fetch-mock';
 import {
   buildCalculateRewards,
   buildClaimRewards,
@@ -52,7 +50,6 @@ import {
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
-  ensurePox5,
   getNextNonce,
   getPoxInfo,
   getStxBalance,
@@ -60,8 +57,8 @@ import {
   waitForFulfilled,
 } from '../../helpers/wait';
 import { signTransaction } from '../../helpers/sign';
+import { useFixtures } from '../../helpers/mock';
 
-fetchMock.disableMocks();
 jest.setTimeout(60 * 60_000);
 
 const network = getNetwork();
@@ -116,10 +113,10 @@ async function sbtcBalance(address: string): Promise<bigint> {
 }
 
 beforeAll(async () => {
-  await ensurePox5();
 }, 60 * 60_000);
 
-test.skip('rewards claim-and-receive for account5 / bond 65 — verifies receipt or explains 0', async () => {
+test('rewards claim-and-receive for account5 / bond 65 — verifies receipt or explains 0', async () => {
+  useFixtures('rewards-claim-receive');
   const poxInfo = await getPoxInfo();
   console.log('current cycle', poxInfo.rewardCycleId, 'burn', poxInfo.currentBurnchainBlockHeight);
 
@@ -164,6 +161,7 @@ test.skip('rewards claim-and-receive for account5 / bond 65 — verifies receipt
     fee: FEE,
     nonce: await getNextNonce(account5.address),
     network,
+    postConditionMode: 'allow',
   });
   const calcTx = signTransaction(calcUnsigned, account5.key);
   const calcRes = await broadcastTransaction({ transaction: calcTx, network });
@@ -183,11 +181,13 @@ test.skip('rewards claim-and-receive for account5 / bond 65 — verifies receipt
   });
 
   // 4. Re-read earned after settlement.
+  useFixtures('rewards-claim-receive-after-calc');
   const stakerEarnedAfter = await fetchEarnedStakerRewards({ signerManager: SIGNER, rewardCycle: poxInfo.rewardCycleId, bondIndex, staker: account5.address, network }).catch(() => -1n);
   const signerEarnedAfter = await fetchEarned({ signerManager: SIGNER, rewardCycle: poxInfo.rewardCycleId, bondIndex, network }).catch(() => -1n);
   console.log(`earned AFTER  — staker(a5,bond${bondIndex})=${stakerEarnedAfter} signer(bond${bondIndex})=${signerEarnedAfter}`);
 
   // 5. claim-rewards from account5 + balance receipt check.
+  useFixtures('rewards-claim-receive-claim');
   const claimCycle = Math.max(0, poxInfo.rewardCycleId - 1);
   const stxBefore = await getStxBalance(account5.address);
   const sbtcBefore = await sbtcBalance(account5.address);
@@ -200,6 +200,7 @@ test.skip('rewards claim-and-receive for account5 / bond 65 — verifies receipt
     fee: FEE,
     nonce: await getNextNonce(account5.address),
     network,
+    postConditionMode: 'allow',
   });
   const claimTx = signTransaction(claimUnsigned, account5.key);
   const claimRes = await broadcastTransaction({ transaction: claimTx, network });

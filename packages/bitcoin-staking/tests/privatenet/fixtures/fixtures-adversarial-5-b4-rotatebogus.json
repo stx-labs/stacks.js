@@ -1,0 +1,3 @@
+{
+  "/v2/transactions": "{\"error\":\"transaction rejected\",\"reason\":\"BadFunctionArgument\",\"reason_data\":{\"message\":\"NoSuchContract(\\\"ST000000000000000000002AMW42H.not-a-signer-manager\\\")\"},\"txid\":\"df398f8b56fdacba3cd84dd60d838be4a0ff7284d7d84d7e69964da3796b09da\"}"
+}

@@ -1,4 +1,3 @@
-// TODO(fixtures): skipped to unblock CI — fixtures are stale after the register/bond-metadata changes. Re-record with RECORD=1 against the live private testnet, then un-skip.
 /**
  * E2E — signer-grant lifecycle: real grant -> verify -> revoke -> verify (happy path).
  *
@@ -37,7 +36,6 @@ import {
 import { resolveAccount } from '../../regtest/regtest';
 import { ENV, getNetwork } from '../../helpers/utils';
 import {
-  ensurePox5,
   getNextNonce,
   getTransaction,
   waitForFulfilled,
@@ -50,7 +48,7 @@ const FEE = 10_000n;
 const GRANT_AUTH_ID = 999001n;
 
 // Dedicated lane account (override via SIGNER env). Default account1 (Lane A).
-const signerAccount = resolveAccount('SIGNER', 'account1');
+const signerAccount = resolveAccount('SIGNER', 'account6'); // clean, self-managed EOA
 const signerKey = signerAccount.publicKey; // 33-byte compressed hex
 const signerPrivateKey = signerAccount.key.slice(0, 64);
 const chainId = ENV.NETWORK_ID;
@@ -61,10 +59,9 @@ const signerManager = signerAccount.address;
 
 beforeAll(async () => {
   useFixtures('e2e-signer-grant');
-  await ensurePox5();
 }, 60_000);
 
-test.skip('grant-signer-key (self-managed EOA): grant → verify true → revoke → verify false', async () => {
+test('grant-signer-key (self-managed EOA): grant → verify true → revoke → verify false', async () => {
   useFixtures('e2e-signer-grant');
   console.log('\n=== E2E: signer-grant lifecycle (real happy path) ===');
   console.log('signerKey (account1):', signerKey);
@@ -148,6 +145,9 @@ test.skip('grant-signer-key (self-managed EOA): grant → verify true → revoke
   expect(revokeRecord.tx_status).toBe('success');
 
   // 4. Verify the grant is gone
+  // Phase switch: same verify-signer-key-grant path returns a different body
+  // after revoke; route the after-read to its own fixture key.
+  useFixtures('e2e-signer-grant-revoked');
   const grantedAfterRevoke = await fetchVerifySignerKeyGrant({ signerKey, signerManager, network });
   console.log('fetchVerifySignerKeyGrant after revoke:', grantedAfterRevoke);
   expect(grantedAfterRevoke).toBe(false);
