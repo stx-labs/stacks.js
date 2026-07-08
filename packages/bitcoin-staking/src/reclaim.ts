@@ -4,13 +4,7 @@ import { signECDSA } from '@scure/btc-signer/utils.js';
 import { concatBytes, equals, hexToBytes, privateKeyToBytes } from '@stacks/common';
 import type { PrivateKey } from '@stacks/common';
 import type { StacksNetwork, StacksNetworkName } from '@stacks/network';
-import {
-  btcNetworkFrom,
-  buildLockScript,
-  buildUnlockScript,
-  computeRegisterPreimage,
-  computeWshOutputScript,
-} from './script';
+import { btcNetworkFrom, computeRegisterPreimage, computeWshOutputScript } from './script';
 import type { Utxo } from './types';
 
 /**
@@ -77,31 +71,6 @@ function decodeLockScript(script: Uint8Array): {
   };
 }
 
-/** @internal Resolve the lockup `witnessScript` from `lockScript` or the pieces. */
-function resolveLockScript(opts: BuildReclaimOpts): Uint8Array {
-  if (opts.lockScript != null) return toBytes(opts.lockScript);
-
-  const { stxAddress, unlockHeight, stakerBtcPublicKey, earlyUnlockBytes } = opts;
-  if (
-    stxAddress == null ||
-    unlockHeight == null ||
-    stakerBtcPublicKey == null ||
-    earlyUnlockBytes == null
-  ) {
-    throw new Error(
-      'buildReclaim: provide `lockScript`, or all of { stxAddress, unlockHeight, ' +
-        'stakerBtcPublicKey, earlyUnlockBytes } to rebuild it'
-    );
-  }
-  return buildLockScript({
-    stxAddress,
-    unlockHeight,
-    unlockBytes: buildUnlockScript(stakerBtcPublicKey),
-    earlyUnlockBytes,
-    validateEarlyUnlockBytes: opts.validateEarlyUnlockBytes,
-  });
-}
-
 /** Inputs to {@link buildReclaim}. */
 export interface BuildReclaimOpts {
   /** Which spend path / witness shape to build. */
@@ -115,30 +84,20 @@ export interface BuildReclaimOpts {
    * mutate the returned tx's outputs before signing.
    */
   output: { address: string; feeSats: bigint };
-
   /**
-   * The lockup `witnessScript`. The staker reuses `RegisterMetadata.lockScript`
-   * verbatim. Pass this OR the four pieces below.
+   * The lockup `witnessScript` — the staker reuses `RegisterMetadata.lockScript`
+   * verbatim; the CLTV unlock height is decoded from it. Rebuild it from its
+   * pieces when the bytes aren't at hand:
+   * ```ts
+   * const lockScript = buildLockScript({
+   *   stxAddress,
+   *   unlockHeight,
+   *   unlockBytes: buildUnlockScript(stakerBtcPublicKey),
+   *   earlyUnlockBytes, // from fetchBond(...)
+   * });
+   * ```
    */
-  lockScript?: Uint8Array | string;
-  /** Staker's Stacks principal (committed in the script). */
-  stxAddress?: string;
-  /**
-   * The **actual** L1 unlock height the lockup was funded at — not necessarily
-   * the bond minimum from `fetchBondL1UnlockHeight`. Carried in `lockScript`.
-   */
-  unlockHeight?: number | bigint;
-  /** Staker's compressed (33-byte) BTC public key. */
-  stakerBtcPublicKey?: Uint8Array | string;
-  /** Per-bond early-unlock subscript, from `fetchBond(...).earlyUnlockBytes`. */
-  earlyUnlockBytes?: Uint8Array | string;
-  /**
-   * Set `false` to skip the shape heuristic when rebuilding the lockup script
-   * from `earlyUnlockBytes` — see `validateEarlyUnlockBytes`. Ignored when
-   * `lockScript` is passed directly.
-   * @default true
-   */
-  validateEarlyUnlockBytes?: boolean;
+  lockScript: Uint8Array | string;
 }
 
 /**
@@ -152,8 +111,7 @@ export interface BuildReclaimOpts {
  *
  * - `path: 'early-exit'` -> `OP_ELSE` branch: `sequence = 0xffffffff`, `lockTime = 0`.
  * - `path: 'locktime'`   -> `OP_IF`/CLTV branch: `sequence = 0xfffffffe`,
- *   `lockTime = unlockHeight` (taken from `opts.unlockHeight`, else parsed from the
- *   `lockScript`).
+ *   `lockTime = unlockHeight` (decoded from the `lockScript`).
  *
  * Sign with btc-signer (`tx.signIdx(privateKey, 0)`), or attach a detached
  * signature ({@link signReclaim} / a hardware wallet) via
@@ -161,7 +119,7 @@ export interface BuildReclaimOpts {
  */
 export function buildReclaim(opts: BuildReclaimOpts): btc.Transaction {
   const network = btcNetworkFrom(opts.network);
-  const lockScript = resolveLockScript(opts);
+  const lockScript = toBytes(opts.lockScript);
   const { unlockHeight: scriptHeight } = decodeLockScript(lockScript);
 
   const amount = opts.utxo.value;
@@ -174,13 +132,12 @@ export function buildReclaim(opts: BuildReclaimOpts): btc.Transaction {
   const earlyExit = opts.path === 'early-exit';
   let lockTime = 0;
   if (!earlyExit) {
-    const height = opts.unlockHeight ?? scriptHeight;
-    if (height == null) {
+    if (scriptHeight == null) {
       throw new Error(
-        'buildReclaim: the locktime path needs an unlockHeight (pass it, or a lockScript that encodes it)'
+        'buildReclaim: the locktime path needs a lockScript that encodes a CLTV unlock height'
       );
     }
-    lockTime = Number(height);
+    lockTime = scriptHeight;
   }
 
   const tx = new btc.Transaction({ ...TX_OPTS, lockTime });

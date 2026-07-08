@@ -50,16 +50,19 @@ describe('buildReclaim', () => {
     expect(bytesToHex(tx.getInput(0).witnessScript!)).toBe(bytesToHex(LOCK_SCRIPT));
   });
 
-  test('rebuilding from pieces yields the same witnessScript as lockScript', () => {
+  test('documented rebuild snippet yields the same witnessScript as the stored lockScript', () => {
+    const rebuilt = buildLockScript({
+      stxAddress: STX_ADDRESS,
+      unlockHeight: UNLOCK_HEIGHT,
+      unlockBytes: buildUnlockScript(STAKER_PUB),
+      earlyUnlockBytes: buildUnlockScript(COSIGNER_PUB),
+    });
     const tx = buildReclaim({
       path: 'early-exit',
       utxo: UTXO,
       network: NETWORK,
       output: OUTPUT,
-      stxAddress: STX_ADDRESS,
-      unlockHeight: UNLOCK_HEIGHT,
-      stakerBtcPublicKey: STAKER_PUB,
-      earlyUnlockBytes: buildUnlockScript(COSIGNER_PUB),
+      lockScript: rebuilt,
     });
     expect(bytesToHex(tx.getInput(0).witnessScript!)).toBe(bytesToHex(LOCK_SCRIPT));
   });
@@ -77,8 +80,11 @@ describe('buildReclaim', () => {
     ).toThrow(/fee/);
   });
 
-  test('throws when neither lockScript nor the full pieces are given', () => {
-    expect(() => buildReclaim({ path: 'early-exit', utxo: UTXO, network: NETWORK, output: OUTPUT, stxAddress: STX_ADDRESS })).toThrow(/lockScript/);
+  test('locktime: throws when the lockScript encodes no CLTV height', () => {
+    const noCltv = btc.Script.encode([COSIGNER_PUB, STAKER_PUB, 'CHECKMULTISIG']);
+    expect(() =>
+      buildReclaim({ path: 'locktime', utxo: UTXO, lockScript: noCltv, network: NETWORK, output: OUTPUT })
+    ).toThrow(/CLTV/);
   });
 });
 
