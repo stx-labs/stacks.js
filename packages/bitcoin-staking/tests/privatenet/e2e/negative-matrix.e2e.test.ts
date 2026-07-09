@@ -343,7 +343,8 @@ const TESTNET_BTC: typeof btc.NETWORK = {
   wif: 0xef,
 };
 
-/** Artifact written by btc-lock.test.ts */
+// Written by btc-lock.test.ts
+/** @internal */
 interface BtcLockArtifact {
   bondIndex: number;
   txid: string;

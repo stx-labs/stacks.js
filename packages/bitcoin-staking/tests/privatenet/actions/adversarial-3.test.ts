@@ -64,7 +64,6 @@ const SBTC_SATS = 1_000n;
 let admin: Awaited<ReturnType<typeof getBondAdminAccount>>;
 let signerManager: string;
 
-
 beforeAll(async () => {
   admin = await getBondAdminAccount();
 

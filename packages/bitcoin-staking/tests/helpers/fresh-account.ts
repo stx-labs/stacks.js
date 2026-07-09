@@ -14,9 +14,9 @@
  * tests must keep using the allowlisted accounts and self-heal on existing
  * membership instead.
  *
- * Funding: STX via a makeSTXTokenTransfer from a rich funder (default account1,
+ * Funding: STX via a makeSTXTokenTransfer from a rich funder (default account4,
  * ~10B STX, not used as a staker elsewhere); confirmation is awaited node-only
- * via the funder's nonce (see fundStx in wait.ts).
+ * via the funder's nonce (see {@link fundStx}).
  */
 // @ts-ignore — ESM; ts-jest transforms via jest.config.js
 import { sha256 } from '@noble/hashes/sha2.js';
@@ -48,7 +48,7 @@ export function deriveFreshAccount(label: string | number = 0): Account {
 
 /**
  * Derive a fresh account and fund it with `amountUstx` from `funderName`
- * (default account1, rich + uncontended). Awaits funding confirmation.
+ * (default account4, rich + uncontended). Awaits funding confirmation.
  *
  * Under replay (`isMocking`) the funding tx is skipped — the fixture is the
  * already-funded state — and the account is derived deterministically from

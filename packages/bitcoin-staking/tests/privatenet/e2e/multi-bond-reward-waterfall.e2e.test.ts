@@ -69,7 +69,7 @@ test(
         network,
       }).catch(() => 'missing' as const);
 
-      // 'locked' = bond period currently active (D0 passed, D+BOND_ACTIVE_CYCLES not yet)
+      // 'locked' = bond period currently active (started, not yet past its active-cycles window)
       if (status === 'locked') {
         activeBonds.push({ bondIndex: i, stxValueRatio: bond.stxValueRatio });
       }

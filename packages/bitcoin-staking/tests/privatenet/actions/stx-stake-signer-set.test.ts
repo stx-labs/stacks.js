@@ -54,7 +54,7 @@ const staker = getAccount(REGTEST_KEYS[STAKER as keyof typeof REGTEST_KEYS]);
 const bootAddress = network.bootAddress;
 
 // read-only helper not yet wrapped in src/fetch.ts
-
+/** @internal */
 async function signerSetContainsForCycle(signer: string, cycle: number): Promise<boolean> {
   const r = await fetchCallReadOnlyFunction({
     contractAddress: bootAddress,

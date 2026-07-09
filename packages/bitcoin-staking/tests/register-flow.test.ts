@@ -145,7 +145,13 @@ describe('lockScript / outputScript overload', () => {
   });
 
   it('buildLockProof: lockScript and outputScript yield identical output', () => {
-    const base = { txHex, header: block.header, merkleProof, txCount: 1, unlockHeight: meta.unlockHeight };
+    const base = {
+      txHex,
+      header: block.header,
+      merkleProof,
+      txCount: 1,
+      unlockHeight: meta.unlockHeight,
+    };
     const viaLockScript = buildLockProof({ ...base, lockScript: meta.lockScript });
     const viaExpected = buildLockProof({ ...base, outputScript });
     expect(viaLockScript).toEqual(viaExpected);

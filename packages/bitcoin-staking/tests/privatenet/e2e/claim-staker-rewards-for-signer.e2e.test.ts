@@ -27,9 +27,9 @@ import { useFixtures } from '../../helpers/mock';
 const network = getNetwork();
 const FEE = 10_000n;
 
-// Broadcaster (override via CALLER env). Default account1 -> shares Lane A with the
-// other account1 signer tests, so it never collides with a parallel lane.
-const caller = resolveAccount('CALLER', 'account6'); // clean
+// Broadcaster (override via CALLER env). Default account6 -> shares its lane with the
+// other account6 signer tests, so it never collides with a parallel lane.
+const caller = resolveAccount('CALLER', 'account6');
 
 // The staker principal whose reward claim we're asserting (read-only subject).
 // (Any funded address works — with no accrued rewards the call returns ok/earned 0.)
@@ -42,7 +42,7 @@ beforeAll(async () => {
 test('claim-staker-rewards-for-signer succeeds with (ok ...) from an EOA (STX-only leg)', async () => {
   useFixtures('e2e-claim-staker-rewards');
   console.log('caller:', caller.address);
-  console.log('staker (account1):', staker.address);
+  console.log('staker (account6):', staker.address);
 
   // DISCOVER CYCLE
   const poxInfo = await getPoxInfo();
@@ -95,7 +95,7 @@ test('claim-staker-rewards-for-signer succeeds with (ok ...) from an EOA (STX-on
 test('claim-staker-rewards-for-signer with bond index: also succeeds with (ok ...)', async () => {
   useFixtures('e2e-claim-staker-rewards-bond'); // own phase: 2nd broadcast must not collide with test 1
   console.log('caller:', caller.address);
-  console.log('staker (account1):', staker.address);
+  console.log('staker (account6):', staker.address);
 
   // DISCOVER CYCLE
   const poxInfo = await getPoxInfo();

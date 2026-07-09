@@ -9,8 +9,8 @@ import { buildUnlockScript } from '../../src';
  * KMS-backed early-exit ("early-unlock") signing service.
  *
  * The service holds the early-unlock PRIVATE key in KMS and exposes:
- *   GET  /v1/public-key  → { key_id, xpub, derivation_path, fingerprint, network }
- *   POST /v1/sign        → { signature (DER), sighash, public_key, sighash_type }
+ *   GET  /v1/public-key  -> { key_id, xpub, derivation_path, fingerprint, network }
+ *   POST /v1/sign        -> { signature (DER), sighash, public_key, sighash_type }
  *
  * NOTE: the routes live under the `/v1` *stage* AND a `/v1` path prefix, so the
  * real URLs are `…/v1/v1/public-key` and `…/v1/v1/sign`.
@@ -54,7 +54,7 @@ export async function fetchEarlyUnlockKey(): Promise<EarlyUnlockKey | null> {
   try {
     res = await fetch(`${EARLY_UNLOCK_API}/public-key`);
   } catch {
-    return null; // network unreachable (offline / firewall) → skip
+    return null; // network unreachable (offline / firewall) -> skip
   }
   if (!res.ok) return null;
   const j = (await res.json()) as {
@@ -80,7 +80,7 @@ export function fullDerivationPath(accountPath: string, leaf: string = EARLY_UNL
 
 /**
  * Derive the 33-byte compressed leaf public key from the account-level xpub.
- * This is the pubkey that goes into `buildUnlockScript` → `early-unlock-bytes`.
+ * This is the pubkey that goes into `buildUnlockScript` -> `early-unlock-bytes`.
  */
 export function deriveEarlyUnlockPubkey(xpub: string, leaf: string = EARLY_UNLOCK_LEAF): Uint8Array {
   const versions = xpub.startsWith('t') ? TESTNET_VERSIONS : MAINNET_VERSIONS;
@@ -91,7 +91,7 @@ export function deriveEarlyUnlockPubkey(xpub: string, leaf: string = EARLY_UNLOC
   return leafKey.publicKey;
 }
 
-/** Convenience: xpub → the bond's `early-unlock-bytes` (`<early-unlock-pubkey> OP_CHECKSIG`). */
+/** Convenience: xpub -> the bond's `early-unlock-bytes` (`<early-unlock-pubkey> OP_CHECKSIG`). */
 export function earlyUnlockBytesHexFromXpub(xpub: string, leaf: string = EARLY_UNLOCK_LEAF): string {
   return bytesToHex(buildUnlockScript(deriveEarlyUnlockPubkey(xpub, leaf)));
 }
@@ -138,7 +138,7 @@ export async function signViaEarlyUnlockApi(opts: {
       }),
     });
   } catch {
-    return null; // network unreachable → skip
+    return null; // network unreachable -> skip
   }
   if (!res.ok) return null;
   const j = (await res.json()) as {

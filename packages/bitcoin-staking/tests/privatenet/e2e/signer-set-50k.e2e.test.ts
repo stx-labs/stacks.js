@@ -59,6 +59,7 @@ const bootAddress = network.bootAddress;
 
 // Read-only helpers (not yet wrapped in src/fetch.ts)
 
+/** @internal */
 async function getAmountDelegatedForSigner(signer: string, cycle: number): Promise<bigint> {
   const r = await fetchCallReadOnlyFunction({
     contractAddress: bootAddress,
@@ -71,6 +72,7 @@ async function getAmountDelegatedForSigner(signer: string, cycle: number): Promi
   return BigInt((r as { value: bigint }).value);
 }
 
+/** @internal */
 async function signerSetContainsForCycle(signer: string, cycle: number): Promise<boolean> {
   const r = await fetchCallReadOnlyFunction({
     contractAddress: bootAddress,
@@ -90,6 +92,7 @@ interface Snapshot {
   totalShares: bigint;
 }
 
+/** @internal */
 async function snapshot(label: string, cycle: number): Promise<Snapshot> {
   const [delegated, inSet, signerShares, totalShares] = await Promise.all([
     getAmountDelegatedForSigner(SIGNER_MANAGER, cycle).catch(() => -1n),

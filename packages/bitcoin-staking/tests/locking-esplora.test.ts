@@ -50,7 +50,7 @@ function foldToRoot(internalLeaf: Uint8Array, internalSiblings: Uint8Array[], po
 
 const getText = async (path: string): Promise<string> => {
   const res = await fetch(`${ESPLORA}${path}`);
-  if (!res.ok) throw new Error(`GET ${path} → ${res.status}`);
+  if (!res.ok) throw new Error(`GET ${path} -> ${res.status}`);
   return res.text();
 };
 const getJson = async <T>(path: string): Promise<T> => JSON.parse(await getText(path)) as T;

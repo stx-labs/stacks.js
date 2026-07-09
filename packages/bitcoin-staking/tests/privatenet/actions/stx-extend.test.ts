@@ -104,7 +104,7 @@ test('stake-update extends account6 STX-only stake by another cycle', async () =
   });
 
   // Phase switch: the same get-stacker-info path returns a DIFFERENT body after
-  // the extend (num-cycles 1 → 2). Route the after-read to its own fixture key so
+  // the extend (num-cycles 1 -> 2). Route the after-read to its own fixture key so
   // replay doesn't collapse before/after to one value.
   useFixtures('stx-extend-after');
   const after = await fetchStakerInfo({ address: staker.address, network });
@@ -119,7 +119,7 @@ test('stake-update extends account6 STX-only stake by another cycle', async () =
       expect(after.details.numCycles).toBe(before.details.numCycles + CYCLES_TO_EXTEND);
       expect(after.details.amountUstx).toBe(before.details.amountUstx + AMOUNT_INCREASE);
       console.log(
-        `CONFIRMED: stake-update extended num-cycles ${before.details.numCycles} → ${after.details.numCycles}` +
+        `CONFIRMED: stake-update extended num-cycles ${before.details.numCycles} -> ${after.details.numCycles}` +
           (AMOUNT_INCREASE > 0n ? `, amount +${AMOUNT_INCREASE}` : '')
       );
     }

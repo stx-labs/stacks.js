@@ -5,7 +5,7 @@
  * is signed by POST /v1/sign (KMS), not a local key. Everything else is built
  * with the package's own reclaim helpers so the witness matches production.
  *
- * Honest-skips (no fake pass) if: staker isn't L1-enrolled in a early-unlock bond,
+ * Honest-skips (no fake pass) if: staker isn't L1-enrolled in an early-unlock bond,
  * hasn't announced early exit, has no spendable lockup UTXO, or the early-unlock
  * API is unreachable.
  *

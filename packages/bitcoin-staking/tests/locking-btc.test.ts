@@ -116,11 +116,29 @@ function refPushCScriptNum(n: number | bigint): number[] {
 
 describe('script encoders match the reference (hand-rolled) implementations', () => {
   const nums = [
-    0n, 1n, 15n, 16n, 17n, 100n, 127n, 128n, 255n, 256n, 850_000n, 65_535n, 65_536n,
+    0n,
+    1n,
+    15n,
+    16n,
+    17n,
+    100n,
+    127n,
+    128n,
+    255n,
+    256n,
+    850_000n,
+    65_535n,
+    65_536n,
     // 4- and 5-byte boundaries (the cscriptnum-serializing fix range), each
     // computed (not hand-typed) and probed just below/at the power of two.
-    2n ** 23n - 1n, 2n ** 23n, 2n ** 24n - 1n, 2n ** 24n,
-    2n ** 31n - 1n, 2n ** 31n, 2n ** 32n - 1n, 2n ** 32n,
+    2n ** 23n - 1n,
+    2n ** 23n,
+    2n ** 24n - 1n,
+    2n ** 24n,
+    2n ** 31n - 1n,
+    2n ** 31n,
+    2n ** 32n - 1n,
+    2n ** 32n,
     C_SCRIPT_NUM_MAX - 1n, // largest value the contract accepts
   ];
   it.each(nums.map(n => [n] as const))('serializeCScriptNum(%s)', n => {
@@ -312,15 +330,17 @@ describe('buildLockProof', () => {
 
   // Self-validation: a proof failing any of these is guaranteed to abort
   // on-chain, so buildLockProof throws instead of burning the tx fee.
-  const withProof = (merkleProof: typeof MERKLE_PROOF, txCount = 3721) => () =>
-    buildLockProof({
-      txHex: TX_HEX,
-      header: HEADER_HEX,
-      merkleProof,
-      txCount,
-      unlockHeight: 850_000,
-      outputScript: OUTPUT_0_SCRIPT,
-    });
+  const withProof =
+    (merkleProof: typeof MERKLE_PROOF, txCount = 3721) =>
+    () =>
+      buildLockProof({
+        txHex: TX_HEX,
+        header: HEADER_HEX,
+        merkleProof,
+        txCount,
+        unlockHeight: 850_000,
+        outputScript: OUTPUT_0_SCRIPT,
+      });
 
   it('rejects a tampered sibling hash (fold no longer reaches the header root)', () => {
     const merkle = [...MERKLE_PROOF.merkle];

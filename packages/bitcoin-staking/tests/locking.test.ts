@@ -108,6 +108,11 @@ describe('buildUnlockScript', () => {
     expect(() => buildUnlockScript(new Uint8Array(32))).toThrow('33-byte');
     expect(() => buildUnlockScript(new Uint8Array(65))).toThrow('33-byte');
   });
+
+  it('rejects 33-byte keys without a compressed 0x02/0x03 prefix', () => {
+    expect(() => buildUnlockScript(new Uint8Array(33).fill(0x04))).toThrow('0x02/0x03');
+    expect(() => buildUnlockScript(new Uint8Array(33))).toThrow('0x02/0x03');
+  });
 });
 
 describe('parseUnlockScript', () => {

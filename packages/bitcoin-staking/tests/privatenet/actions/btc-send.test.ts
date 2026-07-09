@@ -39,7 +39,7 @@ const RECIPIENT_ADDR = process.env.TO_ADDRESS ?? 'bcrt1qr5g5smqp2650kgxz64664vs2
 const SEND_SATS = BigInt(process.env.AMOUNT_SATS ?? 10_000_000); // default 0.1 BTC
 const FEE_SATS = BigInt(process.env.FEE_SATS ?? 300); // 1 sat/vB × ~141 vB rounded up
 
-/** Resolve sender pubkey + p2wpkh spend object once. */
+/** @internal */
 function senderSpend() {
   const priv = hexToBytes(SENDER_PRIV_HEX);
   const pub = secp256k1.getPublicKey(priv, true);
@@ -47,7 +47,7 @@ function senderSpend() {
   return { priv, pub, spend };
 }
 
-/** Poll until `fn` returns a non-null/undefined value, or throw after `timeoutMs`. */
+/** @internal */
 async function poll<T>(
   fn: () => Promise<T | null | undefined>,
   intervalMs: number,

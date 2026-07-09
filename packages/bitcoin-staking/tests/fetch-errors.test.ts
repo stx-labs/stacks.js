@@ -12,9 +12,9 @@ describe('node fetchers surface HTTP errors', () => {
       status: 429,
       statusText: 'Too Many Requests',
     });
-    await expect(fetchAccountStatus({ address: 'ST000000000000000000002AMW42H', client })).rejects.toThrow(
-      /429/
-    );
+    await expect(
+      fetchAccountStatus({ address: 'ST000000000000000000002AMW42H', client })
+    ).rejects.toThrow(/429/);
     await expect(fetchPoxInfo({ client })).rejects.toThrow(/429/);
   });
 
