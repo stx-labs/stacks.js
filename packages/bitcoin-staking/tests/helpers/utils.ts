@@ -3,12 +3,12 @@
  * for the e2e harness. Ported from `stacks-functional-tests/src/utils.ts`
  * (+ `stacksNetwork()` from its `helpers.ts`), kept dependency-light.
  */
-import { exec } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { promisify } from "node:util";
-import { STACKS_TESTNET, type StacksNetwork } from "@stacks/network";
-import fetchMock from "jest-fetch-mock";
+import { exec } from 'node:child_process';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { promisify } from 'node:util';
+import { STACKS_TESTNET, type StacksNetwork } from '@stacks/network';
+import fetchMock from 'jest-fetch-mock';
 
 const sh = promisify(exec);
 
@@ -16,14 +16,14 @@ const sh = promisify(exec);
 // having sourced it or on the shell's working directory — the path is anchored
 // to THIS file, not `process.cwd()`. Real environment variables always win
 // (never overridden), so explicit overrides keep working.
-const dotenvPath = resolve(__dirname, "../../.env");
+const dotenvPath = resolve(__dirname, '../../.env');
 if (existsSync(dotenvPath)) {
-  for (const line of readFileSync(dotenvPath, "utf8").split("\n")) {
+  for (const line of readFileSync(dotenvPath, 'utf8').split('\n')) {
     const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
-    if (!m || line.trimStart().startsWith("#")) continue;
+    if (!m || line.trimStart().startsWith('#')) continue;
     const [, key, raw] = m;
     if (process.env[key] !== undefined) continue;
-    process.env[key] = raw!.replace(/^(['"])(.*)\1$/, "$2");
+    process.env[key] = raw!.replace(/^(['"])(.*)\1$/, '$2');
   }
 }
 
@@ -38,7 +38,7 @@ export const ENV = {
    *   `NETWORK_*_CMD` lifecycle commands unset (they no-op).
    * Both use ST-prefixed testnet addresses — there is no mainnet flavor here.
    */
-  NETWORK: (process.env.NETWORK ?? "devnet") as "devnet" | "testnet",
+  NETWORK: (process.env.NETWORK ?? 'devnet') as 'devnet' | 'testnet',
 
   /**
    * The chain id used to sign transactions — the node's `/v2/info` `.network_id`
@@ -54,12 +54,11 @@ export const ENV = {
    * it at a net (e.g. `https://api.private-1.hiro.so`) and everything (reads,
    * broadcast, pox, waiters) targets that net. No separate node URL needed.
    */
-  STACKS_API: process.env.STACKS_API ?? "http://localhost:3999",
-  BITCOIND_URL: process.env.BITCOIND_URL ?? "http://btc:btc@localhost:18443",
+  STACKS_API: process.env.STACKS_API ?? 'http://localhost:3999',
+  BITCOIND_URL: process.env.BITCOIND_URL ?? 'http://btc:btc@localhost:18443',
 
   /** stacks-regtest-env checkout (contract sources for `deploy.ts`), relative to this package dir. */
-  REGTEST_WORKING_DIR:
-    process.env.REGTEST_WORKING_DIR ?? "../../../stacks-regtest-env",
+  REGTEST_WORKING_DIR: process.env.REGTEST_WORKING_DIR ?? '../../../stacks-regtest-env',
 
   /**
    * Network lifecycle commands (inversion of control): the harness never runs
@@ -68,9 +67,9 @@ export const ENV = {
    * see `.env.example` for the local stacks-regtest-env commands. An unset
    * command makes the op a no-op (right for remote/externally-managed nets).
    */
-  NETWORK_UP_CMD: process.env.NETWORK_UP_CMD ?? "",
-  NETWORK_DOWN_CMD: process.env.NETWORK_DOWN_CMD ?? "",
-  NETWORK_WIPE_CMD: process.env.NETWORK_WIPE_CMD ?? "",
+  NETWORK_UP_CMD: process.env.NETWORK_UP_CMD ?? '',
+  NETWORK_DOWN_CMD: process.env.NETWORK_DOWN_CMD ?? '',
+  NETWORK_WIPE_CMD: process.env.NETWORK_WIPE_CMD ?? '',
 
   // On the hosted private testnet the API rate-limits at ~1 req/s (HTTP 429).
   // Devnet is local and can be polled fast (250 ms is fine). Testnet callers
@@ -101,15 +100,15 @@ export const ENV = {
    */
   FIXTURES_JSON:
     process.env.FIXTURES_JSON ??
-    ((process.env.NETWORK ?? "devnet") === "testnet"
-      ? "tests/privatenet/fixtures/fixtures.json"
-      : "tests/regtest/fixtures.json"),
+    ((process.env.NETWORK ?? 'devnet') === 'testnet'
+      ? 'tests/privatenet/fixtures/fixtures.json'
+      : 'tests/regtest/fixtures.json'),
   /**
    * Capture mode. When `RECORD=1`, hit the live node (jest-fetch-mock disabled)
    * and record every observed request/response into FIXTURES_JSON. Unset ->
    * replay via mocks.
    */
-  RECORD: process.env.RECORD === "1",
+  RECORD: process.env.RECORD === '1',
 };
 
 // In capture mode, go live once at module load (utils is imported by every test).
@@ -122,19 +121,13 @@ if (ENV.RECORD) fetchMock.disableMocks();
  */
 export const isMocking = !ENV.RECORD;
 
-export const timeout = (ms: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, ms));
+export const timeout = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
 // Recorder: programmatically maintain the canonical JSON fixtures store.
 
 /** Pull the request URL out of any `fetch` input shape. */
 function inputToUrl(input: Parameters<typeof fetch>[0]): URL {
-  const raw =
-    typeof input === "string"
-      ? input
-      : input instanceof URL
-        ? input.href
-        : input.url;
+  const raw = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
   return new URL(raw);
 }
 
@@ -145,8 +138,22 @@ function inputToUrl(input: Parameters<typeof fetch>[0]): URL {
  * same path to return different bodies over time use different keys.
  */
 let activeFixtureKey: string | undefined;
+
+// Optional observer of keyed fixture writes. The record-retry harness registers
+// here to learn which files a test wrote (so it can discard them before a
+// re-attempt) — keeping all retry state in the harness, not in this module.
+let onFixtureWrite: ((path: string) => void) | undefined;
+export function observeFixtureWrites(fn?: (path: string) => void): void {
+  onFixtureWrite = fn;
+}
+/** Drop the in-memory fixture cache so the next read re-hydrates from disk. */
+export function clearFixtureCache(): void {
+  fixtureCache.clear();
+}
+
 export function setFixtureFile(key?: string): void {
   activeFixtureKey = key;
+  if (key !== undefined) onFixtureWrite?.(fixturePath(key));
 }
 
 /** Absolute path of the fixtures file for `key` (co-located with `fixtures.json`). */
@@ -179,24 +186,36 @@ function fixturesJsonFor(): string {
  * Per-file in-memory cache, seeded from disk so re-records merge + dedupe (latest
  * wins) instead of clobbering. A missing file -> empty map (never breaks replay).
  */
-const fixtureCache = new Map<string, Record<string, string>>();
-export function loadFixtures(key?: string): Record<string, string> {
+const fixtureCache = new Map<string, Record<string, Fixture>>();
+/** A captured response: HTTP status + body. */
+export interface Fixture {
+  status: number;
+  body: string;
+}
+
+export function loadFixtures(key?: string): Record<string, Fixture> {
   const path = fixturePath(key);
   let map = fixtureCache.get(path);
   if (!map) {
+    let raw: Record<string, string | Fixture>;
     try {
-      map = JSON.parse(readFileSync(path, "utf8")) as Record<string, string>;
+      raw = JSON.parse(readFileSync(path, 'utf8')) as Record<string, string | Fixture>;
     } catch {
-      map = {};
+      raw = {};
     }
+    // legacy fixtures stored bare body strings (status was not captured) —
+    // deserialize them as 200s; delete this once both suites are re-recorded
+    map = Object.fromEntries(
+      Object.entries(raw).map(([k, v]) => [k, typeof v === 'string' ? { status: 200, body: v } : v])
+    );
     fixtureCache.set(path, map);
   }
   return map;
 }
 
 /** Write the store back as sorted JSON (stable key order -> clean diffs). */
-function writeFixtures(key: string | undefined, map: Record<string, string>): void {
-  const sorted: Record<string, string> = {};
+function writeFixtures(key: string | undefined, map: Record<string, Fixture>): void {
+  const sorted: Record<string, Fixture> = {};
   for (const k of Object.keys(map).sort()) sorted[k] = map[k];
   writeFileSync(fixturePath(key), `${JSON.stringify(sorted, null, 2)}\n`);
 }
@@ -210,16 +229,16 @@ function writeFixtures(key: string | undefined, map: Record<string, string>): vo
  */
 export function fixtureKey(
   input: Parameters<typeof fetch>[0],
-  init?: Parameters<typeof fetch>[1],
+  init?: Parameters<typeof fetch>[1]
 ): string {
   const url = inputToUrl(input);
   const path = `${url.pathname}${url.search}`;
-  const body = typeof init?.body === "string" ? init.body : undefined;
+  const body = typeof init?.body === 'string' ? init.body : undefined;
   if (!body) return path; // GETs, and binary POSTs like /v2/transactions
 
   // map_entry POSTs the (hex) clarity map key in the body — different keys (e.g.
   // a bond per index, an allowance per staker) hit the same path, so include it.
-  if (url.pathname.includes("/map_entry/")) return `${path}#${body}`;
+  if (url.pathname.includes('/map_entry/')) return `${path}#${body}`;
 
   try {
     const parsed = JSON.parse(body) as {
@@ -229,14 +248,14 @@ export function fixtureKey(
       arguments?: unknown;
     };
     // bitcoind JSON-RPC: every call POSTs one path -> disambiguate by method+params.
-    if (typeof parsed.method === "string") {
+    if (typeof parsed.method === 'string') {
       return `${url.host}${url.pathname}#${parsed.method}:${JSON.stringify(parsed.params ?? [])}`;
     }
     // Stacks read-only calls: the same fn path serves every (sender, args) — a
     // multi-account test reads e.g. get-bond-membership for two stakers, so key
     // by sender + args, not just the path.
-    if (url.pathname.includes("/contracts/call-read/")) {
-      return `${path}#${String(parsed.sender ?? "")}:${JSON.stringify(parsed.arguments ?? [])}`;
+    if (url.pathname.includes('/contracts/call-read/')) {
+      return `${path}#${String(parsed.sender ?? '')}:${JSON.stringify(parsed.arguments ?? [])}`;
     }
   } catch {
     // not JSON — fall through to path keying
@@ -258,18 +277,20 @@ export function fixtureKey(
 function recordFixture(
   input: Parameters<typeof fetch>[0],
   init: Parameters<typeof fetch>[1],
-  response: Response,
+  response: Response
 ): void {
   try {
     const key = fixtureKey(input, init);
     const fileKey = activeFixtureKey;
+    const status = response.status;
     void response
       .clone()
       .text()
-      .then((body) => {
+      .then(body => {
         const map = loadFixtures(fileKey);
-        if (map[key] === body) return; // unchanged — skip rewrite
-        map[key] = body;
+        const prev = map[key];
+        if (prev && prev.status === status && prev.body === body) return;
+        map[key] = { status, body };
         writeFixtures(fileKey, map);
       });
   } catch {
@@ -314,7 +335,7 @@ export function getNetwork(): StacksNetwork {
 
 export function withRetry<T, A extends unknown[]>(
   maxRetries: number,
-  fn: (...args: A) => Promise<T>,
+  fn: (...args: A) => Promise<T>
 ): (...args: A) => Promise<T> {
   return async function retryWrapper(...args: A): Promise<T> {
     let attempts = 0;
@@ -327,7 +348,7 @@ export function withRetry<T, A extends unknown[]>(
           // Without this, fast retries re-trigger 429s in a tight loop.
           const wait =
             response.status === 429
-              ? (Number(response.headers.get('retry-after') ?? 0) * 1000 || 15_000)
+              ? Number(response.headers.get('retry-after') ?? 0) * 1000 || 15_000
               : ENV.RETRY_INTERVAL;
           await timeout(wait);
           attempts++;
@@ -345,12 +366,12 @@ export function withRetry<T, A extends unknown[]>(
 
 export function withTimeout<T, A extends unknown[]>(
   timeoutMs: number,
-  fn: (...args: A) => Promise<T>,
+  fn: (...args: A) => Promise<T>
 ): (...args: A) => Promise<T> {
   return async function timeoutWrapper(...args: A): Promise<T> {
     let handle: NodeJS.Timeout | undefined;
     const timeoutPromise = new Promise<never>((_, reject) => {
-      handle = setTimeout(() => reject(new Error("Timeout")), timeoutMs);
+      handle = setTimeout(() => reject(new Error('Timeout')), timeoutMs);
     });
     try {
       return await Promise.race([timeoutPromise, fn(...args)]);
@@ -369,7 +390,7 @@ export function withTimeout<T, A extends unknown[]>(
 async function networkCmd(
   label: string,
   cmd: string,
-  env: Record<string, string> = {},
+  env: Record<string, string> = {}
 ): Promise<string | undefined> {
   if (!cmd) {
     console.log(`skip ${label}: no command set (externally managed network)`);
@@ -377,8 +398,8 @@ async function networkCmd(
   }
   const vars = Object.entries(env)
     .map(([k, v]) => `${k}=${v}`)
-    .join(" ");
-  console.log(`${label}...${vars ? ` ${vars}` : ""}`);
+    .join(' ');
+  console.log(`${label}...${vars ? ` ${vars}` : ''}`);
   // command output (e.g. docker builds) can be large; give exec room
   return (
     await sh(cmd, {
@@ -394,13 +415,13 @@ async function networkCmd(
  * staking daemon so a test can drive stake txs itself.
  */
 export const networkUp = (env: Record<string, string> = {}) =>
-  networkCmd("network up", ENV.NETWORK_UP_CMD, env);
+  networkCmd('network up', ENV.NETWORK_UP_CMD, env);
 
 /** Stop the network, KEEPING chain state. */
-export const networkDown = () => networkCmd("network down", ENV.NETWORK_DOWN_CMD);
+export const networkDown = () => networkCmd('network down', ENV.NETWORK_DOWN_CMD);
 
 /** Fresh chain: wipe state (`NETWORK_WIPE_CMD`), then up (forwarding `env`). */
 export async function networkReset(env: Record<string, string> = {}) {
-  await networkCmd("network wipe", ENV.NETWORK_WIPE_CMD);
+  await networkCmd('network wipe', ENV.NETWORK_WIPE_CMD);
   return networkUp(env);
 }

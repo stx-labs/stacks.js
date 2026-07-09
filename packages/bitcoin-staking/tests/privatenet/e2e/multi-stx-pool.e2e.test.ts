@@ -1,12 +1,6 @@
 /**
- * E2E: Multi-staker STX-only pooling into the same signer-manager.
- *
- * account5, account6, account7 each call `stake` targeting the SAME
- * signer-manager for the same target cycle (currentCycle+1).
- *
- * Assertions (relative / delta-based):
- *   - fetchSignerSharesStakedForCycle(signerManager, targetCycle) increases by
- *     exactly the sum of all staked amounts (before/after delta).
+ * E2E: three fresh stakers pool STX to the same signer-manager/cycle; asserts
+ * fetchSignerSharesStakedForCycle increases by exactly the sum staked.
  *
  * Stakers run sequentially (await each) to avoid nonce races.
  *
@@ -23,12 +17,7 @@ import { broadcastTransaction } from '@stacks/transactions';
 import { buildStake, fetchSignerSharesStakedForCycle } from '../../../src';
 import type { Account } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
-import {
-  getNextNonce,
-  getPoxInfo,
-  getTransaction,
-  waitForFulfilled,
-} from '../../helpers/wait';
+import { getNextNonce, getPoxInfo, getTransaction, waitForFulfilled } from '../../helpers/wait';
 import { freshFundedStxAccount } from '../../helpers/fresh-account';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
@@ -54,111 +43,91 @@ interface Staker {
 
 const STAKERS: Staker[] = [];
 
-async function doStxStake(
-  staker: Staker,
-  startBurnHt: number,
-): Promise<bigint> {
-  const network = getNetwork();
-  useFixtures(`e2e-multi-stx-pool-${staker.name}`); // isolate each stake broadcast
-  console.log(`\n--- [${staker.name}] staking ${AMOUNT_USTX} uSTX to ${SIGNER_MANAGER} ---`);
-
-  const nonce = await getNextNonce(staker.account.address);
-
-  const unsigned = await buildStake({
-    signerManager: SIGNER_MANAGER,
-    amountUstx: AMOUNT_USTX,
-    numCycles: NUM_CYCLES,
-    startBurnHt,
-    publicKey: staker.account.publicKey,
-    fee: FEE_USTX,
-    nonce,
-    network,
-    postConditionMode: 'allow',
-  });
-
-  const transaction = signTransaction(unsigned, staker.account.key);
-  const res = await broadcastTransaction({ transaction, network });
-  if ('error' in res) {
-    throw new Error(`[${staker.name}] broadcast rejected: ${res.error} — ${'reason' in res ? res.reason : ''}`);
-  }
-  console.log(`[${staker.name}] txid: ${res.txid}`);
-
-  // Wait until tx leaves mempool
-  const tx = await waitForFulfilled(async () => {
-    const t = await getTransaction(res.txid);
-    if (!t || t.tx_status === 'pending') throw new Error('tx still pending');
-    return t;
-  });
-
-  console.log(`[${staker.name}] tx_status: ${tx.tx_status}, result: ${tx.tx_result?.repr}`);
-
-  if (tx.tx_status !== 'success') {
-    throw new Error(`[${staker.name}] stake tx failed: ${tx.tx_status} ${tx.tx_result?.repr}`);
-  }
-  console.log(`[${staker.name}] staked ${AMOUNT_USTX} uSTX ✓`);
-  return AMOUNT_USTX;
-}
-
 beforeAll(async () => {
   useFixtures('e2e-multi-stx-pool');
-  // Derive + fund N fresh random stakers (no collisions, no allowlist needed).
   const network = getNetwork();
   for (let i = 0; i < NUM_STAKERS; i++) {
     useFixtures(`e2e-multi-stx-pool-fund${i}`); // isolate each funding broadcast
-    const account = await freshFundedStxAccount({ network, amountUstx: FUND_USTX, label: `pool-${i}` });
+    const account = await freshFundedStxAccount({
+      network,
+      amountUstx: FUND_USTX,
+      label: `pool-${i}`,
+    });
     STAKERS.push({ name: `fresh${i + 1}`, account });
   }
 }, 6 * 180_000);
 
-test('multi-staker STX pooling: three fresh stakers pool to the same signer-manager', async () => {
-  useFixtures('e2e-multi-stx-pool');
-  const network = getNetwork();
+test(
+  'multi-staker STX pooling: three fresh stakers pool to the same signer-manager',
+  async () => {
+    useFixtures('e2e-multi-stx-pool');
+    const network = getNetwork();
 
-  console.log('\n=== MULTI-STX-POOL E2E: beginning ===');
+    const poxInfo = await getPoxInfo();
+    const targetCycle = poxInfo.rewardCycleId + 1;
+    // startBurnHt must map to the current cycle (replay guard in the contract)
+    const startBurnHt = poxInfo.currentBurnchainBlockHeight;
 
-  // Dynamic current cycle discovery
-  const poxInfo = await getPoxInfo();
-  const targetCycle = poxInfo.rewardCycleId + 1;
-  // startBurnHt must map to the current cycle (replay guard in the contract)
-  const startBurnHt = poxInfo.currentBurnchainBlockHeight;
+    const sharesBefore = await fetchSignerSharesStakedForCycle({
+      signerManager: SIGNER_MANAGER,
+      rewardCycle: targetCycle,
+      network,
+    });
 
-  console.log(`currentCycle: ${poxInfo.rewardCycleId}, targetCycle: ${targetCycle}`);
-  console.log(`currentBurnHt: ${poxInfo.currentBurnchainBlockHeight}, startBurnHt: ${startBurnHt}`);
-  console.log(`signerManager: ${SIGNER_MANAGER}`);
-  console.log(`amountUstx per staker: ${AMOUNT_USTX.toString()}`);
-  console.log(`numCycles: ${NUM_CYCLES}`);
+    const stakedAmounts: bigint[] = [];
+    for (const staker of STAKERS) {
+      useFixtures(`e2e-multi-stx-pool-${staker.name}`); // isolate each stake broadcast
 
-  // Capture aggregate BEFORE (STX-only leg: no bondIndex)
-  const sharesBefore = await fetchSignerSharesStakedForCycle({ signerManager: SIGNER_MANAGER, rewardCycle: targetCycle, network });
-  console.log(`signerSharesStakedForCycle(${targetCycle}) BEFORE: ${sharesBefore.toString()} uSTX`);
+      const nonce = await getNextNonce(staker.account.address);
 
-  // Run all three stakers sequentially
-  const stakedAmounts: bigint[] = [];
-  for (const staker of STAKERS) {
-    const amount = await doStxStake(staker, startBurnHt);
-    stakedAmounts.push(amount);
-  }
+      const unsigned = await buildStake({
+        signerManager: SIGNER_MANAGER,
+        amountUstx: AMOUNT_USTX,
+        numCycles: NUM_CYCLES,
+        startBurnHt,
+        publicKey: staker.account.publicKey,
+        fee: FEE_USTX,
+        nonce,
+        network,
+        postConditionMode: 'allow',
+      });
 
-  useFixtures('e2e-multi-stx-pool-after');
-  // Capture aggregate AFTER
-  const sharesAfter = await fetchSignerSharesStakedForCycle({ signerManager: SIGNER_MANAGER, rewardCycle: targetCycle, network });
-  console.log(`signerSharesStakedForCycle(${targetCycle}) AFTER: ${sharesAfter.toString()} uSTX`);
+      const transaction = signTransaction(unsigned, staker.account.key);
+      const res = await broadcastTransaction({ transaction, network });
+      if ('error' in res) {
+        throw new Error(
+          `[${staker.name}] broadcast rejected: ${res.error} — ${'reason' in res ? res.reason : ''}`
+        );
+      }
+      console.log(`[${staker.name}] txid: ${res.txid}`);
 
-  const expectedDelta = stakedAmounts.reduce((sum, a) => sum + a, 0n);
-  const actualDelta = sharesAfter - sharesBefore;
+      const tx = await waitForFulfilled(async () => {
+        const t = await getTransaction(res.txid);
+        if (!t || t.tx_status === 'pending') throw new Error('tx still pending');
+        return t;
+      });
 
-  console.log(`\n=== MULTI-STX-POOL SUMMARY ===`);
-  console.log(`signerManager: ${SIGNER_MANAGER}`);
-  console.log(`targetCycle: ${targetCycle}`);
-  console.log(`stakers: ${STAKERS.map(s => s.name).join(', ')}`);
-  console.log(`amountUstx each: ${AMOUNT_USTX.toString()}`);
-  console.log(`expectedDelta: ${expectedDelta.toString()} uSTX`);
-  console.log(`actualDelta:   ${actualDelta.toString()} uSTX`);
-  console.log(`sharesBefore: ${sharesBefore.toString()}`);
-  console.log(`sharesAfter:  ${sharesAfter.toString()}`);
+      console.log(`[${staker.name}] tx_status: ${tx.tx_status}, result: ${tx.tx_result?.repr}`);
 
-  // Delta assertion: signer shares for this cycle must have increased by exactly the sum staked
-  expect(actualDelta).toBe(expectedDelta);
+      if (tx.tx_status !== 'success') {
+        throw new Error(`[${staker.name}] stake tx failed: ${tx.tx_status} ${tx.tx_result?.repr}`);
+      }
+      stakedAmounts.push(AMOUNT_USTX);
+    }
 
-  console.log('\n=== MULTI-STX-POOL: ALL ASSERTIONS PASSED ✓ ===');
-}, 3 * 180_000);
+    useFixtures('e2e-multi-stx-pool-after');
+    const sharesAfter = await fetchSignerSharesStakedForCycle({
+      signerManager: SIGNER_MANAGER,
+      rewardCycle: targetCycle,
+      network,
+    });
+
+    const expectedDelta = stakedAmounts.reduce((sum, a) => sum + a, 0n);
+    const actualDelta = sharesAfter - sharesBefore;
+
+    console.log(`expectedDelta: ${expectedDelta.toString()}, actualDelta: ${actualDelta.toString()}`);
+
+    expect(actualDelta).toBe(expectedDelta);
+  },
+  3 * 180_000
+);

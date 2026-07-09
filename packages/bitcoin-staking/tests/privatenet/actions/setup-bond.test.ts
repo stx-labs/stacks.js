@@ -18,24 +18,15 @@
  *   TARGET_RATE_BPS=500 ALLOWLIST_ACCOUNTS=account5,account6 ALLOWLIST_MAX_SATS=5000 \
  *     npx jest tests/privatenet/actions/setup-bond.test.ts --runInBand --collectCoverage=false
  */
-import { broadcastTransaction } from "@stacks/transactions";
-import {
-  BOND_GAP_CYCLES,
-  buildSetupBond,
-  fetchBond,
-  rewardCycleToBurnHeight,
-} from "../../../src";
-import { REGTEST_KEYS, getAccount } from "../../regtest/regtest";
-import { getNetwork } from "../../helpers/utils";
-import {
-  getNextNonce,
-  getPoxInfo,
-  waitForFulfilled,
-} from "../../helpers/wait";
-import { signTransaction } from "../../helpers/sign";
+import { broadcastTransaction } from '@stacks/transactions';
+import { BOND_GAP_CYCLES, buildSetupBond, fetchBond, rewardCycleToBurnHeight } from '../../../src';
+import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
+import { getNetwork } from '../../helpers/utils';
+import { getNextNonce, getPoxInfo, waitForFulfilled } from '../../helpers/wait';
+import { signTransaction } from '../../helpers/sign';
 import { getBondAdminAccount } from '../../helpers/bondAdmin';
-import { fetchFirstBondPeriodCycle } from "../pox";
-import { useFixtures } from "../../helpers/mock";
+import { fetchFirstBondPeriodCycle } from '../pox';
+import { useFixtures } from '../../helpers/mock';
 
 jest.setTimeout(60 * 60_000); // bond open can be 20+ blocks away; 1h covers it
 
@@ -59,30 +50,24 @@ const ALLOWLIST_MAX_SATS = BigInt(process.env.ALLOWLIST_MAX_SATS ?? 10_000);
  * Override which accounts are included via ALLOWLIST_ACCOUNTS env var
  * (comma-separated subset, e.g. "account5,account6").
  */
-const ALLOWLISTABLE_ACCOUNTS = ["account5", "account6", "account7"] as const;
+const ALLOWLISTABLE_ACCOUNTS = ['account5', 'account6', 'account7'] as const;
 type AllowlistableKey = (typeof ALLOWLISTABLE_ACCOUNTS)[number];
 
 /** Parse ALLOWLIST_ACCOUNTS env, defaulting to account5 only. */
 function parseAllowlistAccounts(): AllowlistableKey[] {
   const raw = process.env.ALLOWLIST_ACCOUNTS;
-  if (!raw) return ["account5"];
-  const names = raw.split(",").map((s) => s.trim()) as AllowlistableKey[];
-  const valid = names.filter((n) =>
-    (ALLOWLISTABLE_ACCOUNTS as readonly string[]).includes(n)
-  );
+  if (!raw) return ['account5'];
+  const names = raw.split(',').map(s => s.trim()) as AllowlistableKey[];
+  const valid = names.filter(n => (ALLOWLISTABLE_ACCOUNTS as readonly string[]).includes(n));
   if (valid.length === 0) {
-    console.warn(
-      `ALLOWLIST_ACCOUNTS="${raw}" has no recognized names — falling back to account5`
-    );
-    return ["account5"];
+    console.warn(`ALLOWLIST_ACCOUNTS="${raw}" has no recognized names — falling back to account5`);
+    return ['account5'];
   }
   return valid;
 }
 
 const allowlistAccountNames = parseAllowlistAccounts();
-const allowlistAccounts = allowlistAccountNames.map((name) =>
-  getAccount(REGTEST_KEYS[name])
-);
+const allowlistAccounts = allowlistAccountNames.map(name => getAccount(REGTEST_KEYS[name]));
 
 /**
  * Extra arbitrary principal(s) to append to the allowlist, beyond the known
@@ -90,26 +75,24 @@ const allowlistAccounts = allowlistAccountNames.map((name) =>
  * Each gets ALLOWLIST_EXTRA_MAX_SATS (default: ALLOWLIST_MAX_SATS).
  * Used to allowlist e.g. a friend principal that isn't one of account5/6/7.
  */
-const ALLOWLIST_EXTRA_MAX_SATS = BigInt(
-  process.env.ALLOWLIST_EXTRA_MAX_SATS ?? ALLOWLIST_MAX_SATS
-);
-const allowlistExtra = (process.env.ALLOWLIST_EXTRA ?? "")
-  .split(",")
-  .map((s) => s.trim())
-  .filter((s) => s.length > 0)
-  .map((staker) => ({ staker, maxSats: ALLOWLIST_EXTRA_MAX_SATS }));
+const ALLOWLIST_EXTRA_MAX_SATS = BigInt(process.env.ALLOWLIST_EXTRA_MAX_SATS ?? ALLOWLIST_MAX_SATS);
+const allowlistExtra = (process.env.ALLOWLIST_EXTRA ?? '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(s => s.length > 0)
+  .map(staker => ({ staker, maxSats: ALLOWLIST_EXTRA_MAX_SATS }));
 
 // Early-unlock subscript (ELSE branch). Default: 683-byte placeholder. For a
 // REAL early-unlock-reclaim test, override with a `<adminPubkey> CHECKSIGVERIFY`
 // script via EARLY_UNLOCK_BYTES (hex).
-const EARLY_UNLOCK_BYTES = process.env.EARLY_UNLOCK_BYTES ?? "00".repeat(683);
+const EARLY_UNLOCK_BYTES = process.env.EARLY_UNLOCK_BYTES ?? '00'.repeat(683);
 
 beforeAll(async () => {
   admin = await getBondAdminAccount();
 }, 60 * 60_000);
 
-test("setup-bond: admin creates a bond at the correct time", async () => {
-  useFixtures("setup-bond");
+test('setup-bond: admin creates a bond at the correct time', async () => {
+  useFixtures('setup-bond');
   // Bond periods are anchored to the contract's FIXED `first-bond-period-cycle`
   // data-var (read live — the SDK's `firstPox5RewardCycle` can't see it on this
   // net because pox-5 is absent from `/v2/pox` contract_versions[], and its
@@ -120,21 +103,20 @@ test("setup-bond: admin creates a bond at the correct time", async () => {
 
   // Soonest bond period whose start cycle is strictly after the current cycle:
   // its setup window (the BOND_GAP_CYCLES cycles before its start) is open now.
-  const bondIndex =
-    Math.floor((poxInfo.rewardCycleId - anchorCycle) / BOND_GAP_CYCLES) + 1;
+  const bondIndex = Math.floor((poxInfo.rewardCycleId - anchorCycle) / BOND_GAP_CYCLES) + 1;
   const startCycle = anchorCycle + bondIndex * BOND_GAP_CYCLES;
   const startBurn = rewardCycleToBurnHeight({ cycle: startCycle, poxInfo });
 
   // Build allowlist from env-selected accounts, plus any extra principals.
   const allowlist = [
-    ...allowlistAccounts.map((acct) => ({
+    ...allowlistAccounts.map(acct => ({
       staker: acct.address,
       maxSats: ALLOWLIST_MAX_SATS,
     })),
     ...allowlistExtra,
   ];
 
-  console.log("setup-bond params", {
+  console.log('setup-bond params', {
     anchorCycle,
     currentCycle: poxInfo.rewardCycleId,
     bondIndex,
@@ -146,8 +128,8 @@ test("setup-bond: admin creates a bond at the correct time", async () => {
     minUstxRatioBps: MIN_USTX_RATIO_BPS.toString(),
     allowlistMaxSats: ALLOWLIST_MAX_SATS.toString(),
     allowlistAccounts: allowlistAccountNames,
-    allowlistAddresses: allowlistAccounts.map((a) => a.address),
-    allowlistExtra: allowlistExtra.map((e) => e.staker),
+    allowlistAddresses: allowlistAccounts.map(a => a.address),
+    allowlistExtra: allowlistExtra.map(e => e.staker),
   });
 
   // SELF-HEAL (shared net): the daemon creates every bond with the full sheet
@@ -159,7 +141,6 @@ test("setup-bond: admin creates a bond at the correct time", async () => {
     console.log(`bond ${bondIndex} already set up (daemon) — asserting shape instead of re-creating`);
     expect(existing.stxValueRatio).toBeGreaterThan(0n);
     expect(existing.earlyUnlockBytes.length).toBeGreaterThan(0);
-    console.log('=== SETUP-BOND: self-heal pass (daemon-created bond verified) ===');
     return;
   }
 
@@ -178,14 +159,14 @@ test("setup-bond: admin creates a bond at the correct time", async () => {
 
   const transaction = signTransaction(unsigned, admin.key);
   const res = await broadcastTransaction({ transaction, network });
-  if ("error" in res) {
-    throw `broadcast rejected: ${res.error} — ${"reason" in res ? res.reason : ""}`;
+  if ('error' in res) {
+    throw `broadcast rejected: ${res.error} — ${'reason' in res ? res.reason : ''}`;
   }
-  console.log("setup-bond txid", res.txid);
+  console.log('setup-bond txid', res.txid);
 
   const bond = await waitForFulfilled(async () => {
     const b = await fetchBond({ bondIndex, network });
-    if (!b) throw "bond not on-chain yet";
+    if (!b) throw 'bond not on-chain yet';
     return b;
   });
 

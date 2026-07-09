@@ -1,49 +1,14 @@
 /**
  * Adversarial / robustness probes — pox-5 bond contract, batch 4.
  *
- * Focus: bond-sequence and calculate-rewards ordering/completeness
- * misconfigurations. Five targeted probes that exercise the EXACT error paths
- * the contract enforces for bond-index window math and reward-distribution
- * pre-conditions.
- *
- * All probes are EXPLORATORY: broadcast a deliberately invalid tx, log the
- * on-chain abort code, assert tolerantly (abort_by_response OR success). Goal:
- * DISCOVER and DOCUMENT concrete error codes on the live private testnet.
+ * Bond-sequence and calculate-rewards ordering/completeness misconfigurations.
+ * Each probe broadcasts a deliberately invalid tx and asserts tolerantly
+ * (abort_by_response OR success) rather than pinning one exact error code,
+ * since guard ordering in the contract can shift which check fires first.
  *
  * No Bitcoin transactions. No `set-bond-admin` calls. No new deployments.
  * Safe senders: bond-admin for setup-bond/calculate-rewards; account5 for
  * register-for-bond.
- *
- * PROBE 1 — setup-bond skip-ahead (far-future index: soonest+3)
- *   Admin setup-bond at bondIndex = soonest+3 (3 gaps ahead of the currently
- *   settable window). Expected: u2 ERR_CANNOT_SETUP_BOND_TOO_SOON (the bond's
- *   setup window hasn't opened yet). Confirms you can't pre-create a skipped
- *   bond index.
- *
- * PROBE 2 — setup-bond past index (bondIndex = 0, anchor cycle)
- *   Admin setup-bond at bondIndex = 0. The anchor cycle's setup window closed
- *   long ago. Expected: u3 ERR_CANNOT_SETUP_BOND_TOO_LATE (or u4
- *   ERR_BOND_ALREADY_SETUP if index 0 was set up on this chain). Confirms the
- *   lower boundary of the setup window is enforced.
- *
- * PROBE 3 — calculate-rewards WRONG ORDER (ascending stx-value-ratio)
- *   Read stxValueRatio for a handful of known bond indices (47-50 + 4-24 range)
- *   via fetchProtocolBond. Build a list of >=2 existing bonds sorted in WRONG
- *   (ascending) order by stxValueRatio. Call buildCalculateRewards with that
- *   list. Expected: u29 ERR_INVALID_BOND_PERIOD_ORDERING (primary target). Also
- *   tolerant of u31 BondNotActive, u33 ActiveBondNotIncluded, u30
- *   DistributionAlreadyComputed, or success (all logged).
- *
- * PROBE 4 — calculate-rewards INCOMPLETE active set (single bond)
- *   Call buildCalculateRewards with a single arbitrary bond index (e.g. 47)
- *   when the contract's active set likely includes multiple bonds. Expected:
- *   u33 ERR_ACTIVE_BOND_NOT_INCLUDED (primary). Also tolerant of u31/u29/u30.
- *
- * PROBE 5 — register-for-bond against a NON-EXISTENT bond index
- *   Verify via fetchProtocolBond that a candidate index (tries 9, 25, 999 in
- *   order) returns undefined. Build a register-for-bond (sBTC path, account5)
- *   against that index. Expected: u7 ERR_BOND_NOT_FOUND (primary target —
- *   NEWLY confirmed here). Log describePox5Error to expose the name.
  *
  * Run with:
  *   NETWORK=testnet NETWORK_ID=256 STACKS_API=https://api.private-1.hiro.so RECORD=1 \
@@ -52,7 +17,6 @@
  */
 
 import {
-  BOND_GAP_CYCLES,
   buildCalculateRewards,
   buildRegisterForBond,
   buildSetupBond,
@@ -61,25 +25,24 @@ import {
   Pox5ErrorCode,
 } from '../../../src';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
-import { getNetwork, ENV } from '../../helpers/utils';
+import { getNetwork } from '../../helpers/utils';
 import {
   broadcastAndWait,
   getNextNonce,
   getPoxInfo,
-  getTransaction,
+  assertTolerableResult,
 } from '../../helpers/wait';
 import { signTransaction } from '../../helpers/sign';
 import { getBondAdminAccount } from '../../helpers/bondAdmin';
-import { fetchFirstBondPeriodCycle } from '../pox';
 import { useFixtures } from '../../helpers/mock';
+import { computeNextBondIndex } from '../../helpers/bond';
 
 jest.setTimeout(30 * 60_000);
 
 // Reuse the daemon's deployed signer-manager — same approach as
 // adversarial-2.test.ts and register-for-bond.test.ts.
 const SIGNER_MANAGER =
-  process.env.SIGNER_MANAGER ??
-  'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
+  process.env.SIGNER_MANAGER ?? 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 
 const network = getNetwork();
 
@@ -95,76 +58,6 @@ const STX_VALUE_RATIO = 1_000n;
 const MIN_USTX_RATIO_BPS = 500n;
 
 let admin: Awaited<ReturnType<typeof getBondAdminAccount>>;
-
-/** Parse `(err uN)` repr -> N, or undefined. */
-function parseErrCode(repr: string | undefined): number | undefined {
-  if (!repr) return undefined;
-  const m = repr.match(/^\(err u(\d+)\)$/);
-  return m ? Number(m[1]) : undefined;
-}
-
-/**
- * Fetch the tx record, log status + repr + describePox5Error, assert tolerantly:
- * the tx must be `abort_by_response` or `success`. Returns the parsed error code
- * (undefined on success or RECORD not set).
- */
-async function assertTolerableResult(
-  label: string,
-  txid: string
-): Promise<number | undefined> {
-  if (!ENV.RECORD) {
-    console.log(`${label}: RECORD not set — skipping /extended result check`);
-    return undefined;
-  }
-  const record = await getTransaction(txid);
-  console.log(`${label} tx_status:`, record?.tx_status);
-  console.log(`${label} tx_result.repr:`, record?.tx_result?.repr);
-
-  if (!record || record.tx_status === 'pending') {
-    console.warn(`${label}: tx still pending — cannot assert result`);
-    return undefined;
-  }
-
-  const isAbort = record.tx_status === 'abort_by_response';
-  const isSuccess = record.tx_status === 'success';
-
-  // Tolerant: accept either outcome (fuzz cases may accidentally succeed)
-  expect(isAbort || isSuccess).toBe(true);
-
-  if (isAbort) {
-    const code = parseErrCode(record.tx_result?.repr);
-    const info = describePox5Error(code ?? -1);
-    console.log(
-      `${label} abort code:`,
-      code,
-      info?.name ?? '(unknown)',
-      '—',
-      info?.description ?? ''
-    );
-    // Must be a valid (err uN) repr
-    expect(record.tx_result?.repr).toMatch(/^\(err u\d+\)$/);
-    return code;
-  }
-
-  console.log(`${label}: tx SUCCEEDED (unexpected but acceptable for adversarial probe)`);
-  return undefined;
-}
-
-/**
- * Compute soonest settable bondIndex (the one whose setup window is open now),
- * then offset by `offset`. Returns { bondIndex, anchorCycle, currentCycle }.
- */
-async function computeNextBondIndex(offset = 0): Promise<{
-  bondIndex: number;
-  anchorCycle: number;
-  currentCycle: number;
-}> {
-  const poxInfo = await getPoxInfo();
-  const anchorCycle = await fetchFirstBondPeriodCycle();
-  const bondIndex =
-    Math.floor((poxInfo.rewardCycleId - anchorCycle) / BOND_GAP_CYCLES) + 1 + offset;
-  return { bondIndex, anchorCycle, currentCycle: poxInfo.rewardCycleId };
-}
 
 /**
  * Probe a range of bond indices and return those that exist on-chain with their
@@ -194,9 +87,7 @@ async function findExistingBondsWithRatios(
  * Find the first bond index from `candidates` that does NOT exist on-chain
  * (fetchProtocolBond returns undefined). Returns undefined if all exist.
  */
-async function findNonExistentBondIndex(
-  candidates: number[]
-): Promise<number | undefined> {
+async function findNonExistentBondIndex(candidates: number[]): Promise<number | undefined> {
   for (const bondIndex of candidates) {
     try {
       const bond = await fetchProtocolBond({ bondIndex, network });
@@ -209,7 +100,9 @@ async function findNonExistentBondIndex(
       );
     } catch {
       // treat fetch error as non-existent (conservative)
-      console.log(`findNonExistentBondIndex: index ${bondIndex} fetch failed — treating as non-existent`);
+      console.log(
+        `findNonExistentBondIndex: index ${bondIndex} fetch failed — treating as non-existent`
+      );
       return bondIndex;
     }
   }
@@ -223,17 +116,11 @@ beforeAll(async () => {
   console.log('signerManager:', SIGNER_MANAGER);
 }, 20 * 60_000);
 
-// PROBE 1: setup-bond skip-ahead (soonest+3)
-//
-// bondIndex = soonest+3 — 3 bond gaps ahead of the currently open window.
-// The contract checks: setup window is BOND_GAP_CYCLES before the bond's
-// start cycle. At soonest+3, that window is 3*BOND_GAP_CYCLES cycles in the
-// future — ERR_CANNOT_SETUP_BOND_TOO_SOON (u2) expected.
-// Also tolerant of u4 (BondAlreadySetup) in case that index was previously set up.
+// SETUP-BOND SKIP-AHEAD
 
 test('adversarial-4-1: setup-bond skip-ahead (soonest+3) expects u2 CannotSetupBondTooSoon', async () => {
   useFixtures('adversarial-4-1');
-  const { bondIndex, anchorCycle, currentCycle } = await computeNextBondIndex(3);
+  const { bondIndex, anchorCycle, currentCycle } = await computeNextBondIndex(await getPoxInfo(), 4);
   console.log('probe-1 bondIndex (soonest+3):', bondIndex, { anchorCycle, currentCycle });
 
   const unsigned = await buildSetupBond({
@@ -259,16 +146,20 @@ test('adversarial-4-1: setup-bond skip-ahead (soonest+3) expects u2 CannotSetupB
   // Tolerant: also accept u4 (already set up) or u2 (primary)
   const TOLERANT_SET = new Set([
     Pox5ErrorCode.CannotSetupBondTooSoon, // u2 — primary: setup window not open yet
-    Pox5ErrorCode.BondAlreadySetup,       // u4 — already set up (chain history)
+    Pox5ErrorCode.BondAlreadySetup, // u4 — already set up (chain history)
     Pox5ErrorCode.CannotSetupBondTooLate, // u3 — offset arithmetic surprised us
   ]);
 
   if (code !== undefined) {
     const info = describePox5Error(code);
     if (code === Pox5ErrorCode.CannotSetupBondTooSoon) {
-      console.log('probe-1 CONFIRMED: ERR_CANNOT_SETUP_BOND_TOO_SOON (u2) — skip-ahead index rejected');
+      console.log(
+        'probe-1 CONFIRMED: ERR_CANNOT_SETUP_BOND_TOO_SOON (u2) — skip-ahead index rejected'
+      );
     } else if (code === Pox5ErrorCode.BondAlreadySetup) {
-      console.log('probe-1 NOTE: ERR_BOND_ALREADY_SETUP (u4) — index was already set up on this chain');
+      console.log(
+        'probe-1 NOTE: ERR_BOND_ALREADY_SETUP (u4) — index was already set up on this chain'
+      );
     } else if (TOLERANT_SET.has(code)) {
       console.log(`probe-1 NOTE: (err u${code}) — acceptable`);
     } else {
@@ -280,20 +171,15 @@ test('adversarial-4-1: setup-bond skip-ahead (soonest+3) expects u2 CannotSetupB
   }
 });
 
-// PROBE 2: setup-bond past index (bondIndex = 0)
-//
-// bondIndex = 0 is the very first bond period anchored at firstBondPeriodCycle.
-// The setup window for bond 0 was openable only during the first BOND_GAP_CYCLES
-// cycles — it is long past. Expected: u3 ERR_CANNOT_SETUP_BOND_TOO_LATE.
-// Also tolerant of u4 (BondAlreadySetup) if bond 0 was successfully set up.
+// SETUP-BOND PAST INDEX
 
 test('adversarial-4-2: setup-bond past index (bondIndex=0) expects u3 CannotSetupBondTooLate', async () => {
   useFixtures('adversarial-4-2');
-  const { anchorCycle, currentCycle } = await computeNextBondIndex(0);
+  const { anchorCycle, currentCycle } = await computeNextBondIndex(await getPoxInfo(), 1);
   console.log('probe-2 bondIndex=0 (anchor cycle):', anchorCycle, 'currentCycle:', currentCycle);
 
   const unsigned = await buildSetupBond({
-    bondIndex: 0,  // the very first bond period — setup window closed long ago
+    bondIndex: 0, // the very first bond period — setup window closed long ago
     targetRateBps: TARGET_RATE_BPS,
     stxValueRatio: STX_VALUE_RATIO,
     minUstxRatioBps: MIN_USTX_RATIO_BPS,
@@ -314,7 +200,7 @@ test('adversarial-4-2: setup-bond past index (bondIndex=0) expects u3 CannotSetu
   // Primary: u3 CannotSetupBondTooLate. Also accept u4 if already set up.
   const TOLERANT_SET = new Set([
     Pox5ErrorCode.CannotSetupBondTooLate, // u3 — primary: setup window long closed
-    Pox5ErrorCode.BondAlreadySetup,       // u4 — already set up (also fine)
+    Pox5ErrorCode.BondAlreadySetup, // u4 — already set up (also fine)
   ]);
 
   if (code !== undefined) {
@@ -322,7 +208,9 @@ test('adversarial-4-2: setup-bond past index (bondIndex=0) expects u3 CannotSetu
     if (code === Pox5ErrorCode.CannotSetupBondTooLate) {
       console.log('probe-2 CONFIRMED: ERR_CANNOT_SETUP_BOND_TOO_LATE (u3) — past-index rejected');
     } else if (code === Pox5ErrorCode.BondAlreadySetup) {
-      console.log('probe-2 NOTE: ERR_BOND_ALREADY_SETUP (u4) — bond 0 was already set up on this chain');
+      console.log(
+        'probe-2 NOTE: ERR_BOND_ALREADY_SETUP (u4) — bond 0 was already set up on this chain'
+      );
     } else if (TOLERANT_SET.has(code)) {
       console.log(`probe-2 NOTE: (err u${code}) — acceptable`);
     } else {
@@ -334,22 +222,7 @@ test('adversarial-4-2: setup-bond past index (bondIndex=0) expects u3 CannotSetu
   }
 });
 
-// PROBE 3: calculate-rewards WRONG ORDER (ascending stx-value-ratio)
-//
-// The contract requires bondPeriods sorted DESCENDING by stx-value-ratio (ties:
-// higher bond-index first). ERR_INVALID_BOND_PERIOD_ORDERING (u29) is the
-// primary discovery target.
-//
-// Steps:
-//   1. Read fetchProtocolBond for a spread of likely-existing indices (47-50 and
-//      a sample from 4-24). Log each bond's stxValueRatio.
-//   2. If >=2 bonds found with DIFFERENT ratios, sort them ASCENDING (wrong order)
-//      and call buildCalculateRewards.
-//   3. If all ratios are equal (ties), reverse the index order (lower index first)
-//      — that also violates the tie-break rule (higher index should come first).
-//   4. If only 1 bond found, submit it alone — likely u33 ActiveBondNotIncluded.
-//
-// Tolerant set: u29 (primary), u31, u33, u30, success.
+// CALCULATE-REWARDS WRONG ORDER
 
 test('adversarial-4-3: calculate-rewards WRONG ORDER (ascending stx-value-ratio) expects u29 InvalidBondPeriodOrdering', async () => {
   useFixtures('adversarial-4-3');
@@ -359,10 +232,15 @@ test('adversarial-4-3: calculate-rewards WRONG ORDER (ascending stx-value-ratio)
   // bonds yields BadFunctionArgument / u31 instead of the ordering guard we want.
   const candidateIndices = [47, 48, 49, 50, 51, 52];
   const bonds = await findExistingBondsWithRatios(candidateIndices);
-  console.log('probe-3 found bonds:', bonds.map(b => `[${b.bondIndex}]=ratio:${b.stxValueRatio}`).join(', '));
+  console.log(
+    'probe-3 found bonds:',
+    bonds.map(b => `[${b.bondIndex}]=ratio:${b.stxValueRatio}`).join(', ')
+  );
 
   if (bonds.length === 0) {
-    console.warn('probe-3 SKIP: no bonds found among candidate indices — cannot build wrong-order list');
+    console.warn(
+      'probe-3 SKIP: no bonds found among candidate indices — cannot build wrong-order list'
+    );
     return;
   }
 
@@ -405,10 +283,10 @@ test('adversarial-4-3: calculate-rewards WRONG ORDER (ascending stx-value-ratio)
   // Tolerant: u31 (bonds not active at calc-height), u33 (missing active bonds),
   //           u30 (distribution already computed this period), success (rare)
   const TOLERANT_SET = new Set([
-    Pox5ErrorCode.InvalidBondPeriodOrdering,    // u29 — PRIMARY DISCOVERY TARGET
-    Pox5ErrorCode.BondNotActive,                // u31 — bonds not active at calc-height
-    Pox5ErrorCode.ActiveBondNotIncluded,        // u33 — partial list missing active bonds
-    Pox5ErrorCode.DistributionAlreadyComputed,  // u30 — already settled this period
+    Pox5ErrorCode.InvalidBondPeriodOrdering, // u29 — PRIMARY DISCOVERY TARGET
+    Pox5ErrorCode.BondNotActive, // u31 — bonds not active at calc-height
+    Pox5ErrorCode.ActiveBondNotIncluded, // u33 — partial list missing active bonds
+    Pox5ErrorCode.DistributionAlreadyComputed, // u30 — already settled this period
   ]);
 
   if (code !== undefined) {
@@ -416,14 +294,20 @@ test('adversarial-4-3: calculate-rewards WRONG ORDER (ascending stx-value-ratio)
     if (code === Pox5ErrorCode.InvalidBondPeriodOrdering) {
       console.log(
         'probe-3 PRIMARY CONFIRMED: ERR_INVALID_BOND_PERIOD_ORDERING (u29) — ' +
-        'ascending order correctly rejected. DISCOVERY: wrong-order list triggers u29.'
+          'ascending order correctly rejected. DISCOVERY: wrong-order list triggers u29.'
       );
     } else if (code === Pox5ErrorCode.BondNotActive) {
-      console.log('probe-3 NOTE: ERR_BOND_NOT_ACTIVE (u31) — bonds not active at calc-height (ordering guard not reached)');
+      console.log(
+        'probe-3 NOTE: ERR_BOND_NOT_ACTIVE (u31) — bonds not active at calc-height (ordering guard not reached)'
+      );
     } else if (code === Pox5ErrorCode.ActiveBondNotIncluded) {
-      console.log('probe-3 NOTE: ERR_ACTIVE_BOND_NOT_INCLUDED (u33) — partial list guard fired before ordering guard');
+      console.log(
+        'probe-3 NOTE: ERR_ACTIVE_BOND_NOT_INCLUDED (u33) — partial list guard fired before ordering guard'
+      );
     } else if (code === Pox5ErrorCode.DistributionAlreadyComputed) {
-      console.log('probe-3 NOTE: ERR_DISTRIBUTION_ALREADY_COMPUTED (u30) — already settled; ordering guard not reached');
+      console.log(
+        'probe-3 NOTE: ERR_DISTRIBUTION_ALREADY_COMPUTED (u30) — already settled; ordering guard not reached'
+      );
     } else if (TOLERANT_SET.has(code)) {
       console.log(`probe-3 NOTE: (err u${code}) — in tolerant set`);
     } else {
@@ -434,17 +318,13 @@ test('adversarial-4-3: calculate-rewards WRONG ORDER (ascending stx-value-ratio)
     // Any code is acceptable — the goal is discovery; do not hard-pin
     expect(typeof code).toBe('number');
   } else {
-    console.log('probe-3: tx SUCCEEDED — distribution settled (wrong-order list accepted or no-op)');
+    console.log(
+      'probe-3: tx SUCCEEDED — distribution settled (wrong-order list accepted or no-op)'
+    );
   }
 });
 
-// PROBE 4: calculate-rewards INCOMPLETE active set (single bond index)
-//
-// The contract's assert-all-active-bonds-included guard requires the FULL set of
-// currently active bonds. Submitting only a single bond index (e.g. 47) when
-// multiple bonds are active should trigger u33 ERR_ACTIVE_BOND_NOT_INCLUDED.
-//
-// Tolerant: u33 (primary), u31, u29, u30, success.
+// CALCULATE-REWARDS INCOMPLETE SET
 
 test('adversarial-4-4: calculate-rewards INCOMPLETE active set (single bond) expects u33 ActiveBondNotIncluded', async () => {
   useFixtures('adversarial-4-4');
@@ -474,7 +354,12 @@ test('adversarial-4-4: calculate-rewards INCOMPLETE active set (single bond) exp
   }
 
   const poxInfo = await getPoxInfo();
-  console.log('probe-4 current reward cycle:', poxInfo.rewardCycleId, '/ single bondIndex:', singleIndex);
+  console.log(
+    'probe-4 current reward cycle:',
+    poxInfo.rewardCycleId,
+    '/ single bondIndex:',
+    singleIndex
+  );
 
   const unsigned = await buildCalculateRewards({
     bondIndices: [singleIndex], // intentionally incomplete — only one bond
@@ -494,10 +379,10 @@ test('adversarial-4-4: calculate-rewards INCOMPLETE active set (single bond) exp
   // Primary: u33 ActiveBondNotIncluded (incomplete list)
   // Tolerant: u31 (not active), u29 (ordering), u30 (already computed), success
   const TOLERANT_SET = new Set([
-    Pox5ErrorCode.ActiveBondNotIncluded,        // u33 — PRIMARY DISCOVERY TARGET
-    Pox5ErrorCode.BondNotActive,                // u31 — bond not active at calc-height
-    Pox5ErrorCode.InvalidBondPeriodOrdering,    // u29 — ordering guard
-    Pox5ErrorCode.DistributionAlreadyComputed,  // u30 — already settled this period
+    Pox5ErrorCode.ActiveBondNotIncluded, // u33 — PRIMARY DISCOVERY TARGET
+    Pox5ErrorCode.BondNotActive, // u31 — bond not active at calc-height
+    Pox5ErrorCode.InvalidBondPeriodOrdering, // u29 — ordering guard
+    Pox5ErrorCode.DistributionAlreadyComputed, // u30 — already settled this period
   ]);
 
   if (code !== undefined) {
@@ -505,7 +390,7 @@ test('adversarial-4-4: calculate-rewards INCOMPLETE active set (single bond) exp
     if (code === Pox5ErrorCode.ActiveBondNotIncluded) {
       console.log(
         'probe-4 PRIMARY CONFIRMED: ERR_ACTIVE_BOND_NOT_INCLUDED (u33) — ' +
-        'incomplete bond list correctly rejected. DISCOVERY: single-bond subset triggers u33.'
+          'incomplete bond list correctly rejected. DISCOVERY: single-bond subset triggers u33.'
       );
     } else if (code === Pox5ErrorCode.BondNotActive) {
       console.log('probe-4 NOTE: ERR_BOND_NOT_ACTIVE (u31) — bond not active at calc-height');
@@ -522,25 +407,18 @@ test('adversarial-4-4: calculate-rewards INCOMPLETE active set (single bond) exp
     }
     expect(typeof code).toBe('number');
   } else {
-    console.log('probe-4: tx SUCCEEDED — distribution settled for single-bond subset (no other active bonds)');
+    console.log(
+      'probe-4: tx SUCCEEDED — distribution settled for single-bond subset (no other active bonds)'
+    );
   }
 });
 
-// PROBE 5: register-for-bond against a NON-EXISTENT bond index
+// REGISTER-FOR-BOND NON-EXISTENT INDEX
 //
-// Verify fetchProtocolBond returns undefined for a candidate index, then call
-// buildRegisterForBond (sBTC path, account5) against it. Expected: u7
-// ERR_BOND_NOT_FOUND — this is the primary DISCOVERY target for this probe.
-//
-// Guard ordering in pox-5.register-for-bond (inferred from other tests):
-//   1. prepare-phase guard  -> u47 StakeInPreparePhase
-//   2. bond-exists guard    -> u7  BondNotFound        <- THIS PROBE
-//   3. allowlist guard      -> u11 NotAllowlisted
-//   4. already-started guard-> u43 BondAlreadyStarted
-//   5. lock-sbtc            -> u1  Unauthorized (no sBTC balance)
-//
-// We try indices 9, 25, 999 in order — taking the first non-existent one.
-// Tolerant: u7 (primary), u47 (prepare-phase guard fires first), u1 (lock-sbtc).
+// Guard ordering in pox-5.register-for-bond: prepare-phase (u47) -> bond-exists
+// (u7, this probe's target) -> allowlist (u11) -> already-started (u43) ->
+// lock-sbtc (u1). Any earlier guard firing first is still a valid, tolerated
+// outcome.
 
 test('adversarial-4-5: register-for-bond against non-existent bond index expects u7 BondNotFound', async () => {
   useFixtures('adversarial-4-5');
@@ -550,7 +428,7 @@ test('adversarial-4-5: register-for-bond against non-existent bond index expects
   if (nonExistentIndex === undefined) {
     console.warn(
       'probe-5 SKIP: all candidate indices (9, 25, 999) appear to exist on-chain — ' +
-      'cannot confirm a non-existent target. Proceeding with 999 as fallback.'
+        'cannot confirm a non-existent target. Proceeding with 999 as fallback.'
     );
   }
 
@@ -578,9 +456,9 @@ test('adversarial-4-5: register-for-bond against non-existent bond index expects
   // Primary: u7 BondNotFound — the "bond not found" / "no such bond" code.
   // Tolerant: u47 (prepare-phase guard fires before bond-exists check), u1 (sBTC guard).
   const TOLERANT_SET = new Set([
-    Pox5ErrorCode.BondNotFound,        // u7 — PRIMARY DISCOVERY TARGET
+    Pox5ErrorCode.BondNotFound, // u7 — PRIMARY DISCOVERY TARGET
     Pox5ErrorCode.StakeInPreparePhase, // u47 — prepare-phase guard fires first
-    Pox5ErrorCode.Unauthorized,        // u1  — lock-sbtc guard fires (no sBTC balance)
+    Pox5ErrorCode.Unauthorized, // u1  — lock-sbtc guard fires (no sBTC balance)
   ]);
 
   if (code !== undefined) {
@@ -588,19 +466,23 @@ test('adversarial-4-5: register-for-bond against non-existent bond index expects
     if (code === Pox5ErrorCode.BondNotFound) {
       console.log(
         `probe-5 PRIMARY CONFIRMED: ERR_BOND_NOT_FOUND (u7) — ` +
-        `register against non-existent bondIndex=${bondIndex} correctly aborts with u7. ` +
-        `DISCOVERY: bond-not-found code is u7.`
+          `register against non-existent bondIndex=${bondIndex} correctly aborts with u7. ` +
+          `DISCOVERY: bond-not-found code is u7.`
       );
     } else if (code === Pox5ErrorCode.StakeInPreparePhase) {
-      console.log('probe-5 NOTE: ERR_STAKE_IN_PREPARE_PHASE (u47) — prepare-phase guard fired before bond-exists check');
+      console.log(
+        'probe-5 NOTE: ERR_STAKE_IN_PREPARE_PHASE (u47) — prepare-phase guard fired before bond-exists check'
+      );
     } else if (code === Pox5ErrorCode.Unauthorized) {
-      console.log('probe-5 NOTE: ERR_UNAUTHORIZED (u1) — lock-sbtc guard fired (no sBTC balance on account5)');
+      console.log(
+        'probe-5 NOTE: ERR_UNAUTHORIZED (u1) — lock-sbtc guard fired (no sBTC balance on account5)'
+      );
     } else if (TOLERANT_SET.has(code)) {
       console.log(`probe-5 NOTE: (err u${code}) — in tolerant set`);
     } else {
       console.warn(
         `probe-5 UNEXPECTED/NEW CODE: (err u${code}) ${info?.name ?? '(unknown)'} — ` +
-        `${info?.description ?? 'not in Pox5ErrorCode enum — newly discovered error code!'}`
+          `${info?.description ?? 'not in Pox5ErrorCode enum — newly discovered error code!'}`
       );
     }
     // Accept any abort — the DISCOVERY is the actual code value
@@ -609,7 +491,7 @@ test('adversarial-4-5: register-for-bond against non-existent bond index expects
     // Success against a non-existent bond would be deeply surprising
     console.warn(
       `probe-5 UNEXPECTED SUCCESS: register-for-bond at non-existent bondIndex=${bondIndex} ` +
-      'returned (ok ...) — investigate immediately!'
+        'returned (ok ...) — investigate immediately!'
     );
   }
 });

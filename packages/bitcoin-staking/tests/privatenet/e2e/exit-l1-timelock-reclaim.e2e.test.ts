@@ -1,18 +1,9 @@
 /**
  * E2E — L1 BTC timelock (CLTV / IF-branch) reclaim.
  *
- * Loads the BTC lock artifact for account7 (or the STAKER env account),
- * checks whether the Bitcoin tip has reached the unlockHeight, and:
- *
- *   tip < unlockHeight -> SKIP gracefully (log reason, return without failing).
- *     The context doc notes unlock height is ~+250 blocks ahead; this is expected.
- *
- *   tip >= unlockHeight -> Build and broadcast the P2WSH IF-branch (CLTV) reclaim
- *     tx (staker-only, tx.lockTime = unlockHeight, sequence = 0xfffffffe), assert
- *     the txid appears in the mempool API.
- *
- * The artifact path is /tmp/btc-lock-<BOND_INDEX>-<STAKER>.json, where BOND_INDEX
- * is read from the staker's active membership (dynamic discovery).
+ * Loads the BTC lock artifact for the staker, discovers bondIndex from the
+ * live membership, and skips gracefully if the Bitcoin tip hasn't reached
+ * unlockHeight yet (staker-only path, no BOND_ADMIN_KEY needed).
  *
  * Run:
  *   NETWORK=testnet NETWORK_ID=256 STACKS_API=https://api.private-1.hiro.so \
@@ -21,9 +12,6 @@
  *     FIXTURES_JSON=tests/privatenet/fixtures/fixtures-e2e-exit-l1-timelock-reclaim.json \
  *     npx jest tests/privatenet/e2e/exit-l1-timelock-reclaim.e2e.test.ts \
  *       --runInBand --collectCoverage=false --verbose
- *
- * Does NOT require BOND_ADMIN_KEY (timelock path is staker-only).
- * Requires a prior lock artifact at /tmp/btc-lock-<bondIndex>-<STAKER>.json.
  */
 
 // @ts-ignore — @scure/btc-signer is ESM; ts-jest transforms it via jest.config.js
@@ -101,7 +89,7 @@ async function poll<T>(
   fn: () => Promise<T | null | undefined>,
   intervalMs: number,
   timeoutMs: number,
-  label: string,
+  label: string
 ): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -121,10 +109,9 @@ beforeAll(async () => {
 
 test(`L1 timelock-reclaim (IF/CLTV branch) for ${STAKER_NAME}`, async () => {
   useFixtures('e2e-exit-l1-timelock-reclaim');
-  console.log('\n=== E2E: exit-l1-timelock-reclaim ===');
   console.log('staker:', stakerAccount.address, `(${STAKER_NAME})`);
 
-  // 1. Discover the staker's active L1 membership
+  // DISCOVER MEMBERSHIP
   const membership = await fetchBondMembership({ address: stakerAccount.address, network });
   if (!membership) {
     console.warn(
@@ -145,7 +132,7 @@ test(`L1 timelock-reclaim (IF/CLTV branch) for ${STAKER_NAME}`, async () => {
   const bondIndex = membership.bondIndex;
   console.log('discovered bondIndex:', bondIndex, '(from membership)');
 
-  // 2. Load the BTC lock artifact
+  // LOAD ARTIFACT
   const artifactPath = `/tmp/btc-lock-${bondIndex}-${STAKER_NAME}.json`;
   console.log('loading lock artifact:', artifactPath);
 
@@ -158,28 +145,41 @@ test(`L1 timelock-reclaim (IF/CLTV branch) for ${STAKER_NAME}`, async () => {
     );
   }
 
-  const { txid: lockTxid, outputIndex: lockOutputIndex, unlockHeight, amountSats: amountSatsStr, witnessScriptHex } = artifact;
+  const {
+    txid: lockTxid,
+    outputIndex: lockOutputIndex,
+    unlockHeight,
+    amountSats: amountSatsStr,
+    witnessScriptHex,
+  } = artifact;
   const amountSats = BigInt(amountSatsStr);
   const witnessScript = hexToBytes(witnessScriptHex);
 
-  console.log('artifact:', { lockTxid, lockOutputIndex, unlockHeight, amountSats: amountSats.toString() });
+  console.log('artifact:', {
+    lockTxid,
+    lockOutputIndex,
+    unlockHeight,
+    amountSats: amountSats.toString(),
+  });
 
-  // 3. Check tip vs unlockHeight — skip if too early
+  // CHECK TIP
   const tipHeight = await fetchTipHeight();
   console.log(`Bitcoin tip height: ${tipHeight}, unlockHeight: ${unlockHeight}`);
 
   if (tipHeight < unlockHeight) {
     console.log(
-      `=== SKIP: tip (${tipHeight}) < unlockHeight (${unlockHeight}) — CLTV not yet satisfied. ` +
-      `Need ${unlockHeight - tipHeight} more Bitcoin blocks (~${Math.ceil((unlockHeight - tipHeight) * 10 / 60)} min at 10-min blocks). ===`
+      `SKIP: tip (${tipHeight}) < unlockHeight (${unlockHeight}) — CLTV not yet satisfied. ` +
+        `Need ${unlockHeight - tipHeight} more Bitcoin blocks (~${Math.ceil(((unlockHeight - tipHeight) * 10) / 60)} min at 10-min blocks).`
     );
-    // Graceful skip — do not fail. The orchestrator will retry when the height is reached.
+    // Graceful skip — do not fail; the orchestrator retries once the height is reached.
     return;
   }
 
-  console.log(`tip (${tipHeight}) >= unlockHeight (${unlockHeight}) — CLTV satisfied, proceeding with reclaim`);
+  console.log(
+    `tip (${tipHeight}) >= unlockHeight (${unlockHeight}) — CLTV satisfied, proceeding with reclaim`
+  );
 
-  // 4. Derive keys and addresses
+  // DERIVE KEYS
   const stakerPriv = hexToBytes(STAKER_PRIV_HEX);
   const stakerPub = secp256k1.getPublicKey(stakerPriv, true);
   const toAddress = btc.p2wpkh(stakerPub, BTC_NETWORK).address!;
@@ -193,7 +193,7 @@ test(`L1 timelock-reclaim (IF/CLTV branch) for ${STAKER_NAME}`, async () => {
   if (reclaimSats <= 0n) throw new Error(`fee (${FEE_SATS}) exceeds lockup amount (${amountSats})`);
   console.log('reclaimSats:', reclaimSats.toString());
 
-  // 5. Build CLTV (IF-branch) reclaim tx
+  // BUILD RECLAIM TX
   // lockTime = unlockHeight (CLTV requirement), sequence = 0xfffffffe (non-final, enables CLTV)
   const reclaimTx = new btc.Transaction({
     allowUnknownOutputs: true,
@@ -219,15 +219,9 @@ test(`L1 timelock-reclaim (IF/CLTV branch) for ${STAKER_NAME}`, async () => {
   const stakerSig = concatBytes(stakerSigDer, new Uint8Array([SIGHASH_ALL]));
   console.log('staker sig:', bytesToHex(stakerSig));
 
-  // TIMELOCK witness stack (bottom -> top):
-  //   [ staker_sig, 0x01 (truthy -> IF branch), witnessScript ]
-  const selector = new Uint8Array([0x01]); // truthy -> OP_IF (CLTV) branch
+  // Witness stack (bottom -> top): [ staker_sig, 0x01 (truthy -> IF/CLTV branch), witnessScript ]
+  const selector = new Uint8Array([0x01]);
   const witnessItems: Uint8Array[] = [stakerSig, selector, witnessScript];
-
-  console.log('--- TIMELOCK witness stack ---');
-  console.log('[0] staker_sig:', bytesToHex(stakerSig));
-  console.log('[1] selector (0x01 → IF):', bytesToHex(selector));
-  console.log('[2] witnessScript:', bytesToHex(witnessScript));
 
   reclaimTx.updateInput(0, { finalScriptWitness: witnessItems }, true);
   if (!reclaimTx.isFinal) throw new Error('Reclaim tx is not finalized — witness injection failed');
@@ -236,7 +230,7 @@ test(`L1 timelock-reclaim (IF/CLTV branch) for ${STAKER_NAME}`, async () => {
   console.log('tx vsize:', reclaimTx.vsize, 'vBytes');
   console.log('tx hex (first 80 chars):', rawHex.slice(0, 80) + '...');
 
-  // 6. Broadcast and confirm in mempool
+  // BROADCAST
   const reclaimTxid = await broadcastBtcTx(rawHex);
   console.log('reclaim txid:', reclaimTxid);
 
@@ -250,23 +244,18 @@ test(`L1 timelock-reclaim (IF/CLTV branch) for ${STAKER_NAME}`, async () => {
     },
     5_000,
     2 * 60_000,
-    `reclaim tx ${reclaimTxid} visible in mempool`,
+    `reclaim tx ${reclaimTxid} visible in mempool`
   );
 
-  console.log('mempool tx:', JSON.stringify({
-    txid: seenTx.txid,
-    fee: seenTx.fee,
-    confirmed: seenTx.status.confirmed,
-  }));
+  console.log(
+    'mempool tx:',
+    JSON.stringify({
+      txid: seenTx.txid,
+      fee: seenTx.fee,
+      confirmed: seenTx.status.confirmed,
+    })
+  );
 
   expect(seenTx.txid).toBe(reclaimTxid);
   expect(seenTx.fee).toBeGreaterThan(0);
-
-  console.log('\n=== E2E exit-l1-timelock-reclaim: SUCCESS ✓ ===');
-  console.log('bondIndex:', bondIndex);
-  console.log('reclaimTxid:', reclaimTxid);
-  console.log('reclaimSats:', reclaimSats.toString());
-  console.log('toAddress:', toAddress);
-  console.log('lockTime (unlockHeight):', unlockHeight);
-  console.log('tipAtTime:', tipHeight);
 }, 180_000);

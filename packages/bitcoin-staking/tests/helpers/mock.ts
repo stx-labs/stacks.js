@@ -19,7 +19,7 @@
  */
 import { setApiMocks } from '@stacks/internal';
 import fetchMock from 'jest-fetch-mock';
-import { fixtureKey, isMocking, loadFixtures, setFixtureFile } from './utils';
+import { fixtureKey, isMocking, loadFixtures, setFixtureFile, type Fixture } from './utils';
 import { FIXTURES } from '../regtest/fixtures';
 
 export { setApiMocks };
@@ -39,38 +39,30 @@ export const BASE_POX5: Record<string, string> = {
  * layers its changed endpoints on top of the previous phase (your "…going into
  * that" model). Seeded once with fallbacks + the default file.
  */
-let replayMap: Record<string, string> = {};
-let replayInstalled = false;
-
 /**
- * Route record + replay to a fixtures file. See the module docstring. In replay
- * mode each call layers `fixtures-<key>.json` over the current map (so a later
- * phase overrides just the endpoints that changed). Layer precedence:
- * `fallbacks < default file < phase keys (in call order)`.
+ * Replay is a dumb switch: each useFixtures(key) installs a FRESH flat map —
+ * fallbacks < default file < key file — with no carry-over between calls.
+ * A phase's fixture file is self-contained (the recorder captures every request
+ * made while that key is active).
  */
 export function useFixtures(key?: string): void {
   if (!isMocking) {
     setFixtureFile(key); // RECORD: subsequent captures go to this file
     return;
   }
-  if (!replayInstalled) {
-    replayMap = { '/v2/pox': POX5_FALLBACK, '/v2/info': INFO_FALLBACK, ...loadFixtures() };
-    replayInstalled = true;
-  }
-  if (key) replayMap = { ...replayMap, ...loadFixtures(key) };
+  const map: Record<string, Fixture> = {
+    '/v2/pox': { status: 200, body: POX5_FALLBACK },
+    '/v2/info': { status: 200, body: INFO_FALLBACK },
+    ...loadFixtures(),
+    ...(key ? loadFixtures(key) : {}),
+  };
   fetchMock.mockResponse(async req => {
     const body = req.method === 'POST' ? await req.clone().text() : undefined;
     const k = fixtureKey(req.url, body !== undefined ? { body } : undefined);
-    const hit = replayMap[k];
+    const hit = map[k];
     if (hit === undefined) {
       throw new Error(`useFixtures: no fixture for "${k}"${key ? ` (file key: ${key})` : ''}`);
     }
-    // The recorder stores bodies only (no HTTP status). Node-level broadcast
-    // REJECTIONS are non-2xx live; replaying them as 200 makes the SDK parse the
-    // body as a txid and throw. Restore the status for rejection-shaped bodies.
-    if (k.startsWith('/v2/transactions') && hit.includes('"error"') && hit.includes('"reason"')) {
-      return { body: hit, init: { status: 400 } };
-    }
-    return hit;
+    return { body: hit.body, init: { status: hit.status } };
   });
 }

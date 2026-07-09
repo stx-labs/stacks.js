@@ -1,20 +1,12 @@
 /**
- * E2E — Stake >=50,000 STX -> signer counts toward the signer set.
+ * E2E - stake >=50,000 STX -> signer counts toward the signer set.
  *
  * pox-5 gates signer-set membership on the signer's aggregate delegated
- * uSTX exceeding SIGNER_SET_MIN_USTX (50,000,000,000 uSTX = 50k STX).
- * A single stake of >=50k STX from a fresh account pushes that signer's
- * aggregate over (or confirms it's over) the floor.
+ * uSTX exceeding SIGNER_SET_MIN_USTX. A single stake from a fresh account
+ * pushes that signer's aggregate over (or confirms it's over) the floor.
  *
- * Assertions (relative, before/after delta):
- *   - fetchSignerSharesStakedForCycle(signerManager, targetCycle) increases by AMOUNT_USTX.
- *   - fetchSignerInfo(signerManager) returns the signer key (registered in the set).
- *   - get-amount-delegated-for-signer >= SIGNER_SET_MIN_USTX after the stake.
- *   - signer-set-contains-for-cycle -> true after the stake.
- *
- * Uses account1 (uncontended, ~10B STX, not driven by any daemon).
- *
- * Fixture key: 'e2e-signer-set-50k'
+ * If account1 is already staking >=50k (prior record run), self-heals by
+ * asserting the existing position instead of re-staking.
  *
  * Run:
  *   NETWORK=testnet NETWORK_ID=256 STACKS_API=https://api.private-1.hiro.so \
@@ -25,7 +17,12 @@
  *       --runInBand --collectCoverage=false --verbose
  */
 
-import { Cl, ClarityType, broadcastTransaction, fetchCallReadOnlyFunction } from '@stacks/transactions';
+import {
+  Cl,
+  ClarityType,
+  broadcastTransaction,
+  fetchCallReadOnlyFunction,
+} from '@stacks/transactions';
 import {
   buildStake,
   fetchSignerInfo,
@@ -40,6 +37,7 @@ import {
   getPoxInfo,
   getTransaction,
   isInPreparePhase,
+  parseErrCode,
   waitForBurnBlockHeight,
   waitForFulfilled,
   waitForRewardPhase,
@@ -58,11 +56,6 @@ const SIGNER_SET_MIN_USTX = 50_000_000_000n; // from pox-5
 const staker = resolveAccount('STAKER', 'account1');
 const network = getNetwork();
 const bootAddress = network.bootAddress;
-
-function parseErrCode(repr: string | undefined): number | undefined {
-  const m = repr?.match(/^\(err u(\d+)\)$/);
-  return m ? Number(m[1]) : undefined;
-}
 
 // Read-only helpers (not yet wrapped in src/fetch.ts)
 
@@ -101,7 +94,11 @@ async function snapshot(label: string, cycle: number): Promise<Snapshot> {
   const [delegated, inSet, signerShares, totalShares] = await Promise.all([
     getAmountDelegatedForSigner(SIGNER_MANAGER, cycle).catch(() => -1n),
     signerSetContainsForCycle(SIGNER_MANAGER, cycle).catch(() => false),
-    fetchSignerSharesStakedForCycle({ signerManager: SIGNER_MANAGER, rewardCycle: cycle, network }).catch(() => -1n),
+    fetchSignerSharesStakedForCycle({
+      signerManager: SIGNER_MANAGER,
+      rewardCycle: cycle,
+      network,
+    }).catch(() => -1n),
     fetchTotalSharesStakedForCycle({ rewardCycle: cycle, network }).catch(() => -1n),
   ]);
   console.log(`[${label}] cycle ${cycle}:`, {
@@ -117,145 +114,135 @@ beforeAll(async () => {
   useFixtures('e2e-signer-set-50k');
 }, 60_000);
 
-test('account1: stake ≥50k STX → signer aggregate ≥ floor, signer counts toward signer set', async () => {
-  useFixtures('e2e-signer-set-50k');
+test(
+  'account1: stake ≥50k STX → signer aggregate ≥ floor, signer counts toward signer set',
+  async () => {
+    useFixtures('e2e-signer-set-50k');
 
-  console.log('\n=== E2E: signer-set-50k ===');
-  console.log('staker:', staker.address);
-  console.log('signerManager:', SIGNER_MANAGER);
-  console.log('amountUstx:', AMOUNT_USTX.toString(), '(', Number(AMOUNT_USTX) / 1e6, 'STX )');
-  console.log('SIGNER_SET_MIN_USTX:', SIGNER_SET_MIN_USTX.toString());
+    console.log('staker:', staker.address, 'amountUstx:', AMOUNT_USTX.toString());
 
-  // Guard: already staking?
-  const existing = await fetchStakerInfo({ address: staker.address, network });
-  console.log('account1 existing staker-info:', existing.staked
-    ? { amountUstx: existing.details.amountUstx.toString(), numCycles: existing.details.numCycles }
-    : 'not staking');
+    const existing = await fetchStakerInfo({ address: staker.address, network });
+    console.log(
+      'account1 existing staker-info:',
+      existing.staked
+        ? {
+            amountUstx: existing.details.amountUstx.toString(),
+            numCycles: existing.details.numCycles,
+          }
+        : 'not staking'
+    );
 
-  if (existing.staked) {
-    // Self-heal on a shared chain (suite convention): the 50k position from a
-    // prior record run still exists — assert it satisfies the signer-set floor
-    // instead of hard-failing. Full flow proven live 2026-07-08 (record run).
-    console.warn('account1 is ALREADY staking — asserting the existing >=50k position instead.');
-    expect(existing.details.amountUstx).toBeGreaterThanOrEqual(SIGNER_SET_MIN_USTX);
-    console.log('=== ALREADY STAKED >= 50k — self-heal pass ===');
-    return;
-  }
+    if (existing.staked) {
+      // Self-heal on a shared chain: a prior record run's 50k position may
+      // still exist — assert it satisfies the signer-set floor instead of
+      // hard-failing on a duplicate stake.
+      console.warn('account1 is ALREADY staking — asserting the existing >=50k position instead.');
+      expect(existing.details.amountUstx).toBeGreaterThanOrEqual(SIGNER_SET_MIN_USTX);
+      return;
+    }
 
-  // Wait out prepare phase
-  let pox = await getPoxInfo();
-  const posOf = () =>
-    (pox.currentBurnchainBlockHeight - pox.firstBurnchainBlockHeight) % pox.rewardCycleLength;
-  const rewardPhaseLen = pox.rewardCycleLength - pox.prepareCycleLength;
+    // WAIT OUT PREPARE PHASE
+    let pox = await getPoxInfo();
+    const posOf = () =>
+      (pox.currentBurnchainBlockHeight - pox.firstBurnchainBlockHeight) % pox.rewardCycleLength;
+    const rewardPhaseLen = pox.rewardCycleLength - pox.prepareCycleLength;
 
-  while (isInPreparePhase(pox.currentBurnchainBlockHeight, pox) || posOf() >= rewardPhaseLen - 2) {
-    console.log(`pos=${posOf()} too close to prepare phase (rewardLen=${rewardPhaseLen}) — waiting...`);
-    await waitForRewardPhase(pox, 1);
-    pox = await getPoxInfo();
-    if (!isInPreparePhase(pox.currentBurnchainBlockHeight, pox) && posOf() < rewardPhaseLen - 2) break;
-    const blocksToNext = pox.rewardCycleLength - posOf();
-    await waitForBurnBlockHeight(pox.currentBurnchainBlockHeight + blocksToNext);
-    pox = await getPoxInfo();
-  }
+    while (
+      isInPreparePhase(pox.currentBurnchainBlockHeight, pox) ||
+      posOf() >= rewardPhaseLen - 2
+    ) {
+      console.log(
+        `pos=${posOf()} too close to prepare phase (rewardLen=${rewardPhaseLen}) — waiting...`
+      );
+      await waitForRewardPhase(pox, 1);
+      pox = await getPoxInfo();
+      if (!isInPreparePhase(pox.currentBurnchainBlockHeight, pox) && posOf() < rewardPhaseLen - 2)
+        break;
+      const blocksToNext = pox.rewardCycleLength - posOf();
+      await waitForBurnBlockHeight(pox.currentBurnchainBlockHeight + blocksToNext);
+      pox = await getPoxInfo();
+    }
 
-  const startBurnHt = pox.currentBurnchainBlockHeight;
-  const targetCycle = pox.rewardCycleId + 1;
+    const startBurnHt = pox.currentBurnchainBlockHeight;
+    const targetCycle = pox.rewardCycleId + 1;
 
-  console.log('\nstake params:', {
-    startBurnHt,
-    currentCycle: pox.rewardCycleId,
-    targetCycle,
-    numCycles: NUM_CYCLES,
-  });
+    const before = await snapshot('BEFORE', targetCycle);
 
-  // BEFORE snapshot
-  const before = await snapshot('BEFORE', targetCycle);
+    // BROADCAST STAKE
+    const unsigned = await buildStake({
+      signerManager: SIGNER_MANAGER,
+      amountUstx: AMOUNT_USTX,
+      numCycles: NUM_CYCLES,
+      startBurnHt,
+      publicKey: staker.publicKey,
+      fee: FEE,
+      nonce: await getNextNonce(staker.address),
+      network,
+      postConditionMode: 'allow',
+    });
+    const transaction = signTransaction(unsigned, staker.key);
+    const res = await broadcastTransaction({ transaction, network });
+    if ('error' in res) {
+      throw new Error(
+        `stake broadcast rejected: ${res.error} — ${'reason' in res ? res.reason : ''}`
+      );
+    }
+    console.log('stake txid:', res.txid);
 
-  // Broadcast stake
-  const unsigned = await buildStake({
-    signerManager: SIGNER_MANAGER,
-    amountUstx: AMOUNT_USTX,
-    numCycles: NUM_CYCLES,
-    startBurnHt,
-    publicKey: staker.publicKey,
-    fee: FEE,
-    nonce: await getNextNonce(staker.address),
-    network,
-    postConditionMode: 'allow',
-  });
-  const transaction = signTransaction(unsigned, staker.key);
-  const res = await broadcastTransaction({ transaction, network });
-  if ('error' in res) {
-    throw new Error(`stake broadcast rejected: ${res.error} — ${'reason' in res ? res.reason : ''}`);
-  }
-  console.log('\nstake txid:', res.txid);
+    const tx = await waitForFulfilled(async () => {
+      const t = await getTransaction(res.txid);
+      if (!t || t.tx_status === 'pending') throw new Error('tx still pending');
+      return t;
+    });
+    console.log('stake on-chain result:', {
+      tx_status: tx.tx_status,
+      repr: tx.tx_result?.repr,
+      burn_block_height: tx.burn_block_height,
+    });
 
-  const tx = await waitForFulfilled(async () => {
-    const t = await getTransaction(res.txid);
-    if (!t || t.tx_status === 'pending') throw new Error('tx still pending');
-    return t;
-  });
-  console.log('stake on-chain result:', {
-    tx_status: tx.tx_status,
-    repr: tx.tx_result?.repr,
-    burn_block_height: tx.burn_block_height,
-  });
+    if (tx.tx_status !== 'success') {
+      const code = parseErrCode(tx.tx_result?.repr);
+      throw new Error(`stake aborted (err u${code}): ${JSON.stringify(tx.tx_result)}`);
+    }
 
-  if (tx.tx_status !== 'success') {
-    const code = parseErrCode(tx.tx_result?.repr);
-    throw new Error(`stake aborted (err u${code}): ${JSON.stringify(tx.tx_result)}`);
-  }
+    useFixtures('e2e-signer-set-50k-after'); // post-stake reads differ
+    const after = await snapshot('AFTER', targetCycle);
 
-  useFixtures('e2e-signer-set-50k-after'); // post-stake reads differ
-  // AFTER snapshot
-  const after = await snapshot('AFTER', targetCycle);
+    const stakerInfo = await fetchStakerInfo({ address: staker.address, network });
+    console.log(
+      'account1 staker-info AFTER:',
+      stakerInfo.staked
+        ? {
+            amountUstx: stakerInfo.details.amountUstx.toString(),
+            numCycles: stakerInfo.details.numCycles,
+            firstRewardCycle: stakerInfo.details.firstRewardCycle,
+          }
+        : 'not staking'
+    );
 
-  const stakerInfo = await fetchStakerInfo({ address: staker.address, network });
-  console.log('account1 staker-info AFTER:', stakerInfo.staked
-    ? { amountUstx: stakerInfo.details.amountUstx.toString(), numCycles: stakerInfo.details.numCycles, firstRewardCycle: stakerInfo.details.firstRewardCycle }
-    : 'not staking');
+    const signerInfo = await fetchSignerInfo({ signerManager: SIGNER_MANAGER, network });
 
-  const signerInfo = await fetchSignerInfo({ signerManager: SIGNER_MANAGER, network });
-  console.log('signerInfo:', signerInfo);
+    // ASSERTIONS
+    expect(stakerInfo.staked).toBe(true);
+    if (stakerInfo.staked) {
+      expect(stakerInfo.details.amountUstx).toBe(AMOUNT_USTX);
+      expect(stakerInfo.details.firstRewardCycle).toBe(targetCycle);
+    }
 
-  console.log('\n=== SIGNER-SET-50K ASSERTIONS ===');
+    const sharesDelta = after.signerShares - before.signerShares;
+    expect(sharesDelta).toBe(AMOUNT_USTX);
 
-  // 1. Staker position created
-  expect(stakerInfo.staked).toBe(true);
-  if (stakerInfo.staked) {
-    expect(stakerInfo.details.amountUstx).toBe(AMOUNT_USTX);
-    expect(stakerInfo.details.firstRewardCycle).toBe(targetCycle);
-    console.log('✓ staker position: amount & firstRewardCycle match');
-  }
+    if (after.delegated >= SIGNER_SET_MIN_USTX) {
+      expect(after.inSet).toBe(true);
+    } else {
+      console.warn(
+        `WARN: delegated (${after.delegated}) < floor (${SIGNER_SET_MIN_USTX}) — signer NOT yet in set; more stakes needed`
+      );
+    }
 
-  // 2. signerShares increased by exactly AMOUNT_USTX
-  const sharesDelta = after.signerShares - before.signerShares;
-  expect(sharesDelta).toBe(AMOUNT_USTX);
-  console.log(`✓ signerSharesStakedForCycle(${targetCycle}) delta: ${sharesDelta.toString()} = AMOUNT_USTX`);
+    expect(signerInfo).toBeDefined();
 
-  // 3. delegated >= SIGNER_SET_MIN_USTX -> signer must be in the set
-  if (after.delegated >= SIGNER_SET_MIN_USTX) {
-    expect(after.inSet).toBe(true);
-    console.log(`✓ delegated (${after.delegated}) ≥ floor (${SIGNER_SET_MIN_USTX}) → signer IN set`);
-  } else {
-    console.warn(`WARN: delegated (${after.delegated}) < floor (${SIGNER_SET_MIN_USTX}) — signer NOT yet in set; more stakes needed`);
-  }
-
-  // 4. signerInfo: signer key registered
-  expect(signerInfo).toBeDefined();
-  if (signerInfo) {
-    console.log(`✓ signerInfo.signerKey: ${signerInfo.signerKey}`);
-  }
-
-  console.log('\n=== SUMMARY ===');
-  console.log('staker:', staker.address);
-  console.log('signerManager:', SIGNER_MANAGER);
-  console.log('targetCycle:', targetCycle);
-  console.log('AMOUNT_USTX:', AMOUNT_USTX.toString());
-  console.log('delegated BEFORE→AFTER:', before.delegated.toString(), '→', after.delegated.toString());
-  console.log('inSignerSet BEFORE→AFTER:', before.inSet, '→', after.inSet);
-  console.log('signerShares BEFORE→AFTER:', before.signerShares.toString(), '→', after.signerShares.toString());
-  console.log('totalShares  BEFORE→AFTER:', before.totalShares.toString(), '→', after.totalShares.toString());
-  console.log('stake txid:', res.txid);
-  console.log('\n=== E2E signer-set-50k: ALL ASSERTIONS PASSED ✓ ===');
-}, 3 * 180_000);
+    console.log('stake txid:', res.txid, 'delegated BEFORE->AFTER:', before.delegated.toString(), '->', after.delegated.toString());
+  },
+  3 * 180_000
+);

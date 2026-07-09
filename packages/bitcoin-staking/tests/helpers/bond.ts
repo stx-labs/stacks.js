@@ -2,8 +2,10 @@
  * Bond-period selection for the regtest bond flow. Shared by the action tests so
  * the timing logic lives in one place.
  */
-import { BOND_GAP_CYCLES, bondPeriodToBurnHeight, type PoxInfo } from '../../src';
+import { BOND_GAP_CYCLES, bondPeriodToBurnHeight, fetchBond, type PoxInfo } from '../../src';
+import { getNetwork } from './utils';
 import { getPoxInfo, waitForBurnBlockHeight } from './wait';
+import { fetchFirstBondPeriodCycle } from '../privatenet/pox';
 
 /**
  * Pick the bond period with the MOST runway before its start. setup-bond is only
@@ -48,4 +50,50 @@ export async function waitForBondWithRunway(
     chosen = pickBondIndex(poxInfo);
   }
   return { ...chosen, poxInfo };
+}
+
+/**
+ * Probe `fetchBond` over `[0, max)` and return the lowest or highest index that
+ * exists on-chain (undefined if none do). Consolidates the identical
+ * `findHighestExistingBondIndex` (adversarial.test.ts) and
+ * `findLowestExistingBondIndex` (adversarial-2.test.ts) probing loops —
+ * `direction` picks which extreme, `max` the probe range (their `maxProbe`).
+ */
+export async function findExistingBondIndex({
+  direction,
+  max = 25,
+}: {
+  direction: 'lowest' | 'highest';
+  max?: number;
+}): Promise<number | undefined> {
+  const network = getNetwork();
+  let found: number | undefined;
+  for (let i = 0; i < max; i++) {
+    try {
+      const bond = await fetchBond({ bondIndex: i, network });
+      if (bond !== undefined) {
+        found = i;
+        if (direction === 'lowest') break;
+      }
+    } catch {
+      // fetchBond can throw on network errors — skip
+    }
+  }
+  return found;
+}
+
+/**
+ * Compute the soonest settable bondIndex from live pox/anchor state, offset by
+ * `offset`. Offsets >= 1 target future-future indices the contract may reject
+ * with ERR_CANNOT_SETUP_BOND_TOO_SOON (u2) — callers use distinct offsets per
+ * fuzz probe to avoid index collisions. Consolidates the identical
+ * `computeNextBondIndex` copies in adversarial-2/-3/-4.test.ts.
+ */
+export async function computeNextBondIndex(
+  poxInfo: PoxInfo,
+  offset = 1
+): Promise<{ bondIndex: number; anchorCycle: number; currentCycle: number }> {
+  const anchorCycle = await fetchFirstBondPeriodCycle();
+  const bondIndex = Math.floor((poxInfo.rewardCycleId - anchorCycle) / BOND_GAP_CYCLES) + offset;
+  return { bondIndex, anchorCycle, currentCycle: poxInfo.rewardCycleId };
 }

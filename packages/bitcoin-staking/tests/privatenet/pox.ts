@@ -23,11 +23,11 @@
  * with its real `first_reward_cycle_id` (= this data-var). Until then the SDK
  * fallback is unreliable for any bond-period math on this net.
  */
-import { Cl } from "@stacks/transactions";
-import { POX5_CONTRACT_NAME } from "../../src/constants";
-import { ENV } from "../helpers/utils";
+import { Cl } from '@stacks/transactions';
+import { POX5_CONTRACT_NAME } from '../../src/constants';
+import { ENV } from '../helpers/utils';
 
-const POX5_CONTRACT_ADDRESS = "ST000000000000000000002AMW42H";
+const POX5_CONTRACT_ADDRESS = 'ST000000000000000000002AMW42H';
 
 /**
  * The real `first-bond-period-cycle` for the active pox-5 deployment, read
@@ -45,7 +45,7 @@ export async function fetchFirstBondPeriodCycle(): Promise<number> {
   }
   const { data } = (await res.json()) as { data: string };
   const cv = Cl.deserialize(data);
-  if (cv.type !== "uint") {
+  if (cv.type !== 'uint') {
     throw new Error(`first-bond-period-cycle is not a uint: ${cv.type}`);
   }
   return Number(cv.value);

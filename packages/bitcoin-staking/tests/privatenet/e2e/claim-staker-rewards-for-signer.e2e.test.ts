@@ -1,20 +1,9 @@
 /**
  * E2E — claim-staker-rewards-for-signer: happy-path (ok ...) coverage.
  *
- * CONTRACT TRUTH (pox-5.fn):
- *   `claim-staker-rewards-for-signer` has NO auth assertion — an EOA call
- *   SUCCEEDS. When there are no accrued rewards it returns
- *   `(ok {earned: u0, ...})`.
- *
- * There are NO accrued sBTC rewards on the private testnet (sBTC deposit
- * contracts are not deployed, so no sBTC has been minted). The call therefore
- * succeeds with `earned: 0` — which is exactly what we assert.
- *
- * This test:
- *   1. Builds the `claim-staker-rewards-for-signer` transaction using
- *      `buildClaimStakerRewardsForSigner` (SDK builder exists — see src/build.ts).
- *   2. Broadcasts it from a plain EOA.
- *   3. Asserts tx_status === 'success' and the result is an (ok ...) tuple.
+ * contract.claim-staker-rewards-for-signer has no auth assertion — an EOA
+ * call succeeds. No sBTC rewards accrue on this net (sbtc-deposit isn't
+ * deployed), so `earned: 0` is expected, not a failure.
  *
  * Both legs (STX-only and bond-index) are exercised and each expects success.
  *
@@ -31,12 +20,7 @@ import { broadcastTransaction } from '@stacks/transactions';
 import { buildClaimStakerRewardsForSigner } from '../../../src';
 import { REGTEST_KEYS, getAccount, resolveAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
-import {
-  getNextNonce,
-  getPoxInfo,
-  getTransaction,
-  waitForFulfilled,
-} from '../../helpers/wait';
+import { getNextNonce, getPoxInfo, getTransaction, waitForFulfilled } from '../../helpers/wait';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
 
@@ -57,22 +41,16 @@ beforeAll(async () => {
 
 test('claim-staker-rewards-for-signer succeeds with (ok ...) from an EOA (STX-only leg)', async () => {
   useFixtures('e2e-claim-staker-rewards');
-  console.log('\n=== E2E: claim-staker-rewards-for-signer ===');
   console.log('caller:', caller.address);
   console.log('staker (account1):', staker.address);
-  console.log('Expected: success, result is (ok {...}) (earned 0 is fine — no rewards on this chain)');
-  console.log('CONTRACT TRUTH: claim-staker-rewards-for-signer has no auth guard — EOA call succeeds');
 
-  // 1. Discover current reward cycle
+  // DISCOVER CYCLE
   const poxInfo = await getPoxInfo();
-  // Use currentCycle - 1 as the claim target (most recent completed cycle).
   const rewardCycle = Math.max(0, poxInfo.rewardCycleId - 1);
-  console.log('currentCycle:', poxInfo.rewardCycleId);
   console.log('claimRewardCycle:', rewardCycle);
 
-  // 2. Build claim-staker-rewards-for-signer using SDK builder
+  // BUILD
   const nonce = await getNextNonce(caller.address);
-  console.log('caller nonce:', nonce);
 
   const unsigned = await buildClaimStakerRewardsForSigner({
     staker: staker.address,
@@ -85,19 +63,18 @@ test('claim-staker-rewards-for-signer succeeds with (ok ...) from an EOA (STX-on
     postConditionMode: 'allow',
   });
 
-  console.log('claim-staker-rewards-for-signer tx built via buildClaimStakerRewardsForSigner ✓');
-  console.log('(STX-only leg; bondIndex omitted → Cl.none())');
-
-  // 3. Sign and broadcast
+  // SIGN AND BROADCAST
   const tx = signTransaction(unsigned, caller.key);
   const res = await broadcastTransaction({ transaction: tx, network });
 
   if ('error' in res) {
-    throw new Error(`claim-staker-rewards-for-signer broadcast rejected: ${res.error} — ${'reason' in res ? res.reason : ''}`);
+    throw new Error(
+      `claim-staker-rewards-for-signer broadcast rejected: ${res.error} — ${'reason' in res ? res.reason : ''}`
+    );
   }
-  console.log('claim-staker-rewards-for-signer txid:', res.txid);
+  console.log('txid:', res.txid);
 
-  // 4. Wait for on-chain result
+  // WAIT
   const txRecord = await waitForFulfilled(async () => {
     const t = await getTransaction(res.txid);
     if (!t || t.tx_status === 'pending') throw new Error('tx still pending');
@@ -111,28 +88,24 @@ test('claim-staker-rewards-for-signer succeeds with (ok ...) from an EOA (STX-on
     burn_block_height: txRecord.burn_block_height,
   });
 
-  // 5. Assert success + (ok ...) tuple
   expect(txRecord.tx_status).toBe('success');
   expect(txRecord.tx_result?.repr).toMatch(/^\(ok /);
-
-  console.log(`\n=== CONFIRMED: EOA claim succeeded with (ok ...) — earned 0 is expected (no rewards) ✓ ===`);
 }, 180_000);
 
 test('claim-staker-rewards-for-signer with bond index: also succeeds with (ok ...)', async () => {
   useFixtures('e2e-claim-staker-rewards-bond'); // own phase: 2nd broadcast must not collide with test 1
-  console.log('\n=== E2E: claim-staker-rewards-for-signer (bond-index leg) ===');
   console.log('caller:', caller.address);
   console.log('staker (account1):', staker.address);
 
-  // 1. Discover current reward cycle + bond index
+  // DISCOVER CYCLE
   const poxInfo = await getPoxInfo();
   const rewardCycle = Math.max(0, poxInfo.rewardCycleId - 1);
 
-  // Use bond index 1 (the first bond; always present on a running chain).
+  // Bond index 1: the first bond, always present on a running chain.
   const bondIndex = 1;
   console.log('rewardCycle:', rewardCycle, '  bondIndex:', bondIndex);
 
-  // 2. Build via SDK builder (bondIndex present -> Cl.some(Cl.uint(1)))
+  // BUILD
   const nonce = await getNextNonce(caller.address);
 
   const unsigned = await buildClaimStakerRewardsForSigner({
@@ -145,18 +118,18 @@ test('claim-staker-rewards-for-signer with bond index: also succeeds with (ok ..
     network,
   });
 
-  console.log('claim-staker-rewards-for-signer (bond leg) tx built ✓  [bondIndex=1 → Cl.some(Cl.uint(1))]');
-
-  // 3. Sign and broadcast
+  // SIGN AND BROADCAST
   const tx = signTransaction(unsigned, caller.key);
   const res = await broadcastTransaction({ transaction: tx, network });
 
   if ('error' in res) {
-    throw new Error(`claim-staker-rewards-for-signer (bond leg) broadcast rejected: ${res.error} — ${'reason' in res ? res.reason : ''}`);
+    throw new Error(
+      `claim-staker-rewards-for-signer (bond leg) broadcast rejected: ${res.error} — ${'reason' in res ? res.reason : ''}`
+    );
   }
   console.log('txid:', res.txid);
 
-  // 4. Wait and assert
+  // WAIT
   const txRecord = await waitForFulfilled(async () => {
     const t = await getTransaction(res.txid);
     if (!t || t.tx_status === 'pending') throw new Error('tx still pending');
@@ -171,6 +144,4 @@ test('claim-staker-rewards-for-signer with bond index: also succeeds with (ok ..
 
   expect(txRecord.tx_status).toBe('success');
   expect(txRecord.tx_result?.repr).toMatch(/^\(ok /);
-
-  console.log(`\n=== CONFIRMED: bond-index leg also succeeds with (ok ...) ✓ ===`);
 }, 180_000);

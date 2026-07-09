@@ -10,7 +10,7 @@ import {
   type StacksTransactionWire,
 } from '@stacks/transactions';
 import type { StacksNetwork } from '@stacks/network';
-import { fetchPoxInfo, fetchSignerInfo, type PoxInfo } from '../../src';
+import { describePox5Error, fetchPoxInfo, fetchSignerInfo, type PoxInfo } from '../../src';
 import { ENV, getNetwork, isMocking, networkReset, timeout, withRetry } from './utils';
 
 /**
@@ -41,6 +41,33 @@ export async function waitFor(
   while (!(await condition())) {
     if (timeoutMs !== undefined && Date.now() - startedAt > timeoutMs) {
       throw new Error(`waitFor: condition not met within ${timeoutMs}ms`);
+    }
+    await timeout(interval);
+  }
+}
+
+/**
+ * Poll `condition` until true, failing fast if the burn chain stalls: if no new
+ * burn block appears for `BITCOIN_TX_TIMEOUT`, the condition never will, so throw
+ * instead of hanging to the jest timeout. No-op under replay (the fixture is the
+ * settled state). The shared shape behind the confirmation waits.
+ */
+async function waitForChainProgress(
+  condition: () => Promise<boolean>,
+  interval: number = ENV.POLL_INTERVAL
+): Promise<void> {
+  if (isMocking) return;
+  let lastBurn = -1;
+  let lastBurnTime = Date.now();
+  while (!(await condition())) {
+    const burn = await getBurnBlockHeight();
+    if (burn > lastBurn) {
+      lastBurn = burn;
+      lastBurnTime = Date.now();
+    } else if (Date.now() - lastBurnTime > ENV.BITCOIN_TX_TIMEOUT) {
+      throw new Error(
+        `Chain stall: burn block stuck at ${burn} for ${ENV.BITCOIN_TX_TIMEOUT / 1000}s`
+      );
     }
     await timeout(interval);
   }
@@ -117,28 +144,7 @@ export async function waitForBurnBlockHeight(
   burnBlockHeight: number,
   interval: number = ENV.POLL_INTERVAL
 ): Promise<void> {
-  if (isMocking) return; // replay: burn height is whatever the fixture says
-  let lastHeight = -1;
-  let lastHeightTime = Date.now();
-  while (true) {
-    const currentHeight = await getBurnBlockHeight();
-    if (currentHeight >= burnBlockHeight) {
-      console.log(`block height ${currentHeight} (reached)`);
-      return;
-    }
-    if (currentHeight === lastHeight) {
-      if (Date.now() - lastHeightTime > ENV.BITCOIN_TX_TIMEOUT) {
-        throw new Error(
-          `Burn block height hasn't changed for ${ENV.BITCOIN_TX_TIMEOUT / 1000}s (stuck at ${currentHeight})`
-        );
-      }
-    } else {
-      lastHeight = currentHeight;
-      lastHeightTime = Date.now();
-      console.log(`block height ${currentHeight} (waiting for ${burnBlockHeight})`);
-    }
-    await timeout(interval);
-  }
+  await waitForChainProgress(async () => (await getBurnBlockHeight()) >= burnBlockHeight, interval);
 }
 
 /** Minimal raw `/v2/pox` shape the readiness waits need. */
@@ -206,20 +212,13 @@ export async function ensurePox5({
 
 /** Wait until pox-5 is the active PoX contract (epoch 4.0 activation). */
 export async function waitForPox5(): Promise<void> {
-  if (isMocking) return; // replay: the /v2/pox fixture is a pox-5-active snapshot
-  while (true) {
-    try {
-      const pox = await getPoxInfoRaw();
-      if (pox.contract_id.endsWith('.pox-5')) {
-        console.log(`pox-5 active (burn ${pox.current_burnchain_block_height}, cycle ${pox.reward_cycle_id})`);
-        return;
-      }
-      console.log(`waiting for pox-5 (active ${pox.contract_id}, burn ${pox.current_burnchain_block_height})`);
-    } catch {
-      console.log('waiting for pox-5 (node not ready)');
+  await waitForFulfilled(async () => {
+    const pox = await getPoxInfoRaw();
+    if (!pox.contract_id.endsWith('.pox-5')) {
+      throw new Error(`waiting for pox-5 (active ${pox.contract_id})`);
     }
-    await timeout(ENV.POLL_INTERVAL);
-  }
+    console.log(`pox-5 active (burn ${pox.current_burnchain_block_height}, cycle ${pox.reward_cycle_id})`);
+  });
 }
 
 /**
@@ -252,7 +251,9 @@ export async function waitForPreparePhase(poxInfo: PoxInfo, diff = 0): Promise<v
     (poxInfo.currentBurnchainBlockHeight - poxInfo.firstBurnchainBlockHeight) %
     poxInfo.rewardCycleLength;
   const blocksUntilPreparePhase = rewardPhaseLength - pos + 1;
-  return waitForBurnBlockHeight(poxInfo.currentBurnchainBlockHeight + blocksUntilPreparePhase + diff);
+  return waitForBurnBlockHeight(
+    poxInfo.currentBurnchainBlockHeight + blocksUntilPreparePhase + diff
+  );
 }
 
 /**
@@ -274,6 +275,80 @@ export async function waitForRewardPhase(poxInfo: PoxInfo, margin = 8): Promise<
     await timeout(ENV.POLL_INTERVAL);
     pox = await getPoxInfo();
   }
+}
+
+/**
+ * Wait until at least `margin` blocks of reward-phase runway remain before the
+ * next prepare phase (stricter than {@link waitForRewardPhase} alone, which only
+ * checks the CURRENT height) — a multi-step sequence must clear prepare-phase
+ * abort (err u47) for its full duration, not just at the moment it starts.
+ * Ported from the identical inline loops in stx-extend.test.ts and
+ * combined-stx-stake-extend-unstake.e2e.test.ts. Returns the fresh `PoxInfo`.
+ * No-op under replay: `waitForRewardPhase` already no-ops, and this only loops
+ * while its own re-read still reports prepare-phase-adjacent.
+ */
+export async function ensureRewardPhase(margin = 2): Promise<PoxInfo> {
+  let poxInfo = await getPoxInfo();
+  const posOf = () =>
+    (poxInfo.currentBurnchainBlockHeight - poxInfo.firstBurnchainBlockHeight) %
+    poxInfo.rewardCycleLength;
+  const rewardPhaseLen = poxInfo.rewardCycleLength - poxInfo.prepareCycleLength;
+  while (
+    isInPreparePhase(poxInfo.currentBurnchainBlockHeight, poxInfo) ||
+    posOf() >= rewardPhaseLen - margin
+  ) {
+    console.log(`pos ${posOf()} too close to prepare phase — waiting for reward phase`);
+    await waitForRewardPhase(poxInfo, 1);
+    poxInfo = await getPoxInfo();
+  }
+  return poxInfo;
+}
+
+/**
+ * Log a tx's outcome and tolerate either abort or success (some adversarial
+ * param combos may accidentally succeed — that's the finding, not a failure).
+ * Returns the parsed `(err uN)` code, or undefined for success / when
+ * `ENV.RECORD` isn't set (result checks only make sense against a live tx).
+ * Ported from the identical copies in adversarial-2/-3/-4 and rewards.test.ts.
+ */
+export async function assertTolerableResult(
+  label: string,
+  txid: string
+): Promise<number | undefined> {
+  if (!ENV.RECORD) {
+    console.log(`${label}: RECORD not set — skipping /extended result check`);
+    return undefined;
+  }
+  const record = await getTransaction(txid);
+  console.log(`${label} tx_status:`, record?.tx_status);
+  console.log(`${label} tx_result.repr:`, record?.tx_result?.repr);
+
+  if (!record || record.tx_status === 'pending') {
+    console.warn(`${label}: tx still pending — cannot assert result`);
+    return undefined;
+  }
+
+  const isAbort = record.tx_status === 'abort_by_response';
+  const isSuccess = record.tx_status === 'success';
+
+  expect(isAbort || isSuccess).toBe(true);
+
+  if (isAbort) {
+    const code = parseErrCode(record.tx_result?.repr);
+    const info = describePox5Error(code ?? -1);
+    console.log(
+      `${label} abort code:`,
+      code,
+      info?.name ?? '(unknown)',
+      '—',
+      info?.description ?? ''
+    );
+    expect(record.tx_result?.repr).toMatch(/^\(err u\d+\)$/);
+    return code;
+  }
+
+  console.log(`${label}: tx SUCCEEDED`);
+  return undefined;
 }
 
 export async function waitForNextNonce(
@@ -366,24 +441,9 @@ export async function broadcastAndWait(
     throw new Error(`broadcast rejected: ${res.error} — ${'reason' in res ? res.reason : ''}`);
   }
   console.log('broadcast txid', res.txid);
-  if (!isMocking) {
-    let lastBurn = await getBurnBlockHeight();
-    let lastBurnTime = Date.now();
-    while (true) {
-      const nonce = await getNextNonce(senderAddress);
-      if (nonce > startNonce) break;
-      const burn = await getBurnBlockHeight();
-      if (burn > lastBurn) {
-        lastBurn = burn;
-        lastBurnTime = Date.now();
-      } else if (Date.now() - lastBurnTime > ENV.BITCOIN_TX_TIMEOUT) {
-        throw new Error(
-          `Chain stall: burn block stuck at ${burn} for ${ENV.BITCOIN_TX_TIMEOUT / 1000}s while waiting for tx ${res.txid}`
-        );
-      }
-      await timeout(interval);
-    }
-  }
+  // Confirmed node-only: wait until the sender's nonce advances, failing fast if
+  // the chain stalls (see waitForChainProgress). Skipped under replay.
+  await waitForChainProgress(async () => (await getNextNonce(senderAddress)) > startNonce, interval);
   return res.txid;
 }
 

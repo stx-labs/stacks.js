@@ -1,31 +1,12 @@
 /**
- * E2E — L1 BTC early-exit: announce + P2WSH ELSE-branch reclaim (REAL spend).
+ * E2E — L1 BTC early-exit: announce + P2WSH ELSE-branch reclaim (real spend).
  *
- * This test actually exercises the full BTC L1 early-exit path end-to-end — it
- * does NOT self-skip on the happy path. It models the ELSE-branch witness EXACTLY
- * on tests/privatenet/actions/btc-lockup-roundtrip.test.ts (TEST 1, EARLY branch)
- * and reuses the funding/register patterns from single-l1-register.e2e.test.ts.
+ * Models the ELSE-branch witness on btc-lockup-roundtrip.test.ts (TEST 1, EARLY
+ * branch) and reuses the funding/register patterns from single-l1-register.e2e.
+ * Staker = account5; cosigner = account6 (bond's earlyUnlockBytes pubkey).
  *
- * Staker = account5. Cosigner = account6 (the bond's early-exit cosigner).
- * The VPS daemon sets every new bond's earlyUnlockBytes = buildUnlockScript(account6 pub)
- * (i.e. `<account6-compressed-pubkey> OP_CHECKSIG`, 35 bytes).
- *
- * Flow (single test):
- *   1. Discover the newest registerable bond (waitForBondWithRunway). fetchBond ->
- *      read its on-chain earlyUnlockBytes.
- *   2. PRECONDITION GUARD: if the bond's earlyUnlockBytes is NOT the account6
- *      cosigner script (an old all-zero bond), skip-with-clear-log — only
- *      cosigner-enabled bonds are testable.
- *   3. If account5 isn't already L1-enrolled in a bond: fund a P2WSH lockup
- *      (buildLockScript with the bond's on-chain earlyUnlockBytes), confirm,
- *      buildLockProof, register-for-bond (kind btc). Assert isL1Lock.
- *   4. announce-l1-early-exit signed by account5 (staker) -> assert ok.
- *   5. Build + broadcast the ELSE-branch reclaim spending the P2WSH lockup back
- *      to account5's P2WPKH. Witness EXACTLY as btc-lockup-roundtrip TEST 1:
- *      [ staker_sig, cosigner_sig, staker_preimage, <empty->ELSE>, witnessScript ].
- *      Broadcast via mempool; assert the txid is visible/confirmed.
- *
- * Honest skips (no fake pass): no cosigner bond -> skip; faucet down -> throws.
+ * Skips honestly (no fake pass) if the discovered/enrolled bond isn't
+ * cosigner-enabled, or if a previously-enrolled UTXO was already reclaimed.
  *
  * Live run:
  *   set -a; . packages/bitcoin-staking/.env; set +a
@@ -61,18 +42,13 @@ import {
 } from '../../../src';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
-import {
-  broadcastAndWait,
-  getNextNonce,
-  getTransaction,
-} from '../../helpers/wait';
+import { broadcastAndWait, getNextNonce, getTransaction } from '../../helpers/wait';
 import { waitForBondWithRunway } from '../../helpers/bond';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
 
 const SIGNER_MANAGER =
-  process.env.SIGNER_MANAGER ??
-  'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
+  process.env.SIGNER_MANAGER ?? 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 
 const MEMPOOL_BASE = 'https://mempool.bitcoin.private-1.hiro.so/api';
 const FAUCET_URL = 'https://api.private-1.hiro.so/extended/v1/faucets/btc';
@@ -142,7 +118,7 @@ async function btcPoll<T>(
   fn: () => Promise<T | null | undefined>,
   intervalMs: number,
   timeoutMs: number,
-  label: string,
+  label: string
 ): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -180,7 +156,9 @@ async function broadcastBtc(rawHex: string): Promise<string> {
   throw new Error('BTC broadcast failed on both /tx and /v1/tx');
 }
 
-async function waitForBtcConfirmation(txid: string): Promise<{ blockHash: string; blockHeight: number }> {
+async function waitForBtcConfirmation(
+  txid: string
+): Promise<{ blockHash: string; blockHeight: number }> {
   return btcPoll(
     async () => {
       const resp = await fetch(`${MEMPOOL_BASE}/tx/${txid}`);
@@ -195,7 +173,7 @@ async function waitForBtcConfirmation(txid: string): Promise<{ blockHash: string
     },
     15_000,
     25 * 60_000,
-    `waiting for BTC tx ${txid} to confirm`,
+    `waiting for BTC tx ${txid} to confirm`
   );
 }
 
@@ -208,7 +186,7 @@ async function fetchBlockHeader(blockHash: string): Promise<string> {
 async function fetchMerkleProof(
   txid: string,
   blockHash: string,
-  blockHeight: number,
+  blockHeight: number
 ): Promise<{ block_height: number; merkle: string[]; pos: number }> {
   const resp = await fetch(`${MEMPOOL_BASE}/block/${blockHash}/txids`);
   if (!resp.ok) throw new Error(`GET /block/${blockHash}/txids → ${resp.status}`);
@@ -244,7 +222,6 @@ beforeAll(async () => {
 
 test('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5', async () => {
   useFixtures('e2e-exit-l1-announce-and-reclaim');
-  console.log('\n=== E2E: exit-l1-announce-and-reclaim ===');
   console.log('staker (account5):', staker.address);
   console.log('signerManager:', SIGNER_MANAGER);
 
@@ -253,13 +230,10 @@ test('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5', asyn
   const cosignerPrivBytes = hexToBytes(COSIGNER_PRIV_HEX);
   const cosignerBtcPub = secp256k1.getPublicKey(cosignerPrivBytes, true);
 
-  // The cosigner script the VPS daemon stores in earlyUnlockBytes:
-  //   buildUnlockScript(account6 pub) = <account6-pub> OP_CHECKSIG (35 bytes).
   const expectedEarlyUnlockHex = bytesToHex(buildUnlockScript(cosignerBtcPub));
   console.log('expected cosigner earlyUnlockBytes:', expectedEarlyUnlockHex);
 
-  // 1. Discover the newest registerable bond
-  console.log('discovering bond with registration runway...');
+  // DISCOVER BOND
   const { bondIndex, bondStartHeight, poxInfo } = await waitForBondWithRunway();
   console.log(`discovered bondIndex=${bondIndex} bondStartHeight=${bondStartHeight}`);
   console.log('currentBurnHeight:', poxInfo.currentBurnchainBlockHeight);
@@ -269,25 +243,24 @@ test('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5', asyn
   console.log('bond earlyUnlockBytes (on-chain):', bond.earlyUnlockBytes);
   console.log('bond stxValueRatio:', bond.stxValueRatio.toString());
 
-  // 2. PRECONDITION GUARD: bond must be cosigner-enabled
+  // Only cosigner-enabled bonds support the ELSE-branch reclaim — old all-zero
+  // bonds can't be tested here.
   if (bond.earlyUnlockBytes.toLowerCase() !== expectedEarlyUnlockHex.toLowerCase()) {
     console.warn(
       `SKIP: bond ${bondIndex} earlyUnlockBytes (${bond.earlyUnlockBytes}) is NOT the ` +
-      `account6 cosigner script (${expectedEarlyUnlockHex}). Only cosigner-enabled bonds ` +
-      `support the ELSE-branch early-exit reclaim — this is likely an old all-zero bond.`,
+        `account6 cosigner script (${expectedEarlyUnlockHex}).`
     );
     // Honest skip: assert the precondition that prevents the test (no fake pass).
     expect(bond.earlyUnlockBytes.toLowerCase()).not.toBe(expectedEarlyUnlockHex.toLowerCase());
     console.log('(skipped — bond is not cosigner-enabled)');
     return;
   }
-  console.log('precondition: bond is cosigner-enabled (earlyUnlockBytes matches account6) ✓');
 
   // The earlyUnlockBytes used for BOTH the registered lockup script AND the reclaim
   // witnessScript come straight from the bond's on-chain value.
   const earlyUnlockBytes = hexToBytes(bond.earlyUnlockBytes);
 
-  // 3. Ensure account5 has an L1 lock (register if not already enrolled)
+  // ENSURE L1 LOCK
   const unlockHeightBig = await fetchBondL1UnlockHeight({ bondIndex, network });
   const unlockHeight = Number(unlockHeightBig);
   console.log('L1 unlockHeight:', unlockHeight);
@@ -322,28 +295,27 @@ test('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5', asyn
     // Already enrolled — reuse the existing on-chain L1 lock UTXO.
     console.warn(
       'staker already L1-enrolled:',
-      JSON.stringify(existing, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)),
+      JSON.stringify(existing, (_k, v) => (typeof v === 'bigint' ? v.toString() : v))
     );
-    // We must find the funded P2WSH UTXO on-chain to spend it. Recompute the
-    // P2WSH address from the membership's own bond and search for its UTXO.
-    // The membership records the locked sats; the P2WSH script is deterministic
-    // from (stakerAddress, that bond's unlockHeight, unlockBytes, earlyUnlockBytes).
+    // The P2WSH is deterministic from (stakerAddress, bond's unlockHeight,
+    // unlockBytes, earlyUnlockBytes) — recompute it to find the funded UTXO.
     if (existing.bondIndex !== bondIndex) {
-      // Re-derive the P2WSH for the bond the staker is actually enrolled in.
       const existingBond = await fetchBond({ bondIndex: existing.bondIndex, network });
       if (!existingBond) throw new Error(`enrolled bond ${existing.bondIndex} not found`);
       if (existingBond.earlyUnlockBytes.toLowerCase() !== expectedEarlyUnlockHex.toLowerCase()) {
         console.warn(
           `SKIP: staker is enrolled in bond ${existing.bondIndex} whose earlyUnlockBytes ` +
-          `(${existingBond.earlyUnlockBytes}) is not the account6 cosigner script — not reclaimable.`,
+            `(${existingBond.earlyUnlockBytes}) is not the account6 cosigner script — not reclaimable.`
         );
-        expect(existingBond.earlyUnlockBytes.toLowerCase()).not.toBe(expectedEarlyUnlockHex.toLowerCase());
+        expect(existingBond.earlyUnlockBytes.toLowerCase()).not.toBe(
+          expectedEarlyUnlockHex.toLowerCase()
+        );
         console.log('(skipped — enrolled bond is not cosigner-enabled)');
         return;
       }
     }
     const existingUnlockHeight = Number(
-      await fetchBondL1UnlockHeight({ bondIndex: existing.bondIndex, network }),
+      await fetchBondL1UnlockHeight({ bondIndex: existing.bondIndex, network })
     );
     const existingWitnessScript = buildLockScript({
       stxAddress: staker.address,
@@ -359,7 +331,7 @@ test('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5', asyn
     if (!utxo) {
       console.warn(
         `SKIP: staker is L1-enrolled but no spendable P2WSH UTXO found at ${existingP2wsh.address}. ` +
-        `It may already have been reclaimed by a prior run.`,
+          `It may already have been reclaimed by a prior run.`
       );
       expect(utxos.length).toBe(0);
       console.log('(skipped — lockup UTXO already spent)');
@@ -368,9 +340,10 @@ test('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5', asyn
     lockupTxid = utxo.txid;
     lockupVout = utxo.vout;
     lockupAmountSats = utxo.value;
-    // Use this bond's witnessScript for the reclaim below.
     reclaimWitnessScript = existingWitnessScript;
-    console.log(`reusing existing L1 lockup UTXO ${lockupTxid}:${lockupVout} (${lockupAmountSats} sats)`);
+    console.log(
+      `reusing existing L1 lockup UTXO ${lockupTxid}:${lockupVout} (${lockupAmountSats} sats)`
+    );
   } else {
     // Not enrolled — do the full fund + register flow against the discovered bond.
     console.log('staker not L1-enrolled — funding a fresh P2WSH lockup + registering...');
@@ -392,7 +365,7 @@ test('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5', asyn
         },
         15_000,
         25 * 60_000,
-        'waiting for confirmed UTXO after faucet',
+        'waiting for confirmed UTXO after faucet'
       );
     }
 
@@ -401,7 +374,6 @@ test('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5', asyn
     const changeSats = utxo.value - AMOUNT_SATS - FEE_SATS;
     expect(changeSats).toBeGreaterThan(0n);
 
-    // Fund the P2WSH lockup.
     const fundingTx = new btc.Transaction();
     fundingTx.addInput({
       txid: utxo.txid,
@@ -414,7 +386,7 @@ test('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5', asyn
     fundingTx.finalize();
 
     const btcTxid = await broadcastBtc(fundingTx.hex);
-    console.log('\n=== BTC FUNDING TXID:', btcTxid, '===');
+    console.log('BTC funding txid:', btcTxid);
     expect(btcTxid).toMatch(/^[0-9a-f]{64}$/);
     useFixtures('e2e-exit-l1-announce-and-reclaim-btc-confirmed');
 
@@ -438,7 +410,6 @@ test('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5', asyn
     });
     console.log('lockupOutput amount:', lockupOutput.amount.toString());
 
-    // Register for the bond (kind: btc).
     const minUstx = minUstxForSatsAmount({
       sats: AMOUNT_SATS,
       stxValueRatio: bond.stxValueRatio,
@@ -466,7 +437,7 @@ test('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5', asyn
     const regTx = signTransaction(unsignedReg, staker.key);
     console.log('broadcasting register-for-bond (L1)...');
     const regTxid = await broadcastAndWait(regTx, staker.address, network);
-    console.log('\n=== STACKS REGISTER TXID:', regTxid, '===');
+    console.log('register-for-bond txid:', regTxid);
 
     await new Promise(r => setTimeout(r, 5_000));
     const regRecord = await getTransaction(regTxid);
@@ -478,7 +449,6 @@ test('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5', asyn
       }
     }
 
-    // Assert L1 enrollment.
     let membership = await fetchBondMembership({ address: staker.address, network });
     const deadline = Date.now() + 2 * 60_000;
     while (!membership && Date.now() < deadline) {
@@ -487,19 +457,18 @@ test('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5', asyn
     }
     expect(membership).toBeDefined();
     expect(membership!.isL1Lock).toBe(true);
-    console.log(`account5 enrolled in bond ${membership!.bondIndex} (isL1Lock=true) ✓`);
+    console.log(`account5 enrolled in bond ${membership!.bondIndex} (isL1Lock=true)`);
 
     lockupTxid = btcTxid;
     lockupVout = 0; // P2WSH lockup output is always index 0 in our funding tx
     lockupAmountSats = AMOUNT_SATS;
   }
 
-  // 4. announce-l1-early-exit (STAKER signs — zeroes the staker's shares)
-  // Deployed pox-5 enforces contract-caller == tx-sender == staker -> the staker
-  // themselves must announce (ERR_UNAUTHORIZED otherwise).
-  console.log('\n--- Announcing L1 early exit (staker-signed) ---');
+  // ANNOUNCE EARLY EXIT
+  // Deployed pox-5 enforces contract-caller == tx-sender == staker, so the
+  // staker themselves must announce (ERR_UNAUTHORIZED otherwise).
   useFixtures('e2e-exit-l1-announce-and-reclaim-announce'); // isolate from the register-for-bond broadcast (if any)
-  const announceNonce = await getNextNonce(staker.address); // late nonce before broadcast
+  const announceNonce = await getNextNonce(staker.address);
   const unsignedAnnounce = await buildAnnounceL1EarlyExit({
     staker: staker.address,
     oldSignerManager: SIGNER_MANAGER,
@@ -523,25 +492,21 @@ test('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5', asyn
       if (match) {
         const code = Number(match[1]);
         throw new Error(
-          `announce-l1-early-exit aborted: (err u${code}) — ${describePox5Error(code)}`,
+          `announce-l1-early-exit aborted: (err u${code}) — ${describePox5Error(code)}`
         );
       }
     }
     expect(announceRecord.tx_status).toBe('success');
   }
   expect(announceTxid).toMatch(/^[0-9a-f]{64}$/);
-  console.log('=== announce-l1-early-exit success ✓ ===');
   useFixtures('e2e-exit-l1-announce-and-reclaim-after');
 
-  // 5. Build + broadcast the ELSE-branch P2WSH reclaim
-  // Modeled EXACTLY on btc-lockup-roundtrip.test.ts TEST 1 (EARLY branch):
-  //   - ELSE branch: lockTime 0, input sequence 0xffffffff (no CLTV).
-  //   - BIP143 sighash: tx.preimageWitnessV0(0, witnessScript, SIGHASH_ALL, amount).
-  //     For P2WSH the scriptCode IS the witnessScript.
-  //   - Both staker and cosigner sign the SAME sighash; each sig has SIGHASH_ALL appended.
-  //   - The ELSE branch reveals the 32-byte staker preimage = computeRegisterPreimage(stxAddress).
-  //   - Witness (bottom->top): [ staker_sig, cosigner_sig, preimage, <empty->ELSE>, witnessScript ]
-  console.log('\n--- Building P2WSH ELSE-branch reclaim tx ---');
+  // BUILD RECLAIM
+  // ELSE branch (no CLTV): sequence 0xffffffff. Both staker and cosigner sign
+  // the same BIP143 sighash (scriptCode = witnessScript for P2WSH); the ELSE
+  // branch also reveals the staker preimage. Witness order matches
+  // btc-lockup-roundtrip TEST 1 exactly: [staker_sig, cosigner_sig, preimage,
+  // <empty->ELSE>, witnessScript].
 
   // reclaimWitnessScript matches the actual locked UTXO (reuse path may differ).
   const p2wshScript = btc.p2wsh({ type: 'wsh', script: reclaimWitnessScript }, REGTEST_BTC).script;
@@ -566,23 +531,38 @@ test('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5', asyn
   });
   reclaimTx.addOutputAddress(toAddress, reclaimSats, REGTEST_BTC);
 
-  const sighash = reclaimTx.preimageWitnessV0(0, reclaimWitnessScript, SIGHASH_ALL, lockupAmountSats);
+  const sighash = reclaimTx.preimageWitnessV0(
+    0,
+    reclaimWitnessScript,
+    SIGHASH_ALL,
+    lockupAmountSats
+  );
   console.log('BIP143 sighash:', bytesToHex(sighash));
 
-  const stakerSig = concatBytes(signECDSA(sighash, stakerPrivBytes, true), new Uint8Array([SIGHASH_ALL]));
-  const cosignerSig = concatBytes(signECDSA(sighash, cosignerPrivBytes, true), new Uint8Array([SIGHASH_ALL]));
+  const stakerSig = concatBytes(
+    signECDSA(sighash, stakerPrivBytes, true),
+    new Uint8Array([SIGHASH_ALL])
+  );
+  const cosignerSig = concatBytes(
+    signECDSA(sighash, cosignerPrivBytes, true),
+    new Uint8Array([SIGHASH_ALL])
+  );
   const stakerPreimage = computeRegisterPreimage(staker.address);
 
-  // Witness order matches btc-lockup-roundtrip TEST 1 exactly.
-  const witnessItems = [stakerSig, cosignerSig, stakerPreimage, new Uint8Array(0), reclaimWitnessScript];
+  const witnessItems = [
+    stakerSig,
+    cosignerSig,
+    stakerPreimage,
+    new Uint8Array(0),
+    reclaimWitnessScript,
+  ];
   reclaimTx.updateInput(0, { finalScriptWitness: witnessItems }, true);
   if (!reclaimTx.isFinal) throw new Error('Reclaim tx is not finalized — witness injection failed');
 
   const rawHex = reclaimTx.hex;
   console.log('reclaim tx vsize:', reclaimTx.vsize, 'vBytes');
 
-  // 6. Broadcast reclaim + assert it lands
-  console.log('\n--- Broadcasting reclaim tx ---');
+  // BROADCAST RECLAIM
   const reclaimTxid = await broadcastBtc(rawHex);
   console.log('reclaim txid:', reclaimTxid);
   expect(reclaimTxid).toMatch(/^[0-9a-f]{64}$/);
@@ -595,24 +575,27 @@ test('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5', asyn
     },
     10_000,
     25 * 60_000,
-    `reclaim tx ${reclaimTxid} visible in mempool`,
+    `reclaim tx ${reclaimTxid} visible in mempool`
   );
-  console.log('mempool tx:', JSON.stringify({
-    txid: seenTx.txid,
-    fee: seenTx.fee,
-    confirmed: seenTx.status.confirmed,
-  }));
+  console.log(
+    'mempool tx:',
+    JSON.stringify({
+      txid: seenTx.txid,
+      fee: seenTx.fee,
+      confirmed: seenTx.status.confirmed,
+    })
+  );
   expect(seenTx.txid).toBe(reclaimTxid);
   expect(seenTx.fee).toBeGreaterThan(0);
 
   // Wait for the reclaim to confirm so the ELSE branch is proven by consensus.
   const reclaimConf = await waitForBtcConfirmation(reclaimTxid);
-  console.log('reclaim confirmed in block:', reclaimConf.blockHash, 'height:', reclaimConf.blockHeight);
+  console.log(
+    'reclaim confirmed in block:',
+    reclaimConf.blockHash,
+    'height:',
+    reclaimConf.blockHeight
+  );
 
-  console.log('\n=== E2E exit-l1-announce-and-reclaim: SUCCESS ✓ ===');
-  console.log('bondIndex (discovered):', bondIndex);
-  console.log('announceTxid:', announceTxid);
-  console.log('reclaimTxid:', reclaimTxid);
-  console.log('reclaimSats:', reclaimSats.toString());
-  console.log('toAddress:', toAddress);
+  console.log('bondIndex:', bondIndex, 'announceTxid:', announceTxid, 'reclaimTxid:', reclaimTxid);
 }, 900_000);

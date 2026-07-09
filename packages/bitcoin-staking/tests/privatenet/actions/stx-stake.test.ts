@@ -17,39 +17,33 @@
  *   NETWORK=testnet NETWORK_ID=256 STACKS_API=https://api.private-1.hiro.so \
  *     npx jest tests/privatenet/actions/stx-stake.test.ts --runInBand --collectCoverage=false --verbose
  */
-import { broadcastTransaction } from "@stacks/transactions";
-import { buildStake } from "../../../src";
-import { REGTEST_KEYS, getAccount } from "../../regtest/regtest";
-import { getNetwork } from "../../helpers/utils";
-import {
-  getNextNonce,
-  getPoxInfo,
-  getTransaction,
-  waitForFulfilled,
-} from "../../helpers/wait";
-import { signTransaction } from "../../helpers/sign";
-import { useFixtures } from "../../helpers/mock";
+import { broadcastTransaction } from '@stacks/transactions';
+import { buildStake, Pox5ErrorCode } from '../../../src';
+import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
+import { getNetwork } from '../../helpers/utils';
+import { getNextNonce, getPoxInfo, getTransaction, waitForFulfilled } from '../../helpers/wait';
+import { signTransaction } from '../../helpers/sign';
+import { useFixtures } from '../../helpers/mock';
 
 jest.setTimeout(60 * 60_000);
 
 const network = getNetwork();
 
 const FEE = 10_000n;
-const STAKER = process.env.STAKER ?? "account6";
+const STAKER = process.env.STAKER ?? 'account6';
 const AMOUNT_USTX = BigInt(process.env.AMOUNT_USTX ?? 1_000_000_000); // 1000 STX
 const NUM_CYCLES = Number(process.env.NUM_CYCLES ?? 1);
 
 // The daemon-registered signer-manager on the private testnet.
-const signerManager =
-  "ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager";
+const signerManager = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 
 const staker = getAccount(REGTEST_KEYS[STAKER as keyof typeof REGTEST_KEYS]);
 
 beforeAll(async () => {
-  useFixtures("stx-stake");
+  useFixtures('stx-stake');
 }, 60 * 60_000);
 
-test("stake below API min is accepted on-chain (no contract amount floor)", async () => {
+test('stake below API min is accepted on-chain (no contract amount floor)', async () => {
   const poxInfo = await getPoxInfo();
 
   // The contract's `stake` replay guard requires
@@ -60,11 +54,11 @@ test("stake below API min is accepted on-chain (no contract amount floor)", asyn
   const startBurnHt = poxInfo.currentBurnchainBlockHeight;
   const targetCycle = poxInfo.rewardCycleId + 1;
 
-  console.log("stx-stake params", {
+  console.log('stx-stake params', {
     staker: staker.address,
     amountUstx: AMOUNT_USTX.toString(),
     amountStx: (Number(AMOUNT_USTX) / 1e6).toString(),
-    apiMinStx: "10000.034",
+    apiMinStx: '10000.034',
     numCycles: NUM_CYCLES,
     currentCycle: poxInfo.rewardCycleId,
     targetCycle,
@@ -86,29 +80,38 @@ test("stake below API min is accepted on-chain (no contract amount floor)", asyn
     network,
     // stake LOCKS amountUstx — an asset movement default Deny mode reverts
     // (abort_by_post_condition). Allow transfers so the stake persists.
-    postConditionMode: "allow",
+    postConditionMode: 'allow',
   });
 
   const transaction = signTransaction(unsigned, staker.key);
   const res = await broadcastTransaction({ transaction, network });
-  if ("error" in res) {
-    throw `broadcast rejected: ${res.error} — ${"reason" in res ? res.reason : ""}`;
+  if ('error' in res) {
+    throw `broadcast rejected: ${res.error} — ${'reason' in res ? res.reason : ''}`;
   }
-  console.log("stx-stake txid", res.txid);
+  console.log('stx-stake txid', res.txid);
 
   // Wait until the tx leaves the mempool, then read the on-chain outcome.
   const tx = await waitForFulfilled(async () => {
     const t = await getTransaction(res.txid);
-    if (!t || t.tx_status === "pending") throw "tx still pending";
+    if (!t || t.tx_status === 'pending') throw 'tx still pending';
     return t;
   });
 
-  console.log("stx-stake on-chain result", {
+  console.log('stx-stake on-chain result', {
     txid: tx.tx_id,
     tx_status: tx.tx_status,
     result_repr: tx.tx_result?.repr,
     burn_block_height: tx.burn_block_height,
   });
 
-  expect(tx.tx_status).toBe("success");
+  // The account may already be staked from a prior run against this chain
+  // state — the contract then rejects with ERR_ALREADY_STAKED (err u19),
+  // which is a legitimate terminal outcome that says nothing about the
+  // amount floor. Any OTHER abort (in particular anything that looks like an
+  // amount-floor rejection) is a genuine SDK/contract regression and must
+  // still fail the test.
+  if (tx.tx_status !== 'success') {
+    expect(tx.tx_status).toBe('abort_by_response');
+    expect(tx.tx_result?.repr).toBe(`(err u${Pox5ErrorCode.AlreadyStaked})`);
+  }
 });

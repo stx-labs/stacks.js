@@ -16,6 +16,7 @@ import * as btc from '@scure/btc-signer';
 // @ts-ignore — same
 import { secp256k1 } from '@noble/curves/secp256k1.js';
 import { bytesToHex, hexToBytes } from '@stacks/common';
+import { computeMerkleBranch } from '../../src';
 
 export const MEMPOOL_BASE = 'https://mempool.bitcoin.private-1.hiro.so/api';
 export const FAUCET_URL = 'https://api.private-1.hiro.so/extended/v1/faucets/btc';
@@ -48,6 +49,29 @@ export function privKeyToP2wpkhScriptHex(privKey: Uint8Array): string {
   return bytesToHex(btc.p2wpkh(pub, REGTEST).script);
 }
 
+/** SPV-proof inputs persisted by btc-lock.test.ts, consumed by register-for-bond-l1.test.ts. */
+export interface BtcLockArtifact {
+  bondIndex: number;
+  txid: string;
+  outputIndex: number;
+  legacyTxHex: string;
+  blockHash: string;
+  blockHeight: number;
+  unlockHeight: number;
+  amountSats: string;
+  witnessScriptHex: string;
+  unlockBytesHex: string;
+  earlyUnlockBytesHex: string;
+  stakerStxAddress: string;
+  headerHex: string;
+  merkleProof: {
+    block_height: number;
+    merkle: string[];
+    pos: number;
+  };
+  txCount: number;
+}
+
 export interface Utxo {
   txid: string;
   vout: number;
@@ -77,10 +101,7 @@ export async function faucetFund(address: string): Promise<string> {
  * Only returns outputs matching `scriptHex` that haven't been spent by another
  * tx in the same page of transactions.
  */
-export async function getUtxos(
-  address: string,
-  scriptHex: string,
-): Promise<Utxo[]> {
+export async function getUtxos(address: string, scriptHex: string): Promise<Utxo[]> {
   const resp = await fetch(`${MEMPOOL_BASE}/address/${address}/txs`);
   if (!resp.ok) throw new Error(`GET /address/${address}/txs → ${resp.status}`);
   const txs = (await resp.json()) as Array<{
@@ -140,10 +161,7 @@ export async function broadcastBtc(rawHex: string): Promise<string> {
  */
 export async function waitForConfirmed(
   txid: string,
-  {
-    intervalMs = 15_000,
-    timeoutMs = 25 * 60_000,
-  }: { intervalMs?: number; timeoutMs?: number } = {},
+  { intervalMs = 15_000, timeoutMs = 25 * 60_000 }: { intervalMs?: number; timeoutMs?: number } = {}
 ): Promise<{ block_height: number; block_hash: string }> {
   const deadline = Date.now() + timeoutMs;
   console.log(`[btc-wallet] waiting for ${txid} to confirm...`);
@@ -154,9 +172,7 @@ export async function waitForConfirmed(
         status: { confirmed: boolean; block_height?: number; block_hash?: string };
       };
       if (tx.status.confirmed && tx.status.block_height != null && tx.status.block_hash) {
-        console.log(
-          `[btc-wallet] ${txid} confirmed in block ${tx.status.block_height}`,
-        );
+        console.log(`[btc-wallet] ${txid} confirmed in block ${tx.status.block_height}`);
         return {
           block_height: tx.status.block_height,
           block_hash: tx.status.block_hash,
@@ -178,6 +194,70 @@ export async function getBtcTipHeight(): Promise<number> {
 }
 
 /**
+ * Fetch the 80-byte block header hex for the block at `blockHash`, via the
+ * Esplora-compatible `/block/:hash/header` route.
+ */
+export async function fetchBlockHeader(blockHash: string): Promise<string> {
+  const resp = await fetch(`${MEMPOOL_BASE}/block/${blockHash}/header`);
+  if (!resp.ok) throw new Error(`GET /block/${blockHash}/header → ${resp.status}`);
+  return (await resp.text()).trim();
+}
+
+/** Alias for {@link fetchBlockHeader} matching the "headerHex" naming used by callers. */
+export const fetchBlockHeaderHex = fetchBlockHeader;
+
+/**
+ * Build the merkle proof for `txid` from the block's ordered txid list.
+ *
+ * This host does NOT expose `/tx/{txid}/merkle-proof` (404 — redirects to a
+ * /v1/ route that doesn't exist), so we fetch `/block/{hash}/txids` (which DOES
+ * work) and compute the branch locally with the SDK's `computeMerkleBranch`.
+ * Returns the same `{ block_height, merkle, pos }` shape `assembleLockupProof`
+ * expects (merkle siblings in big-endian display form; it reverses internally).
+ */
+export async function fetchMerkleProof(
+  txid: string,
+  blockHash: string,
+  blockHeight: number
+): Promise<{ block_height: number; merkle: string[]; pos: number }> {
+  const resp = await fetch(`${MEMPOOL_BASE}/block/${blockHash}/txids`);
+  if (!resp.ok) throw new Error(`GET /block/${blockHash}/txids → ${resp.status}`);
+  const txids = (await resp.json()) as string[];
+  const pos = txids.indexOf(txid);
+  if (pos === -1) throw new Error(`txid ${txid} not in block ${blockHash} txid list`);
+  const merkle = computeMerkleBranch(txids, pos);
+  return { block_height: blockHeight, merkle, pos };
+}
+
+/**
+ * Fetch the raw tx hex (legacy, non-segwit serialization) from the mempool API.
+ * `/tx/:txid/hex` returns the segwit serialization; we strip the witness via
+ * `@scure/btc-signer` so what we store matches the txid (legacy hash).
+ */
+export async function fetchRawTxHex(
+  txid: string
+): Promise<{ segwitHex: string; legacyHex: string }> {
+  const resp = await fetch(`${MEMPOOL_BASE}/tx/${txid}/hex`);
+  if (!resp.ok) throw new Error(`GET /tx/${txid}/hex → ${resp.status}`);
+  const segwitHex = (await resp.text()).trim();
+  // Strip witness so bytes hash to txid (not wtxid)
+  const parsed = btc.Transaction.fromRaw(hexToBytes(segwitHex), {
+    allowUnknownOutputs: true,
+    disableScriptCheck: true,
+  });
+  const legacyBytes = parsed.toBytes(true, false); // withScriptSig=true, withWitness=false
+  return { segwitHex, legacyHex: bytesToHex(legacyBytes) };
+}
+
+/** Fetch `tx_count` for a block (needed for the Esplora-proof `txCount` field). */
+export async function fetchBlockTxCount(blockHash: string): Promise<number> {
+  const resp = await fetch(`${MEMPOOL_BASE}/block/${blockHash}`);
+  if (!resp.ok) throw new Error(`GET /block/${blockHash} → ${resp.status}`);
+  const data = (await resp.json()) as { tx_count: number };
+  return data.tx_count;
+}
+
+/**
  * Ensure `address` has at least one confirmed UTXO >= minSats.
  * If not, call the faucet then poll until a sufficient UTXO appears.
  * Returns the biggest confirmed UTXO found.
@@ -191,17 +271,12 @@ export async function ensureFunded(
   address: string,
   scriptHex: string,
   minSats: bigint = 50_000n,
-  {
-    intervalMs = 15_000,
-    timeoutMs = 25 * 60_000,
-  }: { intervalMs?: number; timeoutMs?: number } = {},
+  { intervalMs = 15_000, timeoutMs = 25 * 60_000 }: { intervalMs?: number; timeoutMs?: number } = {}
 ): Promise<Utxo> {
   let utxos = await getUtxos(address, scriptHex);
   const hasSufficient = utxos.some(u => u.value >= minSats);
   if (!hasSufficient) {
-    console.log(
-      `[btc-wallet] no UTXO >= ${minSats} sats for ${address}, hitting faucet...`,
-    );
+    console.log(`[btc-wallet] no UTXO >= ${minSats} sats for ${address}, hitting faucet...`);
     await faucetFund(address);
 
     const deadline = Date.now() + timeoutMs;
@@ -209,9 +284,7 @@ export async function ensureFunded(
       utxos = await getUtxos(address, scriptHex);
       const ok = utxos.filter(u => u.value >= minSats);
       if (ok.length > 0) {
-        console.log(
-          `[btc-wallet] funded: ${ok.length} UTXO(s) >= ${minSats} sats`,
-        );
+        console.log(`[btc-wallet] funded: ${ok.length} UTXO(s) >= ${minSats} sats`);
         break;
       }
       await new Promise(r => setTimeout(r, intervalMs));
@@ -222,9 +295,7 @@ export async function ensureFunded(
   const sorted = utxos.slice().sort((a, b) => (b.value > a.value ? 1 : -1));
   const best = sorted[0];
   if (!best || best.value < minSats) {
-    throw new Error(
-      `ensureFunded: still no UTXO >= ${minSats} sats for ${address} after faucet`,
-    );
+    throw new Error(`ensureFunded: still no UTXO >= ${minSats} sats for ${address} after faucet`);
   }
   return best;
 }

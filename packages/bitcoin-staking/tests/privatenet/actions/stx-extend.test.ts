@@ -1,22 +1,11 @@
 /**
  * Privatenet STX-only EXTEND / re-stake action — exercises `stake-update`.
  *
- * pox-5.stake-update (L1077) is the manual re-stake entry-point for an
- * existing STX-only position. A single call can:
- *   - extend the lock by `cycles-to-extend` cycles,
- *   - top up the locked amount by `amount-increase` uSTX,
- *   - rotate the signer-manager (pass new `signer-manager`, current as `old-`).
- * It re-validates via the signer-manager, asserts `old-signer-manager` matches
- * the recorded signer (ERR_INVALID_OLD_SIGNER_MANAGER u36), re-checks the lock
- * period (ERR_INVALID_NUM_CYCLES u20) and reverts in the prepare phase (u47).
- *
- * This action extends account6's existing STX-only stake by CYCLES_TO_EXTEND
- * (default 1), optionally topping up by AMOUNT_INCREASE (default 0), reading
- * get-staker-info BEFORE/AFTER to show num-cycles (and amount) grew. Requires
- * account6 to already be STX-only staking (run stx-stake-signer-set first);
- * if not staked, it reports ERR_NOT_STAKING (u27) is the gate and skips.
- *
- * Staker-only tx (account6). Does NOT touch bond-admin / setup-bond.
+ * Extends account6's existing STX-only stake by CYCLES_TO_EXTEND (default 1),
+ * optionally topping up by AMOUNT_INCREASE, reading get-staker-info
+ * BEFORE/AFTER. Requires account6 already STX-only staking (run
+ * stx-stake-signer-set first); if not staked, asserts ERR_NOT_STAKING (u27)
+ * and skips. Staker-only tx; does not touch bond-admin / setup-bond.
  *
  * Run:
  *   NETWORK=testnet NETWORK_ID=256 STACKS_API=https://api.private-1.hiro.so RECORD=1 \
@@ -28,12 +17,11 @@ import { buildStakeUpdate, fetchStakerInfo, describePox5Error } from '../../../s
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
+  ensureRewardPhase,
   getNextNonce,
-  getPoxInfo,
   getTransaction,
-  isInPreparePhase,
+  parseErrCode,
   waitForFulfilled,
-  waitForRewardPhase,
 } from '../../helpers/wait';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
@@ -50,32 +38,25 @@ const AMOUNT_INCREASE = BigInt(process.env.AMOUNT_INCREASE ?? 0n);
 const signerManager = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 const staker = getAccount(REGTEST_KEYS[STAKER as keyof typeof REGTEST_KEYS]);
 
-function parseErrCode(repr: string | undefined): number | undefined {
-  const m = repr?.match(/^\(err u(\d+)\)$/);
-  return m ? Number(m[1]) : undefined;
-}
-
 beforeAll(async () => {
   useFixtures('stx-extend');
 }, 60 * 60_000);
 
 test('stake-update extends account6 STX-only stake by another cycle', async () => {
-  let poxInfo = await getPoxInfo();
-
-  const posOf = () =>
-    (poxInfo.currentBurnchainBlockHeight - poxInfo.firstBurnchainBlockHeight) % poxInfo.rewardCycleLength;
-  const rewardPhaseLen = poxInfo.rewardCycleLength - poxInfo.prepareCycleLength;
-  while (isInPreparePhase(poxInfo.currentBurnchainBlockHeight, poxInfo) || posOf() >= rewardPhaseLen - 2) {
-    console.log(`pos ${posOf()} too close to prepare phase — waiting for reward phase`);
-    await waitForRewardPhase(poxInfo, 1);
-    poxInfo = await getPoxInfo();
-  }
+  await ensureRewardPhase();
 
   const before = await fetchStakerInfo({ address: staker.address, network });
-  console.log('BEFORE staker-info:', before.staked ? { ...before.details, amountUstx: before.details!.amountUstx.toString() } : before);
+  console.log(
+    'BEFORE staker-info:',
+    before.staked
+      ? { ...before.details, amountUstx: before.details!.amountUstx.toString() }
+      : before
+  );
 
   if (!before.staked) {
-    console.warn('account6 NOT staking — stake-update gates on ERR_NOT_STAKING (u27). Run stx-stake-signer-set first.');
+    console.warn(
+      'account6 NOT staking — stake-update gates on ERR_NOT_STAKING (u27). Run stx-stake-signer-set first.'
+    );
     expect(before.staked).toBe(false); // documents the precondition; nothing to extend
     return;
   }
@@ -106,7 +87,8 @@ test('stake-update extends account6 STX-only stake by another cycle', async () =
 
   const transaction = signTransaction(unsigned, staker.key);
   const res = await broadcastTransaction({ transaction, network });
-  if ('error' in res) throw `broadcast rejected: ${res.error} — ${'reason' in res ? res.reason : ''}`;
+  if ('error' in res)
+    throw `broadcast rejected: ${res.error} — ${'reason' in res ? res.reason : ''}`;
   console.log('extend txid', res.txid);
 
   const tx = await waitForFulfilled(async () => {
@@ -126,7 +108,10 @@ test('stake-update extends account6 STX-only stake by another cycle', async () =
   // replay doesn't collapse before/after to one value.
   useFixtures('stx-extend-after');
   const after = await fetchStakerInfo({ address: staker.address, network });
-  console.log('AFTER staker-info:', after.staked ? { ...after.details, amountUstx: after.details!.amountUstx.toString() } : after);
+  console.log(
+    'AFTER staker-info:',
+    after.staked ? { ...after.details, amountUstx: after.details!.amountUstx.toString() } : after
+  );
 
   if (tx.tx_status === 'success') {
     expect(after.staked).toBe(true);

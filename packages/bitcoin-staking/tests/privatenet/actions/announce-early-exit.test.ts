@@ -1,71 +1,41 @@
 /**
  * ACTION — Announce L1 early exit for a bond participant.
  *
- * Calls `announce-l1-early-exit` on pox-5, signed by the STAKER THEMSELVES.
- * The deployed contract enforces `(is-eq contract-caller tx-sender)` AND
- * `(is-eq contract-caller staker)` -> ERR_UNAUTHORIZED otherwise. This is NOT a
- * bond-admin operation. On success the staker's bond shares are zeroed and the
- * signer's totals decremented, enabling the staker to spend via the BTC ELSE branch.
- *
- * Preconditions:
- *   - The staker must be enrolled in the bond with isL1Lock === true.
- *   - `oldSignerManager` must match the staker's currently bound signer-manager.
- *   - The tx origin MUST be the staker (not the early-unlock-admin).
- *
- * Composable via ENV:
- *   BOND_INDEX        bond index (required — no default; set explicitly)
- *   STAKER            account5 | account6 | account7 (default: account5)
- *   SIGNER_MANAGER    contract principal of the signer-manager bound to the staker
- *                     (default: ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager)
- *   BOND_ADMIN_KEY    private key of the bond's early-unlock-admin (required for live runs;
- *                     see tests/helpers/bondAdmin.ts)
- *   NETWORK=testnet NETWORK_ID=256 STACKS_API=https://api.private-1.hiro.so
+ * Calls `announce-l1-early-exit` on pox-5, signed by the STAKER THEMSELVES
+ * (contract asserts `contract-caller == tx-sender == staker`; NOT a bond-admin
+ * op). On success the staker's bond shares are zeroed, enabling BTC ELSE-branch
+ * spend. Requires isL1Lock enrollment and a matching oldSignerManager.
  *
  * Run:
  *   NETWORK=testnet NETWORK_ID=256 STACKS_API=https://api.private-1.hiro.so \
  *     BOND_INDEX=65 STAKER=account7 \
  *     npx jest tests/privatenet/actions/announce-early-exit.test.ts \
  *       --runInBand --collectCoverage=false --verbose
- *
- * Expected abort codes (logged, not thrown) when the precondition is unmet:
- *   ERR_CANNOT_ANNOUNCE_L1_EARLY_UNLOCK — staker has no L1 membership (not enrolled or sBTC)
- *   ERR_INVALID_OLD_SIGNER_MANAGER      — oldSignerManager does not match the staker's signer
- *   ERR_UNAUTHORIZED                    — caller is not the bond's early-unlock-admin
  */
 
-import { buildAnnounceL1EarlyExit, describePox5Error } from '../../../src';
+import {
+  buildAnnounceL1EarlyExit,
+  describePox5Error,
+  fetchBondMembership,
+  fetchHasAnnouncedL1EarlyExit,
+} from '../../../src';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
-import {
-  broadcastAndWait,
-  getNextNonce,
-  getTransaction,
-} from '../../helpers/wait';
+import { broadcastAndWait, getNextNonce, getTransaction } from '../../helpers/wait';
 import { signTransaction } from '../../helpers/sign';
 import { getBondAdminAccount } from '../../helpers/bondAdmin';
 import { useFixtures } from '../../helpers/mock';
 
 jest.setTimeout(30 * 60_000);
 
-// Default matches the sibling actions (btc-lock/register-for-bond record their
-// artifacts/fixtures against bond 4); override with BOND_INDEX for other bonds.
-
-// The signer-manager the staker is currently bound to (must equal oldSignerManager
-// in the contract call; the daemon registers this contract on the private testnet).
+// Must equal oldSignerManager in the contract call; the daemon registers this
+// contract on the private testnet.
 const SIGNER_MANAGER =
-  process.env.SIGNER_MANAGER ??
-  'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
+  process.env.SIGNER_MANAGER ?? 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 
 const FEE = 10_000n;
 
-// STAKER env selects whose L1 early exit is being announced.
-// Defaults to "account5" so the action is a no-op for the existing happy path
-// (account5 is on bond 65; for early-unlock testing use STAKER=account7).
-
-const STAKER_NAME = (process.env.STAKER ?? 'account5') as
-  | 'account5'
-  | 'account6'
-  | 'account7';
+const STAKER_NAME = (process.env.STAKER ?? 'account5') as 'account5' | 'account6' | 'account7';
 
 const ALLOWED_STAKERS = ['account5', 'account6', 'account7'] as const;
 if (!(ALLOWED_STAKERS as readonly string[]).includes(STAKER_NAME)) {
@@ -83,28 +53,27 @@ beforeAll(async () => {
 
 test(`announce-l1-early-exit: staker=${STAKER_NAME}`, async () => {
   useFixtures('announce-early-exit');
-  console.log(`\n=== ANNOUNCE-EARLY-EXIT ACTION: staker=${STAKER_NAME} ===`);
   console.log('staker principal:', stakerAccount.address);
   console.log('bond admin (early-unlock-admin):', bondAdmin.address);
   console.log('oldSignerManager:', SIGNER_MANAGER);
 
-  // buildAnnounceL1EarlyExit signature:
-  //   args: { staker: string; oldSignerManager: string } & TxParams
-  //
-  // - staker          — the STX principal whose L1 early exit is announced.
-  // - oldSignerManager — must equal the contract's stored signer for the staker;
-  //                      any mismatch aborts with ERR_INVALID_OLD_SIGNER_MANAGER.
-  //                      On the private testnet the daemon registers
-  //                      ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager.
-  // - publicKey       — bond-admin's compressed secp256k1 public key (origin).
-  // - fee, nonce, network — standard TxParams fields.
+  // SELF-HEAL: announce is one-shot per enrollment. On a re-record where the
+  // staker already announced (register self-healed), assert the flag instead.
+  const membership = await fetchBondMembership({ address: stakerAccount.address, network });
+  if (membership?.isL1Lock) {
+    const announced = await fetchHasAnnouncedL1EarlyExit({
+      bondIndex: membership.bondIndex,
+      staker: stakerAccount.address,
+      network,
+    });
+    if (announced) {
+      console.log(`already announced for bond ${membership.bondIndex} — self-heal pass`);
+      expect(announced).toBe(true);
+      return;
+    }
+  }
 
-  // NOTE: the deployed pox-5 requires the STAKER themselves to call
-  // announce-l1-early-exit — `(asserts! (and (is-eq contract-caller tx-sender)
-  // (is-eq contract-caller staker)) ERR_UNAUTHORIZED)`. It is NOT a bond-admin
-  // operation. The origin/signer must be the staker, not the early-unlock-admin.
   const nonce = await getNextNonce(stakerAccount.address);
-  console.log('staker nonce:', nonce);
 
   const unsigned = await buildAnnounceL1EarlyExit({
     staker: stakerAccount.address,
@@ -119,25 +88,22 @@ test(`announce-l1-early-exit: staker=${STAKER_NAME}`, async () => {
     postConditionMode: 'allow',
   });
 
-  console.log('transaction built — signing with STAKER key...');
   const tx = signTransaction(unsigned, stakerAccount.key);
-
-  console.log('broadcasting announce-l1-early-exit...');
   const txid = await broadcastAndWait(tx, stakerAccount.address, network);
-  console.log('\n=== BROADCAST TXID:', txid, '===');
+  console.log('broadcast txid:', txid);
 
   // Best-effort result check via /extended.
   await new Promise(r => setTimeout(r, 5_000));
   const record = await getTransaction(txid);
 
   if (record && record.tx_status !== 'pending') {
-    console.log('\n=== TX RESULT ===');
     console.log('tx_status:', record.tx_status);
     console.log('tx_result:', record.tx_result?.repr);
 
     if (record.tx_status === 'success') {
-      console.log('=== SUCCESS: announce-l1-early-exit landed on-chain ✓ ===');
-      console.log(`Staker ${stakerAccount.address} bond shares zeroed — BTC ELSE branch is now spendable.`);
+      console.log(
+        `Staker ${stakerAccount.address} bond shares zeroed — BTC ELSE branch is now spendable.`
+      );
     } else if (record.tx_status === 'abort_by_response') {
       const match = record.tx_result?.repr?.match(/^\(err u(\d+)\)$/);
       if (match) {
@@ -145,9 +111,15 @@ test(`announce-l1-early-exit: staker=${STAKER_NAME}`, async () => {
         const description = describePox5Error(code);
         console.error(`=== ABORT: (err u${code}) — ${description} ===`);
         console.error('Common causes:');
-        console.error('  ERR_CANNOT_ANNOUNCE_L1_EARLY_UNLOCK — staker not enrolled with isL1Lock=true');
-        console.error('  ERR_INVALID_OLD_SIGNER_MANAGER      — SIGNER_MANAGER does not match staker\'s signer');
-        console.error('  ERR_UNAUTHORIZED                    — BOND_ADMIN_KEY is not the bond\'s early-unlock-admin');
+        console.error(
+          '  ERR_CANNOT_ANNOUNCE_L1_EARLY_UNLOCK — staker not enrolled with isL1Lock=true'
+        );
+        console.error(
+          "  ERR_INVALID_OLD_SIGNER_MANAGER      — SIGNER_MANAGER does not match staker's signer"
+        );
+        console.error(
+          "  ERR_UNAUTHORIZED                    — BOND_ADMIN_KEY is not the bond's early-unlock-admin"
+        );
         throw new Error(`announce-l1-early-exit aborted: (err u${code}) — ${description}`);
       }
     }

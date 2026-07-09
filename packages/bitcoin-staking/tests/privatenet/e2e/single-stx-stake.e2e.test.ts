@@ -17,12 +17,7 @@
 import { buildStake, fetchStakerInfo } from '../../../src';
 import { resolveAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
-import {
-  broadcastAndWait,
-  getNextNonce,
-  getPoxInfo,
-  waitForFulfilled,
-} from '../../helpers/wait';
+import { broadcastAndWait, getNextNonce, getPoxInfo, waitForFulfilled } from '../../helpers/wait';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
 
@@ -31,8 +26,7 @@ const NUM_CYCLES = Number(process.env.NUM_CYCLES ?? 1);
 const FEE = BigInt(process.env.FEE_USTX ?? 10_000);
 
 const SIGNER_MANAGER =
-  process.env.SIGNER_MANAGER ??
-  'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
+  process.env.SIGNER_MANAGER ?? 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 
 // Dedicated lane account (override via STAKER env). Default account4: funded, daemon-free, nonce-stable.
 const staker = resolveAccount('STAKER', 'account4');
@@ -44,33 +38,30 @@ beforeAll(async () => {
 test('single-staker STX stake: end-to-end', async () => {
   const network = getNetwork();
 
-  console.log('\n=== E2E: single-stx-stake ===');
   console.log('staker:', staker.address);
 
-  // 1. Read current chain state
+  // READ CHAIN STATE
   const poxInfo = await getPoxInfo();
   const currentCycle = poxInfo.rewardCycleId;
   const startBurnHt = poxInfo.currentBurnchainBlockHeight;
 
   console.log('currentCycle:', currentCycle);
   console.log('startBurnHt:', startBurnHt);
-  console.log('amountUstx:', AMOUNT_USTX.toString());
-  console.log('numCycles:', NUM_CYCLES);
-  console.log('signerManager:', SIGNER_MANAGER);
 
-  // 2. Check if already staked
+  // ALREADY STAKED
   const existingInfo = await fetchStakerInfo({ address: staker.address, network });
   if (existingInfo.staked) {
-    console.warn('staker is already staked:', JSON.stringify(existingInfo, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)));
-    console.log('=== ALREADY STAKED — asserting existing info ===');
+    console.log(
+      'staker is already staked:',
+      JSON.stringify(existingInfo, (_k, v) => (typeof v === 'bigint' ? v.toString() : v))
+    );
     expect(existingInfo.staked).toBe(true);
     expect(existingInfo.details.amountUstx).toBeGreaterThan(0n);
     return;
   }
 
-  // 3. Build + sign + broadcast stake tx
+  // BUILD + SIGN + BROADCAST
   const nonce = await getNextNonce(staker.address);
-  console.log('staker nonce:', nonce);
 
   const unsigned = await buildStake({
     signerManager: SIGNER_MANAGER,
@@ -85,26 +76,21 @@ test('single-staker STX stake: end-to-end', async () => {
   });
 
   const tx = signTransaction(unsigned, staker.key);
-  console.log('broadcasting stake tx...');
   const txid = await broadcastAndWait(tx, staker.address, network);
-  console.log('\n=== STAKE TXID:', txid, '===');
+  console.log('stake txid:', txid);
   useFixtures('e2e-single-stx-stake-after');
 
-  // 4. Assert staker info
-  console.log('polling fetchStakerInfo until staked...');
+  // ASSERT STAKER INFO
   const stakerInfo = await waitForFulfilled(async () => {
     const info = await fetchStakerInfo({ address: staker.address, network });
     if (!info.staked) throw new Error('not yet staked');
     return info;
   });
 
-  console.log('\n=== STAKER INFO ===');
   console.log(JSON.stringify(stakerInfo, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)));
 
   expect(stakerInfo.staked).toBe(true);
   expect(stakerInfo.details.amountUstx).toBe(AMOUNT_USTX);
-  // Relative assertion: first-reward-cycle === currentCycle + 1
+  // firstRewardCycle is relative to when the stake landed, not currentCycle read before broadcast
   expect(stakerInfo.details.firstRewardCycle).toBe(currentCycle + 1);
-
-  console.log(`\n=== E2E single-stx-stake SUCCESS: staker staked ${AMOUNT_USTX} uSTX, firstRewardCycle=${stakerInfo.details.firstRewardCycle} ✓ ===`);
 }, 180_000);

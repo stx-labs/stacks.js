@@ -10,33 +10,28 @@
  *   NETWORK=testnet NETWORK_ID=256 STACKS_API=https://api.private-1.hiro.so RECORD=1 \
  *     npx jest tests/privatenet/actions/bonds.test.ts --runInBand --collectCoverage=false
  */
-import {
-  fetchBondMembership,
-  fetchProtocolBond,
-  fetchPoxInfo,
-} from "../../../src";
-import { bondPhaseRanges, bondPeriodToBurnHeight } from "../../../src/cycles";
-import { REGTEST_KEYS, getAccount } from "../../regtest/regtest";
-import { getNetwork } from "../../helpers/utils";
-import { useFixtures } from "../../helpers/mock";
+import { fetchBondMembership, fetchProtocolBond, fetchPoxInfo } from '../../../src';
+import { bondPhaseRanges, bondPeriodToBurnHeight } from '../../../src/cycles';
+import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
+import { getNetwork } from '../../helpers/utils';
+import { useFixtures } from '../../helpers/mock';
 
 jest.setTimeout(60_000);
 
 const network = getNetwork();
 const MAX_BOND_INDEX = Number(process.env.MAX_BOND_INDEX ?? 20);
-const membershipAddress =
-  process.env.STACKS_ADDRESS ?? getAccount(REGTEST_KEYS.account4).address;
+const membershipAddress = process.env.STACKS_ADDRESS ?? getAccount(REGTEST_KEYS.account4).address;
 
-beforeAll(() => useFixtures("bonds"));
+beforeAll(() => useFixtures('bonds'));
 
-test("enumerate protocol-bonds", async () => {
+test('enumerate protocol-bonds', async () => {
   const pox = await fetchPoxInfo({ network });
-  console.log("pox info", {
+  console.log('pox info', {
     contract: pox.contractId,
     cycle: pox.rewardCycleId,
     burnHeight: pox.currentBurnchainBlockHeight,
   });
-  expect(pox.contractId).toContain("pox-5");
+  expect(pox.contractId).toContain('pox-5');
 
   const found: { index: number; bond: Awaited<ReturnType<typeof fetchProtocolBond>> }[] = [];
 
@@ -56,7 +51,7 @@ test("enumerate protocol-bonds", async () => {
         minUstxRatioBps: bond.minUstxRatioBps,
         earlyUnlockBytes: bond.earlyUnlockBytes,
         openAt: openBurnHt,
-        currentPhase: currentPhase?.name ?? "expired",
+        currentPhase: currentPhase?.name ?? 'expired',
       });
       found.push({ index: i, bond });
     }
@@ -65,13 +60,13 @@ test("enumerate protocol-bonds", async () => {
   console.log(`found ${found.length} bond(s) in indices 0..${MAX_BOND_INDEX - 1}`);
 });
 
-test("bond membership for address", async () => {
+test('bond membership for address', async () => {
   const membership = await fetchBondMembership({ address: membershipAddress, network });
-  console.log(`bond membership for ${membershipAddress}:`, membership ?? "none");
+  console.log(`bond membership for ${membershipAddress}:`, membership ?? 'none');
   // account4 (bond-admin) holds no bond membership; if a member, the shape is well-formed.
   if (membership) {
-    expect(typeof membership.bondIndex).toBe("number");
-    expect(typeof membership.isL1Lock).toBe("boolean");
+    expect(typeof membership.bondIndex).toBe('number');
+    expect(typeof membership.isL1Lock).toBe('boolean');
   } else {
     expect(membership).toBeUndefined();
   }

@@ -6,7 +6,7 @@ import { bytesToHex, hexToBytes } from '@stacks/common';
 import { buildUnlockScript } from '../../src';
 
 /**
- * KMS-backed early-exit ("covenant") signing service.
+ * KMS-backed early-exit ("early-unlock") signing service.
  *
  * The service holds the early-unlock PRIVATE key in KMS and exposes:
  *   GET  /v1/public-key  → { key_id, xpub, derivation_path, fingerprint, network }
@@ -19,24 +19,23 @@ import { buildUnlockScript } from '../../src';
  * testnet). The bond's `early-unlock-bytes` must embed the EXACT leaf public key
  * `/sign` signs with. `/sign` takes the FULL BIP-32 path (`m/48'/1'/0'/2'/<leaf>`)
  * and we derive the same leaf locally from the xpub — so both sides land on the
- * identical key. Verified end-to-end in covenant-key-verify.test.ts.
+ * identical key. Verified end-to-end in early-unlock-key-verify.test.ts.
  *
- * The covenant key is wipe-stable, so the derived leaf pubkey — and therefore
+ * The early-unlock key is wipe-stable, so the derived leaf pubkey — and therefore
  * `early-unlock-bytes` — is stable across private-testnet resets.
  */
 
-export const COVENANT_API =
-  process.env.COVENANT_API ??
-  'https://r25rniyw12.execute-api.eu-west-1.amazonaws.com/v1/v1';
+export const EARLY_UNLOCK_API =
+  process.env.EARLY_UNLOCK_API ?? 'https://r25rniyw12.execute-api.eu-west-1.amazonaws.com/v1/v1';
 
 /** Unhardened leaf below the account-level xpub. `/sign` derives the same leaf. */
-export const COVENANT_LEAF = process.env.COVENANT_LEAF ?? '0/0';
+export const EARLY_UNLOCK_LEAF = process.env.EARLY_UNLOCK_LEAF ?? '0/0';
 
 // BIP-32 version bytes. testnet xpubs are `tpub…`; mainnet `xpub…`.
 const TESTNET_VERSIONS = { private: 0x04358394, public: 0x043587cf };
 const MAINNET_VERSIONS = { private: 0x0488ade4, public: 0x0488b21e };
 
-export interface CovenantKey {
+export interface EarlyUnlockKey {
   keyId: number;
   xpub: string;
   /** Hardened account path WITHOUT the leading `m/`, e.g. `48'/1'/0'/2'`. */
@@ -46,14 +45,14 @@ export interface CovenantKey {
 }
 
 /**
- * Fetch the covenant xpub + metadata. Returns null if the endpoint is absent OR
+ * Fetch the early-unlock xpub + metadata. Returns null if the endpoint is absent OR
  * unreachable (firewall/offline) — so mock-mode / no-network suite runs honest-SKIP
  * instead of failing. Live (reachable) runs return the real key.
  */
-export async function fetchCovenantKey(): Promise<CovenantKey | null> {
+export async function fetchEarlyUnlockKey(): Promise<EarlyUnlockKey | null> {
   let res: Response;
   try {
-    res = await fetch(`${COVENANT_API}/public-key`);
+    res = await fetch(`${EARLY_UNLOCK_API}/public-key`);
   } catch {
     return null; // network unreachable (offline / firewall) → skip
   }
@@ -75,7 +74,7 @@ export async function fetchCovenantKey(): Promise<CovenantKey | null> {
 }
 
 /** The full BIP-32 path `/sign` expects: `m/<account>/<leaf>`. */
-export function fullDerivationPath(accountPath: string, leaf: string = COVENANT_LEAF): string {
+export function fullDerivationPath(accountPath: string, leaf: string = EARLY_UNLOCK_LEAF): string {
   return `m/${accountPath}/${leaf}`;
 }
 
@@ -83,21 +82,21 @@ export function fullDerivationPath(accountPath: string, leaf: string = COVENANT_
  * Derive the 33-byte compressed leaf public key from the account-level xpub.
  * This is the pubkey that goes into `buildUnlockScript` → `early-unlock-bytes`.
  */
-export function deriveCovenantPubkey(xpub: string, leaf: string = COVENANT_LEAF): Uint8Array {
+export function deriveEarlyUnlockPubkey(xpub: string, leaf: string = EARLY_UNLOCK_LEAF): Uint8Array {
   const versions = xpub.startsWith('t') ? TESTNET_VERSIONS : MAINNET_VERSIONS;
   const leafKey = HDKey.fromExtendedKey(xpub, versions).derive(`m/${leaf}`);
   if (!leafKey.publicKey || leafKey.publicKey.length !== 33) {
-    throw new Error('deriveCovenantPubkey: expected a 33-byte compressed public key on the leaf');
+    throw new Error('deriveEarlyUnlockPubkey: expected a 33-byte compressed public key on the leaf');
   }
   return leafKey.publicKey;
 }
 
-/** Convenience: xpub → the bond's `early-unlock-bytes` (`<covenant-pubkey> OP_CHECKSIG`). */
-export function covenantEarlyUnlockBytesHex(xpub: string, leaf: string = COVENANT_LEAF): string {
-  return bytesToHex(buildUnlockScript(deriveCovenantPubkey(xpub, leaf)));
+/** Convenience: xpub → the bond's `early-unlock-bytes` (`<early-unlock-pubkey> OP_CHECKSIG`). */
+export function earlyUnlockBytesHexFromXpub(xpub: string, leaf: string = EARLY_UNLOCK_LEAF): string {
+  return bytesToHex(buildUnlockScript(deriveEarlyUnlockPubkey(xpub, leaf)));
 }
 
-export interface CovenantSignResult {
+export interface EarlyUnlockSignResult {
   /** DER-encoded ECDSA signature (low-S), NO trailing sighash byte. */
   signature: string;
   /** The 32-byte digest the service signed, hex. */
@@ -112,7 +111,7 @@ export interface CovenantSignResult {
  * Returns the DER signature + the sighash + pubkey it used, or null if the
  * endpoint is absent. Mirrors POST /v1/sign exactly.
  */
-export async function signViaCovenantApi(opts: {
+export async function signViaEarlyUnlockApi(opts: {
   txHex: string;
   inputIndex: number;
   bip32Derivation: string;
@@ -120,10 +119,10 @@ export async function signViaCovenantApi(opts: {
   prevoutValueSats: number | bigint;
   witnessScriptHex: string;
   sighashTypeHex?: string;
-}): Promise<CovenantSignResult | null> {
+}): Promise<EarlyUnlockSignResult | null> {
   let res: Response;
   try {
-    res = await fetch(`${COVENANT_API}/sign`, {
+    res = await fetch(`${EARLY_UNLOCK_API}/sign`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -163,7 +162,7 @@ export async function signViaCovenantApi(opts: {
  * the message first). Bitcoin sighashes are the final digest, so we MUST pass
  * `{ prehash: false }` — otherwise a valid signature reads as invalid.
  */
-export function verifyCovenantSig(
+export function verifyEarlyUnlockSig(
   sigDerHex: string,
   sighashHex: string,
   publicKey: Uint8Array | string

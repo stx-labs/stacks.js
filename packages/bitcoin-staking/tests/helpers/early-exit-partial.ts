@@ -21,7 +21,7 @@
 // @ts-ignore — @scure/btc-signer is ESM; ts-jest transforms it via jest.config.js
 import * as btc from '@scure/btc-signer';
 import { bytesToHex, hexToBytes } from '@stacks/common';
-import { computeRegisterPreimage } from '../../src';
+import { computeRegisterPreimage, computeReclaimSighash, finalizeReclaim } from '../../src';
 import { REGTEST } from './btc-wallet';
 
 const SIGHASH_ALL = 1;
@@ -70,14 +70,14 @@ export function computeSighash(partial: EarlyExitPartial): string {
   const p2wshScript = btc.p2wsh({ type: 'wsh', script: witnessScript }, REGTEST).script;
 
   const tx = rebuildTx(partial, p2wshScript, witnessScript, amount);
-  const sighash = tx.preimageWitnessV0(0, witnessScript, SIGHASH_ALL, amount);
+  const sighash = computeReclaimSighash(tx, { witnessScript, amountSats: amount });
   return bytesToHex(sighash);
 }
 
 /**
  * Once BOTH signatures are present, assemble the ELSE-branch witness
- * `[stakerSig, cosignerSig, preimage, <empty>, witnessScript]`, inject it via
- * updateInput finalScriptWitness, and return the final (broadcastable) tx hex.
+ * `[stakerSig, cosignerSig, preimage, <empty>, witnessScript]` via
+ * src/reclaim.ts's finalizeReclaim and return the final (broadcastable) tx hex.
  * Throws if either signature is missing.
  */
 export function assembleAndFinalize(partial: EarlyExitPartial): string {
@@ -89,25 +89,29 @@ export function assembleAndFinalize(partial: EarlyExitPartial): string {
   const p2wshScript = btc.p2wsh({ type: 'wsh', script: witnessScript }, REGTEST).script;
 
   const tx = rebuildTx(partial, p2wshScript, witnessScript, amount);
+  tx.updateInput(0, { witnessScript }, true);
 
   // Sanity: the rebuilt sighash must match the one both parties signed.
-  const sighash = bytesToHex(tx.preimageWitnessV0(0, witnessScript, SIGHASH_ALL, amount));
+  const sighash = bytesToHex(computeReclaimSighash(tx, { witnessScript, amountSats: amount }));
   if (sighash !== partial.sighashHex.toLowerCase()) {
     throw new Error(
-      `assembleAndFinalize: rebuilt sighash ${sighash} != partial.sighashHex ${partial.sighashHex}`,
+      `assembleAndFinalize: rebuilt sighash ${sighash} != partial.sighashHex ${partial.sighashHex}`
     );
   }
 
-  const witnessItems = [
-    hexToBytes(partial.stakerSig),
-    hexToBytes(partial.cosignerSig),
-    hexToBytes(partial.preimageHex),
-    new Uint8Array(0), // empty -> OP_IF falsy -> ELSE branch
-    witnessScript,
-  ];
-  tx.updateInput(0, { finalScriptWitness: witnessItems }, true);
-  if (!tx.isFinal) throw new Error('assembleAndFinalize: witness injection failed (tx not final)');
-  return tx.hex;
+  tx.updateInput(
+    0,
+    {
+      partialSig: [
+        [hexToBytes(partial.stakerBtcPubHex), hexToBytes(partial.stakerSig)],
+        [hexToBytes(partial.cosignerBtcPubHex), hexToBytes(partial.cosignerSig)],
+      ],
+    },
+    true
+  );
+
+  const { txHex } = finalizeReclaim({ path: 'early-exit', tx, stxAddress: partial.stakerStxAddress });
+  return txHex;
 }
 
 /**
@@ -119,7 +123,7 @@ function rebuildTx(
   partial: EarlyExitPartial,
   p2wshScript: Uint8Array,
   _witnessScript: Uint8Array,
-  amount: bigint,
+  amount: bigint
 ): btc.Transaction {
   if (partial.reclaimTxUnsignedHex) {
     const tx = btc.Transaction.fromRaw(hexToBytes(partial.reclaimTxUnsignedHex), {

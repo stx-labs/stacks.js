@@ -1,44 +1,22 @@
 /**
- * Privatenet `register-for-bond` (sBTC path) — validation / abort test.
+ * Privatenet `register-for-bond` (sBTC path) — abort probe, not a happy path.
  *
- * We have NO Bitcoin node on api.private-1.hiro.so, so we cannot build a real
- * L1 (`kind: 'btc'`) lockup proof. The only register-for-bond shape callable
- * here is `kind: 'sbtc'`, and we exercise it as an ABORT-path probe rather than
- * a happy path:
- *
- *   register-for-bond evaluates the lockup branch FIRST
- *   (`(try! (match btc-lockup ... sbtc-amount (lock-sbtc sbtc-amount)))`), so
- *   `lock-sbtc`'s `sbtc-token.transfer` runs before any bond/allowlist/signer
- *   guard. Calling from an account that holds 0 sBTC makes that `ft-transfer?`
- *   abort with `(err u1)` — proving the builder serializes against the real ABI
- *   and hits the real entrypoint, without minting sBTC, setting up a bond, or
- *   touching Bitcoin.
- *
- * A valid `<signer-manager-trait>` contract must exist for the trait argument to
- * pass tx analysis, so we deploy one from the bond-admin account first
- * (idempotent — `deployContract` no-ops if it already exists). The bond-admin
- * itself is the 0-sBTC staker (it is funded with STX for fees but never minted
- * sBTC, and is not enrolled in any bond).
- *
- * Node-only assertions (no `/extended`, which lags on this chain): the tx mines
- * (nonce advances) and `fetchBondMembership` stays undefined — the abort left no
- * enrollment. Under `RECORD=1` we additionally surface `tx_result.repr` via
- * `/extended` for an exact `(err u1)` check.
+ * No Bitcoin node on this net, so only `kind: 'sbtc'` is buildable here.
+ * register-for-bond evaluates the lockup branch first, so `lock-sbtc`'s
+ * transfer runs before any bond/allowlist/signer guard — calling from a
+ * 0-sBTC account aborts before enrollment, proving the builder serializes
+ * against the real ABI without minting sBTC or touching Bitcoin.
  *
  * Run with:
  *   NETWORK=testnet NETWORK_ID=256 STACKS_API=https://api.private-1.hiro.so RECORD=1 \
  *     npx jest tests/privatenet/actions/register-for-bond.test.ts --runInBand --collectCoverage=false
  */
-import { buildRegisterForBond, fetchBondMembership } from "../../../src";
-import { getNetwork, ENV } from "../../helpers/utils";
-import {
-  broadcastAndWait,
-  getNextNonce,
-  getTransaction,
-} from "../../helpers/wait";
-import { signTransaction } from "../../helpers/sign";
-import { REGTEST_KEYS, getAccount } from "../../regtest/regtest";
-import { useFixtures } from "../../helpers/mock";
+import { buildRegisterForBond, fetchBondMembership } from '../../../src';
+import { getNetwork, ENV } from '../../helpers/utils';
+import { broadcastAndWait, getNextNonce, getTransaction } from '../../helpers/wait';
+import { signTransaction } from '../../helpers/sign';
+import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
+import { useFixtures } from '../../helpers/mock';
 
 // Reuse the daemon's already-deployed signer-manager instead of deploying our
 // own. Deploying under this net's rate limits reliably times out the 20-min
@@ -47,8 +25,7 @@ import { useFixtures } from "../../helpers/mock";
 // passes — and lock-sbtc aborts (err u1) before signer validation anyway, so the
 // specific contract is irrelevant to this abort probe. Override with SIGNER_MANAGER.
 const SIGNER_MANAGER =
-  process.env.SIGNER_MANAGER ??
-  "ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager";
+  process.env.SIGNER_MANAGER ?? 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 
 jest.setTimeout(20 * 60_000);
 
@@ -64,27 +41,30 @@ const SBTC_SATS = 1_000n;
 const FEE = 10_000n;
 
 beforeAll(async () => {
-  useFixtures("register-for-bond");
-  // account5 (STB44HYPYAT2BB2QE513NSP81HTMYWBJP02HPGK6): allowlisted staker on
-  // bond 1, funded for fees, holds 0 sBTC — will abort in lock-sbtc with (err u1).
-  // account6: unenrolled (STX-staked ≠ bond member), funded for fees, 0 sBTC — aborts in lock-sbtc (err u1).
+  useFixtures('register-for-bond');
+  // account6: unenrolled, funded for fees, holds 0 sBTC -> aborts in lock-sbtc.
   staker = getAccount(REGTEST_KEYS.account6);
   // Reuse an existing deployed signer-manager (see SIGNER_MANAGER above) — no
   // deploy round-trip, so beforeAll stays fast under rate limits.
   signerManager = SIGNER_MANAGER;
 }, 20 * 60_000);
 
-test("buildRegisterForBond (sbtc): serializes against the real ABI, aborts in lock-sbtc", async () => {
-  // Precondition: staker is not enrolled in any bond.
-  expect(
-    await fetchBondMembership({ address: staker.address, network }),
-  ).toBeUndefined();
+test('buildRegisterForBond (sbtc): serializes against the real ABI, aborts in lock-sbtc', async () => {
+  // Precondition: read live membership rather than assume unenrolled — the
+  // staker may already be enrolled in some other bond on this chain. Either
+  // way, this register-for-bond call must abort (0 sBTC, or already-enrolled
+  // guards) and must not change the staker's membership.
+  const membershipBefore = await fetchBondMembership({ address: staker.address, network });
+  console.log(
+    'membership before:',
+    JSON.stringify(membershipBefore, (_k, v) => (typeof v === 'bigint' ? v.toString() : v))
+  );
 
   const unsigned = await buildRegisterForBond({
     bondIndex: BOND_INDEX,
     signerManager,
     amountUstx: AMOUNT_USTX,
-    lockup: { kind: "sbtc", sbtcSats: SBTC_SATS },
+    lockup: { kind: 'sbtc', sbtcSats: SBTC_SATS },
     publicKey: staker.publicKey,
     fee: FEE,
     nonce: await getNextNonce(staker.address),
@@ -97,42 +77,31 @@ test("buildRegisterForBond (sbtc): serializes against the real ABI, aborts in lo
   // (no enrollment) below.
   const txid = await broadcastAndWait(tx, staker.address, network);
 
-  // The abort must NOT have produced an enrollment.
-  expect(
-    await fetchBondMembership({ address: staker.address, network }),
-  ).toBeUndefined();
+  // The abort must NOT have changed membership state (no new enrollment, and
+  // if already enrolled elsewhere, still enrolled the same way).
+  const membershipAfter = await fetchBondMembership({ address: staker.address, network });
+  expect(membershipAfter).toEqual(membershipBefore);
 
   // Best-effort exact-result check via /extended (lags on this chain, so only
-  // under RECORD=1). The register aborts before enrolling — but WHICH guard
-  // fires depends on cycle timing, so we accept the known abort family rather
-  // than pin one code:
-  //   (err u1)  Unauthorized       — lock-sbtc's ft-transfer? (0 sBTC) in the
-  //                                   reward phase, the originally-expected path.
-  //   (err u47) StakeInPreparePhase — observed live: the contract blocks
-  //                                   registration during the cycle's prepare
-  //                                   phase (last ~prepareCycleLength blocks),
-  //                                   and that guard runs BEFORE lock-sbtc.
-  // Either proves the builder serialized against the real ABI and reached the
-  // real entrypoint without enrolling the staker.
-  // Which guard fires depends on cycle timing + the bond's open state:
+  // under RECORD=1). Which guard fires depends on cycle timing + the bond's
+  // open state, so we accept the known abort family rather than pin one code:
   //   u1  lock-sbtc (0 sBTC, reward phase, allowlisted, before open)
+  //   u9  already-registered · u5 staker-already-added (staker enrolled elsewhere)
   //   u11 not-allowlisted · u43 bond-already-started (open bond, reward phase)
-  //   u47 prepare phase
+  //   u47 prepare phase (guard runs before lock-sbtc)
   const EXPECTED_ABORTS = new Set([
-    "(err u1)",
-    "(err u11)",
-    "(err u43)",
-    "(err u47)",
+    '(err u1)',
+    '(err u5)',
+    '(err u9)',
+    '(err u11)',
+    '(err u43)',
+    '(err u47)',
   ]);
   if (ENV.RECORD) {
     const record = await getTransaction(txid);
-    console.log(
-      "register-for-bond result",
-      record?.tx_status,
-      record?.tx_result?.repr,
-    );
-    if (record && record.tx_status !== "pending") {
-      expect(record.tx_status).toBe("abort_by_response");
+    console.log('register-for-bond result', record?.tx_status, record?.tx_result?.repr);
+    if (record && record.tx_status !== 'pending') {
+      expect(record.tx_status).toBe('abort_by_response');
       expect(EXPECTED_ABORTS.has(record.tx_result.repr)).toBe(true);
     }
   }

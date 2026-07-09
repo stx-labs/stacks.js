@@ -1,28 +1,11 @@
-// TODO(fixtures): live-only — needs a cosigner-enabled bond with an L1-enrolled,
-// already-announced staker. Honest-skips otherwise. Re-record with RECORD=1.
 /**
- * ACTION — STAKER-INITIATED early-exit finalize.
+ * ACTION — staker-initiated early-exit finalize: staker hands us a PARTIAL
+ * reclaim tx signed with their key; we add the cosigner (account6) signature,
+ * assemble the ELSE-branch witness, and broadcast. Mirror image of
+ * early-exit-cosign-prepare.test.ts (cosigner-first ordering).
  *
- * Scenario: "the staker hands US a PARTIAL reclaim tx already signed with THEIR
- * key; on our end we add the cosigner (account6) signature, assemble the
- * ELSE-branch witness, and broadcast."
- *
- * This is the staker-first ordering of the 2-of-2 ELSE-branch reclaim — the
- * mirror image of early-exit-cosign-prepare.test.ts:
- *   1. (simulated receive) staker builds reclaim + sighash, signs with account5,
- *      gives us a partial with stakerSig SET / cosignerSig UNSET.
- *   2. OUR side: load it, add the account6 cosignerSig, assembleAndFinalize,
- *      broadcast.
- *
- * The witness/sighash are modeled EXACTLY on
- * tests/privatenet/e2e/exit-l1-announce-and-reclaim.e2e.test.ts and
- * tests/privatenet/actions/btc-lockup-roundtrip.test.ts (TEST 1, EARLY branch):
- *   sighash = tx.preimageWitnessV0(0, witnessScript, SIGHASH_ALL, amount)
- *   witness = [ stakerSig, cosignerSig, preimage, <empty-> ELSE>, witnessScript ]
- *
- * Precondition guard (honest skip — no fake pass): same as cosign-prepare —
- * staker (default account5, override via STAKER) L1-enrolled in a cosigner-
- * enabled bond AND has announced early exit. Otherwise SKIP.
+ * Honest-skips unless staker (default account5, override via STAKER) is
+ * L1-enrolled in a cosigner-enabled bond AND has announced early exit.
  *
  * Live run:
  *   set -a; . packages/bitcoin-staking/.env; set +a
@@ -51,12 +34,7 @@ import {
 } from '../../../src';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
-import {
-  REGTEST,
-  broadcastBtc,
-  getUtxos,
-  waitForConfirmed,
-} from '../../helpers/btc-wallet';
+import { REGTEST, broadcastBtc, getUtxos, waitForConfirmed } from '../../helpers/btc-wallet';
 import {
   EarlyExitPartial,
   assembleAndFinalize,
@@ -88,7 +66,6 @@ const TIMEOUT_MS = ENV.BITCOIN_TX_TIMEOUT > 10_000 ? ENV.BITCOIN_TX_TIMEOUT : 25
 beforeAll(() => useFixtures('early-exit-finalize'));
 
 test('staker-initiated: cosign + broadcast a staker-signed partial', async () => {
-  console.log('\n========== early-exit-finalize (STAKER-FIRST) ==========');
   console.log('staker:', staker.address);
 
   const stakerPrivBytes = hexToBytes(STAKER_PRIV_HEX);
@@ -99,7 +76,7 @@ test('staker-initiated: cosign + broadcast a staker-signed partial', async () =>
   const expectedEarlyUnlockHex = bytesToHex(buildUnlockScript(cosignerBtcPub));
   console.log('expected cosigner earlyUnlockBytes:', expectedEarlyUnlockHex);
 
-  // PRECONDITION GUARD (honest skip).
+  // PRECONDITION
   const membership = await fetchBondMembership({ address: staker.address, network });
   if (!membership || !membership.isL1Lock) {
     console.warn(`SKIP: staker ${staker.address} is not L1-enrolled in any bond.`);
@@ -116,27 +93,29 @@ test('staker-initiated: cosign + broadcast a staker-signed partial', async () =>
   if (bond.earlyUnlockBytes.toLowerCase() !== expectedEarlyUnlockHex.toLowerCase()) {
     console.warn(
       `SKIP: bond ${bondIndex} earlyUnlockBytes (${bond.earlyUnlockBytes}) is NOT the ` +
-      `account6 cosigner script (${expectedEarlyUnlockHex}). Only cosigner-enabled bonds ` +
-      `support the ELSE-branch early-exit reclaim.`,
+        `account6 cosigner script (${expectedEarlyUnlockHex}). Only cosigner-enabled bonds ` +
+        `support the ELSE-branch early-exit reclaim.`
     );
     expect(bond.earlyUnlockBytes.toLowerCase()).not.toBe(expectedEarlyUnlockHex.toLowerCase());
     console.log('(skipped — bond is not cosigner-enabled)');
     return;
   }
 
-  const announced = await fetchHasAnnouncedL1EarlyExit({ bondIndex, staker: staker.address, network });
+  const announced = await fetchHasAnnouncedL1EarlyExit({
+    bondIndex,
+    staker: staker.address,
+    network,
+  });
   if (!announced) {
     console.warn(
       `SKIP: staker has not announced L1 early exit for bond ${bondIndex}. ` +
-      `The ELSE-branch reclaim is only valid after announce-l1-early-exit.`,
+        `The ELSE-branch reclaim is only valid after announce-l1-early-exit.`
     );
     expect(announced).toBe(false);
     console.log('(skipped — early exit not announced)');
     return;
   }
-  console.log('precondition: cosigner-enabled bond + L1-enrolled + announced ✓');
-
-  // Locate the staker's funded P2WSH lockup UTXO.
+  // LOCKUP UTXO
   const earlyUnlockBytes = hexToBytes(bond.earlyUnlockBytes);
   const unlockHeight = Number(await fetchBondL1UnlockHeight({ bondIndex, network }));
   const unlockBytes = buildUnlockScript(stakerBtcPub);
@@ -160,10 +139,9 @@ test('staker-initiated: cosign + broadcast a staker-signed partial', async () =>
   }
   console.log(`lockup UTXO ${utxo.txid}:${utxo.vout} (${utxo.value} sats)`);
 
-  // SIMULATE RECEIVING a STAKER-signed partial.
+  // SIMULATE STAKER SIDE
   // In production the staker builds + signs this on their own machine and hands
   // us the JSON; here we reproduce it so the test is self-contained.
-  console.log('\n--- simulating staker building + signing the partial (their machine) ---');
   const { partial } = buildReclaimPartial({
     witnessScript,
     lockupTxid: utxo.txid,
@@ -177,28 +155,26 @@ test('staker-initiated: cosign + broadcast a staker-signed partial', async () =>
   const sighash = hexToBytes(partial.sighashHex);
   const stakerSig = concatBytes(
     signECDSA(sighash, stakerPrivBytes, true),
-    new Uint8Array([SIGHASH_ALL]),
+    new Uint8Array([SIGHASH_ALL])
   );
   partial.stakerSig = bytesToHex(stakerSig);
   // cosignerSig deliberately UNSET — this is what the staker hands us.
 
-  // OUR (cosigner) STEP: load partial, add cosigner sig, finalize, broadcast.
+  // OUR SIDE: cosign, finalize, broadcast.
   const received: EarlyExitPartial = JSON.parse(JSON.stringify(partial));
   expect(received.stakerSig).toBeDefined();
   expect(received.cosignerSig).toBeUndefined();
-  console.log('received staker-signed partial; staker sig present, cosigner sig pending.');
 
   const cosignerSig = concatBytes(
     signECDSA(sighash, cosignerPrivBytes, true),
-    new Uint8Array([SIGHASH_ALL]),
+    new Uint8Array([SIGHASH_ALL])
   );
   received.cosignerSig = bytesToHex(cosignerSig);
 
   const finalHex = assembleAndFinalize(received);
-  console.log('received staker partial → cosigned + broadcast on our end.');
 
   const reclaimTxid = await broadcastBtc(finalHex);
-  console.log('=== RECLAIM TXID:', reclaimTxid, '===');
+  console.log('reclaim txid:', reclaimTxid);
   expect(reclaimTxid).toMatch(/^[0-9a-f]{64}$/);
 
   const conf = await waitForConfirmed(reclaimTxid, {
@@ -206,5 +182,4 @@ test('staker-initiated: cosign + broadcast a staker-signed partial', async () =>
     timeoutMs: TIMEOUT_MS,
   });
   console.log('reclaim confirmed in block', conf.block_height);
-  console.log('\n=== early-exit-finalize: SUCCESS ✓ ===');
 });

@@ -1,19 +1,9 @@
 /**
  * E2E — sBTC unstake: serialize + expected abort coverage.
  *
- * The private testnet has NO sBTC minted to test accounts (confirmed in the
- * E2E context). Calling `unstake-sbtc` when the staker has no sBTC position
- * aborts with ERR_CANNOT_UNSTAKE_SBTC (err u43) or ERR_NOT_STAKING (err u27).
- *
- * This test:
- *   1. Builds the `unstake-sbtc` transaction for account8 (no sBTC position).
- *   2. Broadcasts it.
- *   3. Asserts the on-chain result is `abort_by_response` with an expected
- *      error code (u43 or u27 — either is a valid "no sBTC" abort).
- *
- * The test passes when the abort is the expected one, confirming that:
- *   a. The transaction serializes correctly (builder works).
- *   b. The contract's sBTC guard fires correctly.
+ * The private testnet has NO sBTC minted to test accounts, so `unstake-sbtc`
+ * for a staker with no sBTC position always aborts. Accepts either an
+ * on-chain abort or a broadcast-level rejection as a valid outcome.
  *
  * Run:
  *   NETWORK=testnet NETWORK_ID=256 STACKS_API=https://api.private-1.hiro.so \
@@ -22,23 +12,13 @@
  *     FIXTURES_JSON=tests/privatenet/fixtures/fixtures-e2e-exit-sbtc-unstake-abort.json \
  *     npx jest tests/privatenet/e2e/exit-sbtc-unstake-abort.e2e.test.ts \
  *       --runInBand --collectCoverage=false --verbose
- *
- * Does NOT require BOND_ADMIN_KEY or a prior lock artifact.
- * The expected abort is part of the test — the tx must abort, not succeed.
  */
 
 import { broadcastTransaction } from '@stacks/transactions';
-import {
-  buildUnstakeSbtc,
-  describePox5Error,
-} from '../../../src';
+import { buildUnstakeSbtc, describePox5Error, Pox5ErrorCode } from '../../../src';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
-import {
-  getNextNonce,
-  getTransaction,
-  waitForFulfilled,
-} from '../../helpers/wait';
+import { getNextNonce, getTransaction, parseErrCode, waitForFulfilled } from '../../helpers/wait';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
 
@@ -46,20 +26,16 @@ const network = getNetwork();
 const FEE = 10_000n;
 const SIGNER_MANAGER = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 
-// account8 — "Someone", funded ~1000 STX, no sBTC position.
 const staker = getAccount(REGTEST_KEYS['account6']); // funded, no sBTC -> abort
 
-// Expected abort codes for "no sBTC position":
-//   u43 ERR_CANNOT_UNSTAKE_SBTC — staker has no sBTC shares
-//   u27 ERR_NOT_STAKING          — staker has no position at all
-// u27 NotStaking / u43 CannotUnstakeSbtc (no position); u34 NotBondParticipant
-// (staker holds an STX-only position, so it's not an sBTC bond participant).
-const EXPECTED_ABORT_CODES = new Set([27, 43, 34]);
-
-function parseErrCode(repr: string | undefined): number | undefined {
-  const m = repr?.match(/^\(err u(\d+)\)$/);
-  return m ? Number(m[1]) : undefined;
-}
+// CannotUnstakeSbtc (no sBTC staked) / NotStaking (no position at all) /
+// NotBondParticipant (staker holds an STX-only position, not an sBTC bond
+// participant) are all valid "no sBTC" outcomes.
+const EXPECTED_ABORT_CODES = new Set<number>([
+  Pox5ErrorCode.NotStaking,
+  Pox5ErrorCode.CannotUnstakeSbtc,
+  Pox5ErrorCode.NotBondParticipant,
+]);
 
 beforeAll(async () => {
   useFixtures('e2e-exit-sbtc-unstake-abort');
@@ -67,12 +43,8 @@ beforeAll(async () => {
 
 test('unstake-sbtc aborts with expected error (no sBTC position)', async () => {
   useFixtures('e2e-exit-sbtc-unstake-abort');
-  console.log('\n=== E2E: exit-sbtc-unstake-abort ===');
-  console.log('staker (account8):', staker.address);
-  console.log('signerManager:', SIGNER_MANAGER);
-  console.log('Expected: abort with (err u43) ERR_CANNOT_UNSTAKE_SBTC or (err u27) ERR_NOT_STAKING');
 
-  // 1. Build unstake-sbtc transaction
+  // BUILD
   // amountToWithdrawSats = 1 sat (minimum plausible value; the tx aborts before
   // the amount is validated because there's no sBTC position at all).
   const unsigned = await buildUnstakeSbtc({
@@ -85,54 +57,34 @@ test('unstake-sbtc aborts with expected error (no sBTC position)', async () => {
     postConditionMode: 'allow', // reach the contract so it aborts by response, not post-condition
   });
 
-  console.log('unstake-sbtc tx built successfully (serialization check passed ✓)');
-
-  // 2. Sign and broadcast
+  // BROADCAST
   const tx = signTransaction(unsigned, staker.key);
   const res = await broadcastTransaction({ transaction: tx, network });
 
-  // A broadcast-level REJECTION is a VALID "cannot unstake sBTC (no position)"
-  // outcome: the node refuses to admit a tx that would abort. Some nodes reject
-  // at broadcast (esp. when the static-analysis / runtime check trips early),
-  // others admit it and surface the abort on-chain. Accept BOTH.
+  // A broadcast-level rejection is also a valid "no sBTC position" outcome:
+  // some nodes reject early (static analysis), others admit and abort on-chain.
   if ('error' in res) {
     const reason = 'reason' in res ? String((res as { reason?: unknown }).reason) : '';
-    console.log('unstake-sbtc broadcast REJECTED (valid no-position outcome):', res.error, '—', reason);
-    console.log('\n=== E2E exit-sbtc-unstake-abort: SUCCESS (broadcast rejection confirmed) ✓ ===');
+    console.log('broadcast REJECTED (valid no-position outcome):', res.error, '-', reason);
     expect(res.error).toBeDefined();
     return;
   }
   console.log('unstake-sbtc txid:', res.txid);
 
-  // 3. Wait for on-chain result
+  // WAIT
   const txRecord = await waitForFulfilled(async () => {
     const t = await getTransaction(res.txid);
     if (!t || t.tx_status === 'pending') throw new Error('tx still pending');
     return t;
   });
 
-  console.log('on-chain result:', {
-    txid: txRecord.tx_id,
-    tx_status: txRecord.tx_status,
-    result_repr: txRecord.tx_result?.repr,
-    burn_block_height: txRecord.burn_block_height,
-  });
-
-  // 4. Assert expected abort
+  // ASSERT
   expect(txRecord.tx_status).toBe('abort_by_response');
 
   const code = parseErrCode(txRecord.tx_result?.repr);
   const info = code !== undefined ? describePox5Error(code) : undefined;
-  console.log('abort code:', code, '—', info?.name ?? 'unknown', '—', info?.description ?? '');
+  console.log('abort code:', code, '-', info?.name ?? 'unknown', '-', info?.description ?? '');
 
   expect(code).toBeDefined();
   expect(EXPECTED_ABORT_CODES.has(code!)).toBe(true);
-
-  if (code === 43) {
-    console.log('CONFIRMED: (err u43) ERR_CANNOT_UNSTAKE_SBTC — no sBTC position ✓');
-  } else if (code === 27) {
-    console.log('CONFIRMED: (err u27) ERR_NOT_STAKING — account8 has no staking position at all ✓');
-  }
-
-  console.log('\n=== E2E exit-sbtc-unstake-abort: SUCCESS (expected abort confirmed) ✓ ===');
 }, 180_000);

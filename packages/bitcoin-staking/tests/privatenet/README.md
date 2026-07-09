@@ -7,14 +7,14 @@ resets, the endpoints don't).
 
 ## Endpoints
 
-| What | Where |
-|---|---|
-| Stacks API / node | `https://api.private-1.hiro.so` (chain id `256`, `NETWORK=testnet`) |
-| BTC indexer (esplora/mempool) | `https://mempool.bitcoin.private-1.hiro.so/api` |
-| BTC faucet | `POST {STACKS_API}/extended/v1/faucets/btc?address=<bcrt1…>&xlarge=true` (no body) |
-| Covenant (KMS) signing service | `https://r25rniyw12.execute-api.eu-west-1.amazonaws.com/v1/v1` (note the doubled `/v1`: stage + route) |
-| Signer-manager | `ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager` |
-| Bond daemon (creates bonds + calc-rewards) | VPS `root@178.104.61.86:/root/bond-daemon`, admin `ST1V2ASRWGR81W7GBN1Z4W2JQKXJWCADPVZG30X45` |
+| What                                       | Where                                                                                                  |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| Stacks API / node                          | `https://api.private-1.hiro.so` (chain id `256`, `NETWORK=testnet`)                                    |
+| BTC indexer (esplora/mempool)              | `https://mempool.bitcoin.private-1.hiro.so/api`                                                        |
+| BTC faucet                                 | `POST {STACKS_API}/extended/v1/faucets/btc?address=<bcrt1…>&xlarge=true` (no body)                     |
+| Early-unlock (KMS) signing service             | `https://r25rniyw12.execute-api.eu-west-1.amazonaws.com/v1/v1` (note the doubled `/v1`: stage + route) |
+| Signer-manager                             | `ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager`                                             |
+| Bond daemon (creates bonds + calc-rewards) | VPS `root@178.104.61.86:/root/bond-daemon`, admin `ST1V2ASRWGR81W7GBN1Z4W2JQKXJWCADPVZG30X45`          |
 
 ## Two modes
 
@@ -35,6 +35,24 @@ npx jest tests/privatenet/<file> --runInBand --collectCoverage=false
 ```
 
 After recording, ALWAYS verify the mock replay passes before moving on.
+
+**Full re-record, one command** (serial, dependency-ordered via
+`record-sequencer.js` — the L1 chain of suites must record in that order;
+fresh-account seed defaults to today so it never collides with a previous
+record on a non-wiped chain; takes a few hours):
+
+```sh
+NETWORK=testnet NETWORK_ID=256 STACKS_API=https://api.private-1.hiro.so \
+POLL_INTERVAL=10000 RETRY_INTERVAL=10000 \
+STACKS_TX_TIMEOUT=300000 BITCOIN_TX_TIMEOUT=600000 \
+FRESH_ACCOUNT_SEED="privatenet-$(date +%F)" \
+BOND_ADMIN_KEY=... RECORD=1 \
+npx jest tests/privatenet --runInBand --collectCoverage=false \
+  --testSequencer="$(pwd)/tests/privatenet/record-sequencer.js"
+```
+
+`BOND_ADMIN_KEY` is only needed for `setup-bond` (self-heal still reads it
+under `RECORD`) — see "Current status / known skips" below.
 
 ## Recording rules (each one earned the hard way)
 
@@ -66,28 +84,28 @@ After recording, ALWAYS verify the mock replay passes before moving on.
 
 ## Accounts (state drifts per wipe — always verify live)
 
-| Account | Role |
-|---|---|
-| `account4` | rich, nonce-stable, daemon-free — default funder + clean STX staker |
-| `account5` | allowlisted ("PoolXYZ") — L1 register/lockup flows |
-| `account6` | allowlisted ("Tester A") — abort probes, signer grants, sBTC-less paths |
-| `account1/2/3` | CONTENDED (other agents/daemons) — avoid for broadcasts |
-| `account7/8` | not prefunded — fund in-test if needed |
-| fresh (`helpers/fresh-account.ts`) | derived from labels; self-funded; never collide |
+| Account                            | Role                                                                    |
+| ---------------------------------- | ----------------------------------------------------------------------- |
+| `account4`                         | rich, nonce-stable, daemon-free — default funder + clean STX staker     |
+| `account5`                         | allowlisted ("PoolXYZ") — L1 register/lockup flows                      |
+| `account6`                         | allowlisted ("Tester A") — abort probes, signer grants, sBTC-less paths |
+| `account1/2/3`                     | CONTENDED (other agents/daemons) — avoid for broadcasts                 |
+| `account7/8`                       | not prefunded — fund in-test if needed                                  |
+| fresh (`helpers/fresh-account.ts`) | derived from labels; self-funded; never collide                         |
 
 Bond allowlists come from the daemon's Google Sheet; every bond includes the
 sheet's standard + contract principals (e.g. FastPool `…TJFM.vault-1/2`).
 
-## Covenant (KMS) early-exit
+## Early-unlock (KMS) early-exit
 
-All daemon bonds embed `earlyUnlockBytes = 0x21 <covenant-pubkey> 0xac`, where
+All daemon bonds embed `earlyUnlockBytes = 0x21 <early-unlock-pubkey> 0xac`, where
 the pubkey is the leaf `m/48'/1'/0'/2'/0/0` of the signing service's xpub
 (`GET /public-key`; wipe-stable). The ELSE-branch reclaim cosignature comes
 from `POST /sign` (tx + input + prevout + witness_script + full BIP-32 path;
 DER, low-S — append `01` sighash byte for the witness). End-to-end proof:
-`actions/covenant-key-verify.test.ts` (key/sighash/sig equivalence) and
-`actions/covenant-reclaim.test.ts` (on-chain reclaim). Helper:
-`helpers/covenant.ts` (verify with `{ prehash: false }` — noble v2 default
+`actions/early-unlock-key-verify.test.ts` (key/sighash/sig equivalence) and
+`actions/early-unlock-reclaim.test.ts` (on-chain reclaim). Helper:
+`helpers/early-unlock.ts` (verify with `{ prehash: false }` — noble v2 default
 sha256s the message otherwise).
 
 ## Layout
@@ -104,7 +122,7 @@ sha256s the message otherwise).
 
 - The **bond daemon** on the VPS is ours: creates every bond (allowlist from the
   Google Sheet, cached to `participants.json`), runs `calculate-rewards` per
-  distribution cycle, and derives covenant `earlyUnlockBytes` from the live KMS
+  distribution cycle, and derives early-unlock `earlyUnlockBytes` from the live KMS
   API at setup time (nothing hardcoded). Health: `sh /root/bond-daemon/check.sh`;
   wipe ledger: `wipes.log`. `BOND_ADMIN_KEY` lives ONLY in the VPS `.env`.
 - The operator `ST3NBRSFKX…` (not us) also runs `calculate-rewards` each cycle
@@ -118,7 +136,7 @@ sha256s the message otherwise).
   be precise when clearing fixtures.
 - Full L1 record chain, in order and serial: `btc-lock` (dynamic bond discovery,
   writes `fixtures/artifacts/btc-lock-<staker>.json`) → `register-for-bond-l1`
-  (reads artifact) → `announce-early-exit` → `covenant-reclaim`.
+  (reads artifact) → `announce-early-exit` → `early-unlock-reclaim`.
 
 ## Current status / known skips
 
@@ -127,8 +145,8 @@ sha256s the message otherwise).
 daemon — never record it). `setup-bond` self-heals against the daemon-created
 bond (recording its create-branch would front-run the daemon with a stripped
 allowlist; the create path is continuously proven by the daemon itself).
-Deleted as superseded: `setup-bond-2` (pre-covenant zero-byte earlyUnlockBytes),
-`btc-reclaim` (early branch → `covenant-reclaim`; timelock →
+Deleted as superseded: `setup-bond-2` (pre-early-unlock zero-byte earlyUnlockBytes),
+`btc-reclaim` (early branch → `early-unlock-reclaim`; timelock →
 `e2e/exit-l1-timelock-reclaim`). sBTC happy paths untestable (sbtc-deposit not
 deployed) — abort paths covered. `BOND_ADMIN_KEY` is required only for
 setup-bond RE-recording; env-only, never commit it.

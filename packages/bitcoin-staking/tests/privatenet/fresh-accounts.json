@@ -6,14 +6,8 @@
     "btcEach": "5,000,000 sats (from account5, tx a1d811fbe6ce59881fbd5f03afde408b7b25a142740fb0e5a32f0264692e7890)"
   },
   "roles": {
-    "adversarial": [
-      "f0",
-      "f1"
-    ],
-    "population": [
-      "f2",
-      "f3"
-    ]
+    "adversarial": ["f0", "f1"],
+    "population": ["f2", "f3"]
   },
   "accounts": [
     {

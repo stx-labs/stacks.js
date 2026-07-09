@@ -1,27 +1,12 @@
 /**
  * E2E — L1 register -> announce early exit (staker-signed) -> re-register in next bond.
  *
- * Flow for account5 (has BTC address, rich ~10B STX, BTC funded via faucet):
- *   1. Discover a bond with open registration window (dynamic, no hardcoded index).
- *   2. BTC-lock: fund a P2WSH timelock output on the private Bitcoin regtest net.
- *   3. register-for-bond (L1 path): submit SPV proof, assert membership.isL1Lock === true.
- *   4. announce-l1-early-exit: staker-signed (contract requires tx-sender == staker).
- *      Assert fetchHasAnnouncedL1EarlyExit returns true after the tx.
- *   5. Discover the NEXT bond with an open window (different or same index; re-reg allowed).
- *   6. BTC-lock again into the new bond.
- *   7. register-for-bond again: assert new membership.bondIndex === newBondIndex.
- *
- * Phase fixture keys:
- *   'e2e-reregister'        — baseline + first registration
- *   'e2e-reregister-exited' — after announce-l1-early-exit
- *   'e2e-reregister-rereg'  — after second registration
- *
- * Preconditions:
- *   - account5 must not already have an active bond membership at test start.
- *   - A bond period with open registration window must exist.
- *   - BTC faucet must be accessible (for funding the P2WSH sender address).
- *
- * NOTE: BTC confirmation (~420s) dominates wall-clock; two locks = ~840s total.
+ * Runs for account5. Requires account5 to have no active bond membership at
+ * start; if it's already enrolled, self-heals to a pass (see below) rather
+ * than running the re-register leg, since that needs a clean account.
+ * announce-l1-early-exit must be staker-signed, not admin-signed (contract
+ * requires tx-sender == staker). BTC confirmation (~420s) dominates
+ * wall-clock; two locks = ~840s total.
  *
  * Run:
  *   set -a; . packages/bitcoin-staking/.env; set +a
@@ -56,14 +41,11 @@ import {
 } from '../../../src';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
-import {
-  broadcastAndWait,
-  getNextNonce,
-  getTransaction,
-} from '../../helpers/wait';
+import { broadcastAndWait, getNextNonce, getTransaction, parseErrCode } from '../../helpers/wait';
 import { signTransaction } from '../../helpers/sign';
 import { waitForBondWithRunway } from '../../helpers/bond';
 import { useFixtures } from '../../helpers/mock';
+import { BtcLockArtifact } from '../../helpers/btc-wallet';
 
 const SIGNER_MANAGER =
   process.env.SIGNER_MANAGER ?? 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
@@ -86,18 +68,18 @@ const STAKER_RAW_KEY_HEX = 'cb3df38053d132895220b9ce471f6b676db5b9bf0b4adefb55f2
 const staker = getAccount(REGTEST_KEYS['account5']);
 const network = getNetwork();
 
-function parseErrCode(repr: string | undefined): number | undefined {
-  const m = repr?.match(/^\(err u(\d+)\)$/);
-  return m ? Number(m[1]) : undefined;
-}
 
-function stakerPrivBytes(): Uint8Array { return hexToBytes(STAKER_RAW_KEY_HEX); }
-function stakerPubBytes(): Uint8Array { return secp256k1.getPublicKey(stakerPrivBytes(), true); }
+function stakerPrivBytes(): Uint8Array {
+  return hexToBytes(STAKER_RAW_KEY_HEX);
+}
+function stakerPubBytes(): Uint8Array {
+  return secp256k1.getPublicKey(stakerPrivBytes(), true);
+}
 
 async function faucetDrip(btcAddress: string): Promise<void> {
   const resp = await fetch(`${FAUCET_URL}?address=${btcAddress}&xlarge=true`, { method: 'POST' });
   const body = await resp.text();
-  console.log(`  faucet → ${btcAddress}: HTTP ${resp.status} ${body.slice(0, 120)}`);
+  console.log(`  faucet -> ${btcAddress}: HTTP ${resp.status} ${body.slice(0, 120)}`);
 }
 
 async function broadcastBtcTx(rawHex: string): Promise<string> {
@@ -109,7 +91,7 @@ async function broadcastBtcTx(rawHex: string): Promise<string> {
     });
     const body = await resp.text();
     if (resp.ok) return body.trim();
-    console.warn(`POST ${MEMPOOL_BASE}${path} → ${resp.status}: ${body.slice(0, 200)}`);
+    console.warn(`POST ${MEMPOOL_BASE}${path} -> ${resp.status}: ${body.slice(0, 200)}`);
   }
   throw new Error('BTC broadcast failed on both /tx and /v1/tx');
 }
@@ -118,7 +100,7 @@ async function pollUntil<T>(
   fn: () => Promise<T | null | undefined>,
   intervalMs: number,
   timeoutMs: number,
-  label: string,
+  label: string
 ): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -167,23 +149,7 @@ async function fetchBlockTxids(blockHash: string): Promise<string[]> {
   return resp.json();
 }
 
-interface LockArtifact {
-  bondIndex: number;
-  txid: string;
-  outputIndex: number;
-  blockHash: string;
-  blockHeight: number;
-  unlockHeight: number;
-  amountSats: string;
-  witnessScriptHex: string;
-  unlockBytesHex: string;
-  earlyUnlockBytesHex: string;
-  stakerStxAddress: string;
-  legacyTxHex: string;
-  headerHex: string;
-  merkleProof: { block_height: number; merkle: string[]; pos: number };
-  txCount: number;
-}
+type LockArtifact = BtcLockArtifact;
 
 /**
  * Execute a full BTC lock: faucet -> fund P2WSH -> wait for confirmation -> artifact.
@@ -192,13 +158,13 @@ interface LockArtifact {
 async function executeBtcLock(bondIndex: number, amountSats: bigint): Promise<LockArtifact> {
   console.log(`  [btc-lock] bondIndex=${bondIndex}, amount=${amountSats} sats`);
 
-  // 1. Fetch bond params from chain
   const bond = await fetchBond({ bondIndex, network });
   if (!bond) throw new Error(`Bond ${bondIndex} not found on chain`);
   const unlockHeight = await fetchBondL1UnlockHeight({ bondIndex, network });
-  console.log(`  [btc-lock] earlyUnlockBytes: ${bond.earlyUnlockBytes}, unlockHeight: ${unlockHeight}`);
+  console.log(
+    `  [btc-lock] earlyUnlockBytes: ${bond.earlyUnlockBytes}, unlockHeight: ${unlockHeight}`
+  );
 
-  // 2. Build lock script & P2WSH address
   const unlockBytes = buildUnlockScript(stakerPubBytes());
   const lockScript = buildLockScript({
     stxAddress: staker.address,
@@ -216,27 +182,30 @@ async function executeBtcLock(bondIndex: number, amountSats: bigint): Promise<Lo
 
   console.log(`  [btc-lock] P2WSH address: ${lockAddress}`);
 
-  // 3. Fund sender P2WPKH from faucet
   const senderPub = stakerPubBytes();
   const senderAddr = btc.p2wpkh(senderPub, BTC_NETWORK).address!;
   console.log(`  [btc-lock] sender (P2WPKH): ${senderAddr}`);
   await faucetDrip(senderAddr);
 
   const utxos = await pollUntil(
-    async () => { const us = await getConfirmedUtxos(senderAddr); return us.length > 0 ? us : null; },
-    10_000, 300_000, `confirmed UTXO for ${senderAddr}`
+    async () => {
+      const us = await getConfirmedUtxos(senderAddr);
+      return us.length > 0 ? us : null;
+    },
+    10_000,
+    300_000,
+    `confirmed UTXO for ${senderAddr}`
   );
-  const utxo = utxos.reduce((best, u) => u.value > best.value ? u : best, utxos[0]);
+  const utxo = utxos.reduce((best, u) => (u.value > best.value ? u : best), utxos[0]);
   const utxoValue = BigInt(utxo.value);
   const changeAmount = utxoValue - amountSats - FEE_SATS;
-  if (changeAmount < 0n) throw new Error(`Insufficient UTXO: ${utxoValue} < ${amountSats} + ${FEE_SATS}`);
+  if (changeAmount < 0n)
+    throw new Error(`Insufficient UTXO: ${utxoValue} < ${amountSats} + ${FEE_SATS}`);
 
-  // 4. Fetch utxo scriptPubKey
   const utxoTx = await fetchMempoolTx(utxo.txid);
   if (!utxoTx) throw new Error(`Cannot fetch UTXO tx ${utxo.txid}`);
   const utxoScriptPubKey = hexToBytes(utxoTx.vout[utxo.vout].scriptpubkey);
 
-  // 5. Build & sign P2WPKH->P2WSH funding tx
   const lockP2wsh = btc.p2wsh({ type: 'wsh', script: lockScript }, BTC_NETWORK);
   const fundTx = new btc.Transaction({ allowUnknownInputs: true, allowUnknownOutputs: true });
   fundTx.addInput({
@@ -255,19 +224,19 @@ async function executeBtcLock(bondIndex: number, amountSats: bigint): Promise<Lo
   const fundTxid = await broadcastBtcTx(fundTx.hex);
   console.log(`  [btc-lock] funding txid: ${fundTxid}`);
 
-  // 6. Wait for BTC confirmation
   const confirmedTx = await pollUntil(
     async () => {
       const t = await fetchMempoolTx(fundTxid);
       return t?.status?.confirmed ? t : null;
     },
-    10_000, 420_000, `lock tx ${fundTxid} confirmed`
+    10_000,
+    420_000,
+    `lock tx ${fundTxid} confirmed`
   );
   const blockHash = confirmedTx.status.block_hash!;
   const blockHeight = confirmedTx.status.block_height!;
   console.log(`  [btc-lock] confirmed at block ${blockHeight} (${blockHash})`);
 
-  // 7. Collect SPV proof inputs
   const headerHex = await fetchBlockHeader(blockHash);
   if (!headerHex) throw new Error(`Cannot fetch block header for ${blockHash}`);
   const txids = await fetchBlockTxids(blockHash);
@@ -292,9 +261,10 @@ async function executeBtcLock(bondIndex: number, amountSats: bigint): Promise<Lo
     amountSats: amountSats.toString(),
     witnessScriptHex: bytesToHex(lockScript),
     unlockBytesHex: bytesToHex(unlockBytes),
-    earlyUnlockBytesHex: typeof bond.earlyUnlockBytes === 'string'
-      ? bond.earlyUnlockBytes
-      : bytesToHex(bond.earlyUnlockBytes),
+    earlyUnlockBytesHex:
+      typeof bond.earlyUnlockBytes === 'string'
+        ? bond.earlyUnlockBytes
+        : bytesToHex(bond.earlyUnlockBytes),
     stakerStxAddress: staker.address,
     legacyTxHex: fundTx.hex,
     headerHex,
@@ -314,7 +284,18 @@ async function executeBtcLock(bondIndex: number, amountSats: bigint): Promise<Lo
 
 /** Build and broadcast a register-for-bond L1 tx from an artifact. Returns txid. */
 async function executeRegisterL1(artifact: LockArtifact): Promise<string> {
-  const { bondIndex, legacyTxHex, headerHex, merkleProof, txCount, amountSats, unlockBytesHex, earlyUnlockBytesHex, stakerStxAddress, unlockHeight } = artifact;
+  const {
+    bondIndex,
+    legacyTxHex,
+    headerHex,
+    merkleProof,
+    txCount,
+    amountSats,
+    unlockBytesHex,
+    earlyUnlockBytesHex,
+    stakerStxAddress,
+    unlockHeight,
+  } = artifact;
 
   const bond = await fetchBond({ bondIndex, network });
   if (!bond) throw new Error(`Bond ${bondIndex} not found`);
@@ -375,153 +356,166 @@ beforeAll(async () => {
   useFixtures('e2e-reregister');
 }, 60_000);
 
-test('account5: L1 register → announce early exit (staker-signed) → re-register in next bond', async () => {
-  useFixtures('e2e-reregister');
+test(
+  'account5: L1 register -> announce early exit (staker-signed) -> re-register in next bond',
+  async () => {
+    useFixtures('e2e-reregister');
 
-  console.log('\n=== E2E: combined-l1-register-reregister ===');
-  console.log('staker:', staker.address);
+    console.log('staker:', staker.address);
 
-  // Precondition / SELF-HEAL: this test drives the full register -> announce ->
-  // re-register flow, which requires account5 to START with no membership. On a
-  // shared chain account5 may ALREADY be enrolled (from a prior L1 run). Rather
-  // than hard-fail, self-heal: assert the existing membership is a valid L1 lock
-  // (the register leg this test exercises already succeeded on-chain in that
-  // prior run) and pass. Document that the full re-register flow needs a clean
-  // account; the steps below run only on a fresh start.
-  const existing = await fetchBondMembership({ address: staker.address, network });
-  if (existing) {
-    console.warn(
-      `account5 already has bond membership (bondIndex=${existing.bondIndex}, isL1Lock=${existing.isL1Lock}).`
+    // SELF-HEAL: on a shared chain account5 may already be enrolled from a
+    // prior run. Rather than hard-fail, accept a valid existing L1 lock as a
+    // pass; the re-register leg below only runs on a fresh (unenrolled) start.
+    const existing = await fetchBondMembership({ address: staker.address, network });
+    if (existing) {
+      console.warn(
+        `account5 already has bond membership (bondIndex=${existing.bondIndex}, isL1Lock=${existing.isL1Lock}).`
+      );
+      const alreadyExited = await fetchHasAnnouncedL1EarlyExit({
+        bondIndex: existing.bondIndex,
+        staker: staker.address,
+        network,
+      });
+      console.log(`hasAnnouncedL1EarlyExit(bond ${existing.bondIndex})=${alreadyExited}`);
+      expect(existing.isL1Lock).toBe(true);
+      console.log('ALREADY ENROLLED — self-heal pass (re-register flow needs a clean account5)');
+      return;
+    }
+
+    // DISCOVER BOND 1
+    const {
+      bondIndex: bond1Index,
+      bondStartHeight: bond1Start,
+      poxInfo: pox1,
+    } = await waitForBondWithRunway(10);
+    console.log(
+      `first bond: bondIndex=${bond1Index}, bondStart=${bond1Start}, currentBurn=${pox1.currentBurnchainBlockHeight}`
     );
-    const alreadyExited = await fetchHasAnnouncedL1EarlyExit({ bondIndex: existing.bondIndex, staker: staker.address, network });
-    console.log(`hasAnnouncedL1EarlyExit(bond ${existing.bondIndex})=${alreadyExited}`);
-    // Self-heal pass: assert the existing membership reflects a valid L1
-    // registration. The re-register phase needs a clean account so we don't
-    // re-run it here (documented limitation on a shared chain).
-    expect(existing.isL1Lock).toBe(true);
-    console.log('=== ALREADY ENROLLED — self-heal pass (re-register flow needs a clean account5) ===');
-    return;
-  }
 
-  // Step 1: Discover first bond with open registration window
-  const { bondIndex: bond1Index, bondStartHeight: bond1Start, poxInfo: pox1 } =
-    await waitForBondWithRunway(10);
-  console.log(`\n[Step 1] First bond: bondIndex=${bond1Index}, bondStart=${bond1Start}, currentBurn=${pox1.currentBurnchainBlockHeight}`);
+    // BTC LOCK 1
+    const artifact1 = await executeBtcLock(bond1Index, LOCK_AMOUNT_SATS);
 
-  // Step 2: BTC-lock into bond 1
-  console.log('\n[Step 2] BTC lock into bond 1...');
-  const artifact1 = await executeBtcLock(bond1Index, LOCK_AMOUNT_SATS);
+    // REGISTER 1
+    useFixtures('e2e-reregister-reg1'); // isolate register-1 broadcast from the bond-1 BTC-lock broadcast
+    const registerTxid1 = await executeRegisterL1(artifact1);
+    console.log('register-l1 txid (bond 1):', registerTxid1);
 
-  // Step 3: Register for bond 1
-  console.log('\n[Step 3] register-for-bond (L1) into bond 1...');
-  useFixtures('e2e-reregister-reg1'); // isolate register-1 broadcast from the bond-1 BTC-lock broadcast
-  const registerTxid1 = await executeRegisterL1(artifact1);
-  console.log('register-l1 txid (bond 1):', registerTxid1);
+    // Wait a moment for the extended API to index
+    await new Promise(r => setTimeout(r, 5_000));
+    const regRecord1 = await getTransaction(registerTxid1);
+    if (regRecord1 && regRecord1.tx_status !== 'success') {
+      const code = parseErrCode(regRecord1.tx_result?.repr);
+      throw new Error(
+        `register-for-bond L1 aborted (err u${code}): ` +
+          `${describePox5Error(code ?? -1)?.name ?? 'unknown'} — ` +
+          `repr: ${regRecord1.tx_result?.repr}`
+      );
+    }
 
-  // Wait a moment for the extended API to index
-  await new Promise(r => setTimeout(r, 5_000));
-  const regRecord1 = await getTransaction(registerTxid1);
-  if (regRecord1 && regRecord1.tx_status !== 'success') {
-    const code = parseErrCode(regRecord1.tx_result?.repr);
-    throw new Error(
-      `register-for-bond L1 aborted (err u${code}): ` +
-      `${describePox5Error(code ?? -1)?.name ?? 'unknown'} — ` +
-      `repr: ${regRecord1.tx_result?.repr}`
+    // Phase switch: same get-bond-membership path returns a different body after
+    // registration; route the after-read to its own fixture key.
+    useFixtures('e2e-reregister-registered');
+    const membership1 = await fetchBondMembership({ address: staker.address, network });
+    console.log(
+      'membership after first register:',
+      JSON.stringify(membership1, (_k, v) => (typeof v === 'bigint' ? v.toString() : v))
     );
-  }
 
-  // Phase switch: same get-bond-membership path returns a different body after
-  // registration; route the after-read to its own fixture key.
-  useFixtures('e2e-reregister-registered');
-  const membership1 = await fetchBondMembership({ address: staker.address, network });
-  console.log('membership after first register:', JSON.stringify(membership1, (_k, v) => typeof v === 'bigint' ? v.toString() : v));
-
-  if (!membership1) {
-    throw new Error('register-for-bond L1 succeeded on-chain but membership not found — timing?');
-  }
-  expect(membership1.isL1Lock).toBe(true);
-  expect(membership1.bondIndex).toBe(bond1Index);
-  console.log(`=== REGISTRATION 1 CONFIRMED ✓ bondIndex=${membership1.bondIndex}, isL1Lock=${membership1.isL1Lock} ===`);
-
-  // Step 4: announce-l1-early-exit (STAKER-signed)
-  // The contract enforces contract-caller == tx-sender == staker.
-  console.log('\n[Step 4] announce-l1-early-exit (staker-signed)...');
-
-  useFixtures('e2e-reregister-announce'); // isolate the announce broadcast from the register-1 broadcast
-  const unsignedAnnounce = await buildAnnounceL1EarlyExit({
-    staker: staker.address,
-    oldSignerManager: SIGNER_MANAGER,
-    publicKey: staker.publicKey,
-    fee: FEE_USTX,
-    nonce: await getNextNonce(staker.address),
-    network,
-    postConditionMode: 'allow',
-  });
-  const announceTxRaw = signTransaction(unsignedAnnounce, staker.key);
-  const announceTxid = await broadcastAndWait(announceTxRaw, staker.address, network);
-  console.log('announce txid:', announceTxid);
-
-  await new Promise(r => setTimeout(r, 5_000));
-  const announceRecord = await getTransaction(announceTxid);
-  if (announceRecord && announceRecord.tx_status !== 'success') {
-    const code = parseErrCode(announceRecord.tx_result?.repr);
-    throw new Error(
-      `announce-l1-early-exit aborted (err u${code}): ` +
-      `${describePox5Error(code ?? -1)?.name ?? 'unknown'} — ` +
-      `repr: ${announceRecord.tx_result?.repr}`
+    if (!membership1) {
+      throw new Error('register-for-bond L1 succeeded on-chain but membership not found — timing?');
+    }
+    expect(membership1.isL1Lock).toBe(true);
+    expect(membership1.bondIndex).toBe(bond1Index);
+    console.log(
+      `registration 1 confirmed: bondIndex=${membership1.bondIndex}, isL1Lock=${membership1.isL1Lock}`
     );
-  }
 
-  const hasAnnounced = await fetchHasAnnouncedL1EarlyExit({ bondIndex: bond1Index, staker: staker.address, network });
-  expect(hasAnnounced).toBe(true);
-  console.log(`=== ANNOUNCE CONFIRMED ✓ hasAnnouncedL1EarlyExit=${hasAnnounced} ===`);
+    // ANNOUNCE EARLY EXIT (staker-signed; contract requires tx-sender == staker)
+    useFixtures('e2e-reregister-announce'); // isolate the announce broadcast from the register-1 broadcast
+    const unsignedAnnounce = await buildAnnounceL1EarlyExit({
+      staker: staker.address,
+      oldSignerManager: SIGNER_MANAGER,
+      publicKey: staker.publicKey,
+      fee: FEE_USTX,
+      nonce: await getNextNonce(staker.address),
+      network,
+      postConditionMode: 'allow',
+    });
+    const announceTxRaw = signTransaction(unsignedAnnounce, staker.key);
+    const announceTxid = await broadcastAndWait(announceTxRaw, staker.address, network);
+    console.log('announce txid:', announceTxid);
 
-  useFixtures('e2e-reregister-exited');
+    await new Promise(r => setTimeout(r, 5_000));
+    const announceRecord = await getTransaction(announceTxid);
+    if (announceRecord && announceRecord.tx_status !== 'success') {
+      const code = parseErrCode(announceRecord.tx_result?.repr);
+      throw new Error(
+        `announce-l1-early-exit aborted (err u${code}): ` +
+          `${describePox5Error(code ?? -1)?.name ?? 'unknown'} — ` +
+          `repr: ${announceRecord.tx_result?.repr}`
+      );
+    }
 
-  // Step 5: Discover next bond for re-registration
-  console.log('\n[Step 5] Discovering next bond for re-registration...');
-  const { bondIndex: bond2Index, bondStartHeight: bond2Start, poxInfo: pox2 } =
-    await waitForBondWithRunway(5);
-  console.log(`  next bond: bondIndex=${bond2Index}, bondStart=${bond2Start}, currentBurn=${pox2.currentBurnchainBlockHeight}`);
+    const hasAnnounced = await fetchHasAnnouncedL1EarlyExit({
+      bondIndex: bond1Index,
+      staker: staker.address,
+      network,
+    });
+    expect(hasAnnounced).toBe(true);
+    console.log(`announce confirmed: hasAnnouncedL1EarlyExit=${hasAnnounced}`);
 
-  // Step 6: BTC-lock into bond 2
-  console.log('\n[Step 6] BTC lock into bond 2...');
-  useFixtures('e2e-reregister-lock2'); // isolate bond-2 BTC-lock broadcast from the announce broadcast
-  const artifact2 = await executeBtcLock(bond2Index, LOCK_AMOUNT_SATS);
+    useFixtures('e2e-reregister-exited');
 
-  // Step 7: Re-register into bond 2
-  console.log('\n[Step 7] register-for-bond (L1) into bond 2 (re-registration)...');
-  useFixtures('e2e-reregister-reg2'); // isolate register-2 broadcast from the bond-2 BTC-lock broadcast
-  const registerTxid2 = await executeRegisterL1(artifact2);
-  console.log('register-l1 txid (bond 2):', registerTxid2);
-
-  await new Promise(r => setTimeout(r, 5_000));
-  const regRecord2 = await getTransaction(registerTxid2);
-  if (regRecord2 && regRecord2.tx_status !== 'success') {
-    const code = parseErrCode(regRecord2.tx_result?.repr);
-    throw new Error(
-      `re-register aborted (err u${code}): ` +
-      `${describePox5Error(code ?? -1)?.name ?? 'unknown'} — ` +
-      `repr: ${regRecord2.tx_result?.repr}`
+    // DISCOVER BOND 2
+    const {
+      bondIndex: bond2Index,
+      bondStartHeight: bond2Start,
+      poxInfo: pox2,
+    } = await waitForBondWithRunway(5);
+    console.log(
+      `next bond: bondIndex=${bond2Index}, bondStart=${bond2Start}, currentBurn=${pox2.currentBurnchainBlockHeight}`
     );
-  }
 
-  const membership2 = await fetchBondMembership({ address: staker.address, network });
-  console.log('membership after re-register:', JSON.stringify(membership2, (_k, v) => typeof v === 'bigint' ? v.toString() : v));
+    // BTC LOCK 2
+    useFixtures('e2e-reregister-lock2'); // isolate bond-2 BTC-lock broadcast from the announce broadcast
+    const artifact2 = await executeBtcLock(bond2Index, LOCK_AMOUNT_SATS);
 
-  if (!membership2) {
-    throw new Error('re-register succeeded on-chain but membership not found — timing?');
-  }
-  expect(membership2.isL1Lock).toBe(true);
-  expect(membership2.bondIndex).toBe(bond2Index);
-  console.log(`=== RE-REGISTRATION CONFIRMED ✓ bondIndex=${membership2.bondIndex}, isL1Lock=${membership2.isL1Lock} ===`);
+    // RE-REGISTER
+    useFixtures('e2e-reregister-reg2'); // isolate register-2 broadcast from the bond-2 BTC-lock broadcast
+    const registerTxid2 = await executeRegisterL1(artifact2);
+    console.log('register-l1 txid (bond 2):', registerTxid2);
 
-  useFixtures('e2e-reregister-rereg');
+    await new Promise(r => setTimeout(r, 5_000));
+    const regRecord2 = await getTransaction(registerTxid2);
+    if (regRecord2 && regRecord2.tx_status !== 'success') {
+      const code = parseErrCode(regRecord2.tx_result?.repr);
+      throw new Error(
+        `re-register aborted (err u${code}): ` +
+          `${describePox5Error(code ?? -1)?.name ?? 'unknown'} — ` +
+          `repr: ${regRecord2.tx_result?.repr}`
+      );
+    }
 
-  console.log('\n=== SUMMARY ===');
-  console.log('staker:', staker.address);
-  console.log('bond 1 index:', bond1Index, '→ register txid:', registerTxid1);
-  console.log('announce txid:', announceTxid);
-  console.log('bond 2 index:', bond2Index, '→ re-register txid:', registerTxid2);
-  console.log('\n=== E2E combined-l1-register-reregister: ALL ASSERTIONS PASSED ✓ ===');
-}, 2 * 420_000 + 180_000);
+    const membership2 = await fetchBondMembership({ address: staker.address, network });
+    console.log(
+      'membership after re-register:',
+      JSON.stringify(membership2, (_k, v) => (typeof v === 'bigint' ? v.toString() : v))
+    );
+
+    if (!membership2) {
+      throw new Error('re-register succeeded on-chain but membership not found — timing?');
+    }
+    expect(membership2.isL1Lock).toBe(true);
+    expect(membership2.bondIndex).toBe(bond2Index);
+    console.log(
+      `re-registration confirmed: bondIndex=${membership2.bondIndex}, isL1Lock=${membership2.isL1Lock}`
+    );
+
+    useFixtures('e2e-reregister-rereg');
+
+    console.log('bond 1 index:', bond1Index, 'register txid:', registerTxid1);
+    console.log('announce txid:', announceTxid);
+    console.log('bond 2 index:', bond2Index, 're-register txid:', registerTxid2);
+  },
+  2 * 420_000 + 180_000
+);

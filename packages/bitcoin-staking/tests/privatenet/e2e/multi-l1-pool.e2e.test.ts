@@ -1,17 +1,8 @@
 /**
- * E2E: Multi-staker BTC L1 pooling into the same bond.
- *
- * account5, account6 each do:
- *   1. Fund a P2WSH L1 lockup output on private-testnet Bitcoin.
- *   2. Register for the SAME dynamically-discovered bond (BTC lockup path).
- *
- * Assertions (relative / delta-based):
- *   - fetchTotalSbtcStakedForBond(bond) increases by exactly the sum of each
- *     staker's locked sats.
- *   - Each fetchBondMembership shows isL1Lock=true and the same bondIndex.
- *
- * The three stakers run sequentially (await each) to avoid nonce races and
- * mempool-UTXO conflicts.
+ * E2E: account5 and account6 each fund a P2WSH L1 lockup and register into
+ * the SAME dynamically-discovered bond. Asserts fetchTotalSbtcStakedForBond
+ * increases by exactly the sum of locked sats, and each membership shows
+ * isL1Lock=true. Stakers run sequentially to avoid nonce/UTXO races.
  *
  * Run:
  *   NETWORK=testnet NETWORK_ID=256 STACKS_API=https://api.private-1.hiro.so \
@@ -33,7 +24,6 @@ import {
   buildLockOutputScript,
   buildLockProof,
   buildRegisterForBond,
-  computeMerkleBranch,
   describePox5Error,
   fetchBond,
   fetchBondL1UnlockHeight,
@@ -43,22 +33,25 @@ import {
 } from '../../../src';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
-import {
-  broadcastAndWait,
-  getNextNonce,
-  getTransaction,
-} from '../../helpers/wait';
+import { broadcastAndWait, getNextNonce, getTransaction } from '../../helpers/wait';
 import { waitForBondWithRunway } from '../../helpers/bond';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
+import {
+  getUtxos,
+  faucetFund,
+  broadcastBtc,
+  waitForConfirmed,
+  fetchBlockHeader,
+  fetchMerkleProof,
+  fetchRawTxHex,
+  fetchBlockTxCount,
+} from '../../helpers/btc-wallet';
 
 const SIGNER_MANAGER = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 const AMOUNT_SATS = BigInt(process.env.AMOUNT_SATS ?? 30_000);
 const FEE_SATS = BigInt(process.env.FEE_SATS ?? 500);
 const FEE_USTX = BigInt(process.env.FEE_USTX ?? 10_000);
-
-const MEMPOOL_BASE = 'https://mempool.bitcoin.private-1.hiro.so/api';
-const FAUCET_URL = 'https://api.private-1.hiro.so/extended/v1/faucets/btc';
 
 const REGTEST_NET: typeof btc.NETWORK = {
   bech32: 'bcrt',
@@ -87,39 +80,12 @@ const STAKERS: StakerDef[] = (['account5', 'account6'] as const).map(name => {
   return { name, rawPrivHex, account };
 });
 
-// BTC helpers (self-contained, mirrored from btc-lock.test.ts)
-
-interface Utxo {
-  txid: string;
-  vout: number;
-  value: bigint;
-  scriptPubKey: Uint8Array;
-}
-
-async function fetchUtxos(addr: string, scriptHex: string): Promise<Utxo[]> {
-  const resp = await fetch(`${MEMPOOL_BASE}/address/${addr}/txs`);
-  if (!resp.ok) throw new Error(`GET /address/${addr}/txs → ${resp.status}`);
-  const txs = (await resp.json()) as Array<{
-    txid: string;
-    vin: Array<{ txid: string; vout: number }>;
-    vout: Array<{ value: number; scriptpubkey: string }>;
-    status: { confirmed: boolean };
-  }>;
-  const spent = new Set<string>();
-  for (const tx of txs) for (const inp of tx.vin) spent.add(`${inp.txid}:${inp.vout}`);
-  const utxos: Utxo[] = [];
-  for (const tx of txs) {
-    if (!tx.status.confirmed) continue;
-    tx.vout.forEach((out, idx) => {
-      if (out.scriptpubkey !== scriptHex) return;
-      if (spent.has(`${tx.txid}:${idx}`)) return;
-      utxos.push({ txid: tx.txid, vout: idx, value: BigInt(out.value), scriptPubKey: hexToBytes(out.scriptpubkey) });
-    });
-  }
-  return utxos;
-}
-
-async function poll<T>(fn: () => Promise<T | null | undefined>, intervalMs: number, timeoutMs: number, label: string): Promise<T> {
+async function poll<T>(
+  fn: () => Promise<T | null | undefined>,
+  intervalMs: number,
+  timeoutMs: number,
+  label: string
+): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const result = await fn();
@@ -127,67 +93,6 @@ async function poll<T>(fn: () => Promise<T | null | undefined>, intervalMs: numb
     await new Promise(r => setTimeout(r, intervalMs));
   }
   throw new Error(`poll timed out after ${timeoutMs}ms: ${label}`);
-}
-
-async function faucetFund(addr: string): Promise<void> {
-  const url = `${FAUCET_URL}?address=${encodeURIComponent(addr)}&xlarge=true`;
-  const resp = await fetch(url, { method: 'POST' });
-  if (!resp.ok) console.warn(`faucet returned ${resp.status}: ${await resp.text()}`);
-  else console.log('faucet response:', JSON.stringify(await resp.json()));
-}
-
-async function broadcast(rawHex: string): Promise<string> {
-  for (const path of ['/tx', '/v1/tx']) {
-    const resp = await fetch(`${MEMPOOL_BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: rawHex });
-    const body = await resp.text();
-    if (resp.ok) { console.log(`broadcast succeeded via POST ${MEMPOOL_BASE}${path}`); return body.trim(); }
-    console.warn(`POST ${MEMPOOL_BASE}${path} → ${resp.status}: ${body}`);
-  }
-  throw new Error('broadcast failed on both /tx and /v1/tx');
-}
-
-async function fetchBlockHeader(blockHash: string): Promise<string> {
-  const resp = await fetch(`${MEMPOOL_BASE}/block/${blockHash}/header`);
-  if (!resp.ok) throw new Error(`GET /block/${blockHash}/header → ${resp.status}`);
-  return (await resp.text()).trim();
-}
-
-async function fetchMerkleProof(txid: string, blockHash: string, blockHeight: number): Promise<{ block_height: number; merkle: string[]; pos: number }> {
-  const resp = await fetch(`${MEMPOOL_BASE}/block/${blockHash}/txids`);
-  if (!resp.ok) throw new Error(`GET /block/${blockHash}/txids → ${resp.status}`);
-  const txids = (await resp.json()) as string[];
-  const pos = txids.indexOf(txid);
-  if (pos === -1) throw new Error(`txid ${txid} not in block ${blockHash}`);
-  const merkle = computeMerkleBranch(txids, pos);
-  return { block_height: blockHeight, merkle, pos };
-}
-
-async function waitForConfirmation(txid: string): Promise<{ blockHash: string; blockHeight: number }> {
-  return poll(
-    async () => {
-      const resp = await fetch(`${MEMPOOL_BASE}/tx/${txid}`);
-      if (!resp.ok) return null;
-      const tx = (await resp.json()) as { status: { confirmed: boolean; block_hash?: string; block_height?: number } };
-      if (tx.status.confirmed && tx.status.block_hash && tx.status.block_height != null) return { blockHash: tx.status.block_hash, blockHeight: tx.status.block_height };
-      return null;
-    },
-    15_000, 25 * 60_000,
-    `waiting for tx ${txid} to confirm`,
-  );
-}
-
-async function fetchRawTxLegacyHex(txid: string): Promise<string> {
-  const resp = await fetch(`${MEMPOOL_BASE}/tx/${txid}/hex`);
-  if (!resp.ok) throw new Error(`GET /tx/${txid}/hex → ${resp.status}`);
-  const segwitHex = (await resp.text()).trim();
-  const parsed = btc.Transaction.fromRaw(hexToBytes(segwitHex), { allowUnknownOutputs: true, disableScriptCheck: true });
-  return bytesToHex(parsed.toBytes(true, false));
-}
-
-async function fetchBlockTxCount(blockHash: string): Promise<number> {
-  const resp = await fetch(`${MEMPOOL_BASE}/block/${blockHash}`);
-  if (!resp.ok) throw new Error(`GET /block/${blockHash} → ${resp.status}`);
-  return ((await resp.json()) as { tx_count: number }).tx_count;
 }
 
 interface LockupResult {
@@ -201,29 +106,32 @@ async function doL1LockupAndRegister(
   unlockHeight: number,
   earlyUnlockBytesHex: string,
   stxValueRatio: bigint,
-  minUstxRatioBps: number,
+  minUstxRatioBps: number
 ): Promise<LockupResult> {
   const network = getNetwork();
   useFixtures(`e2e-multi-l1-pool-${staker.name}`); // isolate each staker's BTC + register broadcasts
   const priv = hexToBytes(staker.rawPrivHex);
   const pub = secp256k1.getPublicKey(priv, true);
 
-  console.log(`\n--- [${staker.name}] starting L1 lockup+register, bond=${bondIndex} ---`);
+  console.log(`[${staker.name}] starting L1 lockup+register, bond=${bondIndex}`);
 
-  // SELF-HEAL (fast path): if this allowlisted account is ALREADY enrolled (from
-  // a prior run, possibly in an OLDER bond), skip the entire BTC-lock + register
-  // flow — no faucet, no funding tx, no confirmation wait. The existing sats were
-  // counted in a previous run (already in `totalBefore`), so contribute ZERO to
-  // the aggregate delta. We do NOT assert the existing bondIndex matches the
-  // freshly-discovered one.
-  const existingMembership = await fetchBondMembership({ address: staker.account.address, network });
+  // SELF-HEAL
+  // If already enrolled (prior run, possibly in an older bond), skip BTC-lock +
+  // register entirely — those sats are already counted in totalBefore, so this
+  // contributes 0 to the aggregate delta. Do not assert bondIndex matches.
+  const existingMembership = await fetchBondMembership({
+    address: staker.account.address,
+    network,
+  });
   if (existingMembership) {
-    console.log(`[${staker.name}] already enrolled (bondIndex=${existingMembership.bondIndex}, isL1Lock=${existingMembership.isL1Lock}) — self-heal: skip BTC-lock+register entirely, contribute 0 to delta`);
+    console.log(
+      `[${staker.name}] already enrolled (bondIndex=${existingMembership.bondIndex}, isL1Lock=${existingMembership.isL1Lock}), skipping`
+    );
     expect(existingMembership.isL1Lock).toBe(true);
     return { amountSats: 0n, txid: '' };
   }
 
-  // Build scripts
+  // BUILD SCRIPTS
   const unlockBytes = buildUnlockScript(pub);
   const earlyUnlockBytes = hexToBytes(earlyUnlockBytesHex);
 
@@ -250,19 +158,20 @@ async function doL1LockupAndRegister(
   console.log(`[${staker.name}] P2WSH address: ${p2wshAddress}`);
   console.log(`[${staker.name}] P2WPKH address: ${senderAddr}`);
 
-  // Fund UTXO if needed
+  // FUND UTXO
   const needed = AMOUNT_SATS + FEE_SATS;
-  let utxos = await fetchUtxos(senderAddr, senderScriptHex);
+  let utxos = await getUtxos(senderAddr, senderScriptHex);
   if (!utxos.some(u => u.value >= needed)) {
     console.log(`[${staker.name}] no sufficient UTXO — hitting faucet...`);
     await faucetFund(senderAddr);
     utxos = await poll(
       async () => {
-        const fresh = await fetchUtxos(senderAddr, senderScriptHex);
+        const fresh = await getUtxos(senderAddr, senderScriptHex);
         return fresh.some(u => u.value >= needed) ? fresh : null;
       },
-      15_000, 25 * 60_000,
-      `[${staker.name}] waiting for confirmed UTXO after faucet`,
+      15_000,
+      25 * 60_000,
+      `[${staker.name}] waiting for confirmed UTXO after faucet`
     );
   }
 
@@ -272,31 +181,32 @@ async function doL1LockupAndRegister(
   const changeSats = utxo.value - AMOUNT_SATS - FEE_SATS;
   expect(changeSats).toBeGreaterThan(0n);
 
-  // Build + sign + broadcast funding tx
+  // SIGN + BROADCAST FUNDING TX
   const fundingTx = new btc.Transaction();
-  fundingTx.addInput({ txid: utxo.txid, index: utxo.vout, witnessUtxo: { script: utxo.scriptPubKey, amount: utxo.value } });
+  fundingTx.addInput({
+    txid: utxo.txid,
+    index: utxo.vout,
+    witnessUtxo: { script: utxo.scriptPubKey, amount: utxo.value },
+  });
   fundingTx.addOutput({ script: p2wshObj.script, amount: AMOUNT_SATS });
   fundingTx.addOutputAddress(senderAddr, changeSats, REGTEST_NET);
   fundingTx.sign(priv);
   fundingTx.finalize();
 
-  const btcTxid = await broadcast(fundingTx.hex);
+  const btcTxid = await broadcastBtc(fundingTx.hex);
   console.log(`[${staker.name}] BTC funding txid: ${btcTxid}`);
   expect(btcTxid).toMatch(/^[0-9a-f]{64}$/);
 
-  // Wait for BTC confirmation
-  console.log(`[${staker.name}] waiting for BTC confirmation...`);
-  const { blockHash, blockHeight } = await waitForConfirmation(btcTxid);
+  // CONFIRM + SPV PROOF
+  const { block_hash: blockHash, block_height: blockHeight } = await waitForConfirmed(btcTxid);
   console.log(`[${staker.name}] confirmed in block ${blockHeight} (${blockHash})`);
 
-  // Fetch SPV proof components
   const headerHex = await fetchBlockHeader(blockHash);
   expect(headerHex.length).toBe(160);
   const merkleProof = await fetchMerkleProof(btcTxid, blockHash, blockHeight);
   const txCount = await fetchBlockTxCount(blockHash);
-  const legacyHex = await fetchRawTxLegacyHex(btcTxid);
+  const { legacyHex } = await fetchRawTxHex(btcTxid);
 
-  // Assemble lock proof
   const lockupOutput = buildLockProof({
     txHex: legacyHex,
     header: headerHex,
@@ -306,11 +216,10 @@ async function doL1LockupAndRegister(
     outputScript,
   });
 
-  // Compute minUstx
   const minUstx = minUstxForSatsAmount({ sats: AMOUNT_SATS, stxValueRatio, minUstxRatioBps });
   const amountUstx = minUstx + 1_000_000n;
 
-  // Build + sign + broadcast register-for-bond
+  // REGISTER FOR BOND
   const nonce = await getNextNonce(staker.account.address);
   const unsigned = await buildRegisterForBond({
     bondIndex,
@@ -332,22 +241,25 @@ async function doL1LockupAndRegister(
   const stacksTxid = await broadcastAndWait(signedTx, staker.account.address, network);
   console.log(`[${staker.name}] register-for-bond txid: ${stacksTxid}`);
 
-  // Brief delay to let extended API index
+  // Brief delay lets the extended API index the tx
   await new Promise(r => setTimeout(r, 5_000));
   const record = await getTransaction(stacksTxid);
   if (record && record.tx_status !== 'pending') {
-    console.log(`[${staker.name}] tx_status: ${record.tx_status}, result: ${record.tx_result?.repr}`);
+    console.log(
+      `[${staker.name}] tx_status: ${record.tx_status}, result: ${record.tx_result?.repr}`
+    );
     if (record.tx_status !== 'success' && record.tx_status !== 'pending') {
       const match = record.tx_result?.repr?.match(/^\(err u(\d+)\)$/);
       if (match) {
         const code = Number(match[1]);
-        throw new Error(`[${staker.name}] register-for-bond aborted: (err u${code}) — ${describePox5Error(code)}`);
+        throw new Error(
+          `[${staker.name}] register-for-bond aborted: (err u${code}) — ${describePox5Error(code)}`
+        );
       }
     }
   }
 
   useFixtures(`e2e-multi-l1-pool-${staker.name}-after`); // post-register membership differs from pre
-  // Poll for membership
   let membership = await fetchBondMembership({ address: staker.account.address, network });
   const deadline = Date.now() + 2 * 60_000;
   while (!membership && Date.now() < deadline) {
@@ -355,11 +267,13 @@ async function doL1LockupAndRegister(
     membership = await fetchBondMembership({ address: staker.account.address, network });
   }
 
-  console.log(`[${staker.name}] bond membership: ${JSON.stringify(membership, (_k, v) => typeof v === 'bigint' ? v.toString() : v)}`);
+  console.log(
+    `[${staker.name}] bond membership: ${JSON.stringify(membership, (_k, v) => (typeof v === 'bigint' ? v.toString() : v))}`
+  );
   expect(membership).toBeDefined();
   expect(membership!.bondIndex).toBe(bondIndex);
   expect(membership!.isL1Lock).toBe(true);
-  console.log(`[${staker.name}] registered successfully ✓`);
+  console.log(`[${staker.name}] registered successfully`);
 
   return { amountSats: AMOUNT_SATS, txid: stacksTxid };
 }
@@ -372,27 +286,31 @@ test('multi-staker BTC L1 pooling: account5+6 all register into the same bond', 
   useFixtures('e2e-multi-l1-pool');
   const network = getNetwork();
 
-  console.log('\n=== MULTI-L1-POOL E2E: discovering bond with runway ===');
+  // DISCOVER BOND
+  const { bondIndex, bondStartHeight, poxInfo } = await waitForBondWithRunway();
+  console.log(
+    `discovered bondIndex=${bondIndex} bondStartHeight=${bondStartHeight} currentBurn=${poxInfo.currentBurnchainBlockHeight}`
+  );
 
-  // Dynamic bond discovery
-  const { bondIndex, bondStartHeight, poxInfo } = await waitForBondWithRunway(/* default half-cycle */);
-  console.log(`discovered bondIndex=${bondIndex} bondStartHeight=${bondStartHeight} currentBurn=${poxInfo.currentBurnchainBlockHeight}`);
-
-  // Fetch bond params
   const bond = await fetchBond({ bondIndex, network });
   if (!bond) throw new Error(`bond ${bondIndex} not found on-chain`);
-  console.log('bond params:', JSON.stringify({ bondIndex: bond.bondIndex, stxValueRatio: bond.stxValueRatio.toString(), minUstxRatioBps: bond.minUstxRatioBps }));
+  console.log(
+    'bond params:',
+    JSON.stringify({
+      bondIndex: bond.bondIndex,
+      stxValueRatio: bond.stxValueRatio.toString(),
+      minUstxRatioBps: bond.minUstxRatioBps,
+    })
+  );
 
-  // Canonical L1 unlock height
   const unlockHeightBig = await fetchBondL1UnlockHeight({ bondIndex, network });
   const unlockHeight = Number(unlockHeightBig);
   console.log('L1 unlock height:', unlockHeight);
 
-  // Capture aggregate BEFORE
   const totalBefore = await fetchTotalSbtcStakedForBond({ bondIndex, network });
   console.log(`totalSbtcStakedForBond BEFORE: ${totalBefore.toString()} sats`);
 
-  // Run all three stakers sequentially (avoid nonce/UTXO contention)
+  // STAKERS (sequential to avoid nonce/UTXO contention)
   const results: LockupResult[] = [];
   for (const staker of STAKERS) {
     const result = await doL1LockupAndRegister(
@@ -401,34 +319,23 @@ test('multi-staker BTC L1 pooling: account5+6 all register into the same bond', 
       unlockHeight,
       bond.earlyUnlockBytes,
       bond.stxValueRatio,
-      bond.minUstxRatioBps,
+      bond.minUstxRatioBps
     );
     results.push(result);
   }
 
   useFixtures('e2e-multi-l1-pool-after');
-  // Capture aggregate AFTER
   const totalAfter = await fetchTotalSbtcStakedForBond({ bondIndex, network });
   console.log(`totalSbtcStakedForBond AFTER: ${totalAfter.toString()} sats`);
 
   const expectedDelta = results.reduce((sum, r) => sum + r.amountSats, 0n);
   const actualDelta = totalAfter - totalBefore;
+  console.log(`expectedDelta=${expectedDelta} actualDelta=${actualDelta}`);
 
-  console.log(`\n=== MULTI-L1-POOL SUMMARY ===`);
-  console.log(`bondIndex: ${bondIndex}`);
-  console.log(`stakers: ${STAKERS.map(s => s.name).join(', ')}`);
-  console.log(`amountSats each: ${AMOUNT_SATS.toString()}`);
-  console.log(`expectedDelta: ${expectedDelta.toString()} sats`);
-  console.log(`actualDelta:   ${actualDelta.toString()} sats`);
-  console.log(`totalBefore: ${totalBefore.toString()}`);
-  console.log(`totalAfter:  ${totalAfter.toString()}`);
-
-  // Delta assertion: total sBTC for this bond must have increased by exactly the sum locked
   expect(actualDelta).toBe(expectedDelta);
 
-  // Each staker must show isL1Lock=true. Only stakers that REGISTERED THIS RUN
-  // (amountSats > 0) are asserted to be in the freshly-discovered bond; a
-  // self-healed staker (amountSats === 0) may be in an older bond.
+  // Only stakers that registered this run (amountSats > 0) are asserted to be
+  // in the freshly-discovered bond; a self-healed staker may be in an older one.
   for (let i = 0; i < STAKERS.length; i++) {
     const staker = STAKERS[i];
     const registeredThisRun = results[i].amountSats > 0n;
@@ -438,8 +345,8 @@ test('multi-staker BTC L1 pooling: account5+6 all register into the same bond', 
     if (registeredThisRun) {
       expect(membership!.bondIndex).toBe(bondIndex);
     }
-    console.log(`[${staker.name}] membership verified ✓ (bondIndex=${membership!.bondIndex}, isL1Lock=${membership!.isL1Lock}, registeredThisRun=${registeredThisRun})`);
+    console.log(
+      `[${staker.name}] membership verified (bondIndex=${membership!.bondIndex}, isL1Lock=${membership!.isL1Lock}, registeredThisRun=${registeredThisRun})`
+    );
   }
-
-  console.log('\n=== MULTI-L1-POOL: ALL ASSERTIONS PASSED ✓ ===');
 }, 720_000);

@@ -1,20 +1,11 @@
 /**
  * E2E: Single-staker sBTC register — serialize + abort coverage.
  *
- * Builds and broadcasts a register-for-bond (kind: 'sbtc') for account5.
- * Since no sBTC is minted to test accounts, lock-sbtc's ft-transfer? aborts
- * with (err u1) Unauthorized — proving the builder serializes correctly against
- * the real ABI and reaches the real contract entrypoint.
- *
- * Expected abort family (cycle-timing dependent — whichever guard fires first):
- *   (err u1)  — lock-sbtc ft-transfer? (0 sBTC, reward phase)
- *   (err u11) — not-allowlisted (bond already started)
- *   (err u43) — bond-already-started (open bond, reward phase)
- *   (err u47) — prepare phase guard (runs before lock-sbtc)
- *
- * This is the serialize + abort coverage path for the sBTC register flow.
- * The test succeeds when the tx aborts (no enrollment) and the result is one
- * of the known abort codes above.
+ * No sBTC is minted to test accounts, so lock-sbtc's ft-transfer? (or an
+ * earlier guard, depending on cycle timing) always aborts. Proves the builder
+ * serializes correctly against the real ABI and reaches the real contract
+ * entrypoint. Passes when the tx aborts with no enrollment and the result is
+ * one of the known abort codes.
  *
  * Live run:
  *   NETWORK=testnet NETWORK_ID=256 STACKS_API=https://api.private-1.hiro.so \
@@ -28,11 +19,7 @@
 import { buildRegisterForBond, fetchBondMembership } from '../../../src';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork, ENV } from '../../helpers/utils';
-import {
-  broadcastAndWait,
-  getNextNonce,
-  getTransaction,
-} from '../../helpers/wait';
+import { broadcastAndWait, getNextNonce, getTransaction } from '../../helpers/wait';
 import { waitForBondWithRunway } from '../../helpers/bond';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
@@ -42,14 +29,21 @@ const AMOUNT_USTX = 1_000_000n; // 1 STX
 const SBTC_SATS = 1_000n;
 
 const SIGNER_MANAGER =
-  process.env.SIGNER_MANAGER ??
-  'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
+  process.env.SIGNER_MANAGER ?? 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 
-// account5: STB44HYPYAT2BB2QE513NSP81HTMYWBJP02HPGK6 — allowlisted, 0 sBTC
 const staker = getAccount(REGTEST_KEYS.account6); // unenrolled, 0 sBTC -> abort
 
-// The known abort codes this path may produce (see file-level comment)
-const EXPECTED_ABORTS = new Set(['(err u1)', '(err u11)', '(err u43)', '(err u47)']);
+// Whichever guard fires first (cycle-timing dependent):
+// u1 lock-sbtc ft-transfer?, u5 staker-already-added, u9 already-registered,
+// u11 not-allowlisted, u43 bond-already-started, u47 prepare-phase guard
+const EXPECTED_ABORTS = new Set([
+  '(err u1)',
+  '(err u5)',
+  '(err u9)',
+  '(err u11)',
+  '(err u43)',
+  '(err u47)',
+]);
 
 beforeAll(async () => {
   useFixtures('e2e-single-sbtc-register-abort');
@@ -59,23 +53,25 @@ test('single-staker sBTC register: aborts with expected error (serialize+abort c
   useFixtures('e2e-single-sbtc-register-abort');
   const network = getNetwork();
 
-  console.log('\n=== E2E: single-sbtc-register-abort ===');
   console.log('staker:', staker.address);
-  console.log('sBTC minted to staker: 0 (expected abort path)');
 
-  // 1. Dynamic bond discovery
+  // DISCOVER BOND
   // lock-sbtc aborts before the bond guard, so any bond index works;
   // we still discover dynamically to stay aligned with the protocol state.
   const { bondIndex, poxInfo } = await waitForBondWithRunway();
   console.log(`discovered bondIndex=${bondIndex}`);
   console.log('currentBurnHeight:', poxInfo.currentBurnchainBlockHeight);
 
-  // 2. Precondition: staker not enrolled
+  // The staker's enrollment state drifts with the chain (e.g. an earlier L1
+  // lock may already have enrolled it into a different bond) — derive the
+  // expected outcome from what's actually there rather than assuming unenrolled.
   const existing = await fetchBondMembership({ address: staker.address, network });
-  expect(existing).toBeUndefined();
-  console.log('precondition: no existing bond membership ✓');
+  console.log(
+    'existing membership:',
+    existing ? JSON.stringify(existing, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)) : 'none'
+  );
 
-  // 3. Build + sign + broadcast register (sbtc)
+  // BUILD + BROADCAST
   const nonce = await getNextNonce(staker.address);
   const unsigned = await buildRegisterForBond({
     bondIndex,
@@ -89,19 +85,20 @@ test('single-staker sBTC register: aborts with expected error (serialize+abort c
   });
 
   const tx = signTransaction(unsigned, staker.key);
-  console.log('broadcasting register-for-bond (sbtc)...');
   const txid = await broadcastAndWait(tx, staker.address, network);
-  console.log('\n=== BROADCAST TXID:', txid, '===');
+  console.log('txid:', txid);
 
-  // 4. Assert no enrollment was created (abort must NOT enroll)
+  // Abort must not change enrollment state: still unenrolled if it started
+  // that way, or still exactly the pre-existing membership if it didn't.
   const membershipAfter = await fetchBondMembership({ address: staker.address, network });
-  expect(membershipAfter).toBeUndefined();
-  console.log('post-broadcast: no bond membership (abort confirmed via read-only) ✓');
+  if (existing === undefined) {
+    expect(membershipAfter).toBeUndefined();
+  } else {
+    expect(membershipAfter).toEqual(existing);
+  }
 
-  // 5. Best-effort exact result check via /extended (RECORD=1 only)
-  // The /extended API lags on this chain, so we only assert under RECORD=1.
-  // Without RECORD the test still proves the builder serialized + the abort
-  // left no enrollment. Both outcomes confirm the serialize+abort path.
+  // Exact result check only under RECORD=1 — /extended lags on this chain;
+  // without RECORD the no-enrollment check above already proves the abort path.
   if (ENV.RECORD) {
     await new Promise(r => setTimeout(r, 5_000));
     const record = await getTransaction(txid);
@@ -110,9 +107,6 @@ test('single-staker sBTC register: aborts with expected error (serialize+abort c
     if (record && record.tx_status !== 'pending') {
       expect(record.tx_status).toBe('abort_by_response');
       expect(EXPECTED_ABORTS.has(record.tx_result.repr)).toBe(true);
-      console.log(`abort confirmed: ${record.tx_result.repr} — in expected abort set ✓`);
     }
   }
-
-  console.log('\n=== E2E single-sbtc-register-abort SUCCESS: serialize+abort path exercised ✓ ===');
 }, 180_000);

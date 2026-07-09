@@ -15,11 +15,7 @@
  *     POLL_INTERVAL=10000 RETRY_INTERVAL=10000 \
  *     npx jest tests/privatenet/actions/rewards-sweep.test.ts --runInBand --collectCoverage=false
  */
-import {
-  fetchPoxInfo,
-  fetchProtocolBond,
-  fetchEarned,
-} from '../../../src';
+import { fetchPoxInfo, fetchProtocolBond, fetchEarned } from '../../../src';
 import { getNetwork } from '../../helpers/utils';
 import { useFixtures } from '../../helpers/mock';
 
@@ -35,13 +31,10 @@ beforeAll(() => useFixtures('rewards-sweep'));
 
 test('rewards sweep: get-earned across all bonds + recent STX-only cycles', async () => {
   const pox = await fetchPoxInfo({ network });
-  console.log('=== rewards sweep ===');
   console.log('signer-manager:', SIGNER_MANAGER);
   console.log('current cycle:', pox.rewardCycleId, 'burn:', pox.currentBurnchainBlockHeight);
 
-  // --- bond legs ---
-  console.log('\n--- BOND LEGS  get-earned(isBond=true, bondIndex) ---');
-  console.log('bondIndex | exists | earned (uSTX/sats)');
+  // BOND LEGS
   const bondRows: { index: number; earned: bigint }[] = [];
   for (let i = 0; i < MAX_BOND_INDEX; i++) {
     let exists = false;
@@ -53,19 +46,26 @@ test('rewards sweep: get-earned across all bonds + recent STX-only cycles', asyn
     if (!exists) continue;
     let earned = -1n;
     try {
-      earned = await fetchEarned({ signerManager: SIGNER_MANAGER, rewardCycle: pox.rewardCycleId, bondIndex: i, network });
+      earned = await fetchEarned({
+        signerManager: SIGNER_MANAGER,
+        rewardCycle: pox.rewardCycleId,
+        bondIndex: i,
+        network,
+      });
     } catch (err) {
-      console.log(`  bond ${i}: earned read FAILED — ${err instanceof Error ? err.message : String(err)}`);
+      console.log(
+        `  bond ${i}: earned read FAILED — ${err instanceof Error ? err.message : String(err)}`
+      );
       continue;
     }
     bondRows.push({ index: i, earned });
     console.log(`  bond ${String(i).padStart(2)} |   yes  | ${earned.toString()}`);
   }
-  console.log(`(found ${bondRows.length} bonds; ${bondRows.filter(r => r.earned > 0n).length} with non-zero bond-leg rewards)`);
+  console.log(
+    `(found ${bondRows.length} bonds; ${bondRows.filter(r => r.earned > 0n).length} with non-zero bond-leg rewards)`
+  );
 
-  // --- STX-only legs (by cycle) ---
-  console.log('\n--- STX-ONLY LEGS  get-earned(isBond=false, cycle) ---');
-  console.log('cycle | earned (uSTX)');
+  // STX-ONLY LEGS (by cycle)
   const start = Math.max(0, pox.rewardCycleId - CYCLE_LOOKBACK);
   const cycleRows: { cycle: number; earned: bigint }[] = [];
   for (let c = start; c <= pox.rewardCycleId; c++) {
@@ -73,18 +73,21 @@ test('rewards sweep: get-earned across all bonds + recent STX-only cycles', asyn
     try {
       earned = await fetchEarned({ signerManager: SIGNER_MANAGER, rewardCycle: c, network });
     } catch (err) {
-      console.log(`  cycle ${c}: read FAILED — ${err instanceof Error ? err.message : String(err)}`);
+      console.log(
+        `  cycle ${c}: read FAILED — ${err instanceof Error ? err.message : String(err)}`
+      );
       continue;
     }
     cycleRows.push({ cycle: c, earned });
     console.log(`  ${String(c).padStart(3)} | ${earned.toString()}`);
   }
-  console.log(`(${cycleRows.filter(r => r.earned > 0n).length} cycles with non-zero STX-only rewards)`);
+  console.log(
+    `(${cycleRows.filter(r => r.earned > 0n).length} cycles with non-zero STX-only rewards)`
+  );
 
-  // --- summary ---
+  // SUMMARY
   const totalBond = bondRows.reduce((a, r) => a + (r.earned > 0n ? r.earned : 0n), 0n);
   const totalCycle = cycleRows.reduce((a, r) => a + (r.earned > 0n ? r.earned : 0n), 0n);
-  console.log('\n=== SUMMARY ===');
   console.log('bonds found:', bondRows.length, '| indices:', bondRows.map(r => r.index).join(','));
   console.log('total claimable bond-leg rewards (this signer):', totalBond.toString());
   console.log('total claimable STX-only rewards (this signer):', totalCycle.toString());

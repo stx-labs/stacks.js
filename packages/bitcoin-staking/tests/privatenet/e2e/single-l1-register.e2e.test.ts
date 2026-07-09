@@ -28,7 +28,6 @@ import {
   buildLockOutputScript,
   buildLockProof,
   buildRegisterForBond,
-  computeMerkleBranch,
   describePox5Error,
   fetchBond,
   fetchBondL1UnlockHeight,
@@ -37,22 +36,27 @@ import {
 } from '../../../src';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
-import {
-  broadcastAndWait,
-  getNextNonce,
-  getTransaction,
-} from '../../helpers/wait';
+import { broadcastAndWait, getNextNonce, getTransaction } from '../../helpers/wait';
 import { waitForBondWithRunway } from '../../helpers/bond';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
+import {
+  getUtxos,
+  faucetFund,
+  broadcastBtc,
+  waitForConfirmed,
+  fetchBlockHeader,
+  fetchMerkleProof,
+  fetchRawTxHex,
+  fetchBlockTxCount,
+} from '../../helpers/btc-wallet';
 
 const AMOUNT_SATS = BigInt(process.env.AMOUNT_SATS ?? 30_000);
 const FEE_SATS = BigInt(process.env.FEE_SATS ?? 500);
 const FEE_USTX = BigInt(process.env.FEE_USTX ?? 10_000);
 
 const SIGNER_MANAGER =
-  process.env.SIGNER_MANAGER ??
-  'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
+  process.env.SIGNER_MANAGER ?? 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 
 // account5: STB44HYPYAT2BB2QE513NSP81HTMYWBJP02HPGK6 — funded, allowlisted
 const STAKER_PRIV_HEX = 'cb3df38053d132895220b9ce471f6b676db5b9bf0b4adefb55f2118ece2478df';
@@ -67,55 +71,13 @@ const REGTEST_BTC: typeof btc.NETWORK = {
   wif: 0xef,
 };
 
-const MEMPOOL_BASE = 'https://mempool.bitcoin.private-1.hiro.so/api';
-const FAUCET_URL = 'https://api.private-1.hiro.so/extended/v1/faucets/btc';
-
 // Inlined BTC helpers (from btc-lock.test.ts)
-
-interface Utxo {
-  txid: string;
-  vout: number;
-  value: bigint;
-  scriptPubKey: Uint8Array;
-}
-
-async function fetchUtxos(addr: string, scriptHex: string): Promise<Utxo[]> {
-  const resp = await fetch(`${MEMPOOL_BASE}/address/${addr}/txs`);
-  if (!resp.ok) throw new Error(`GET /address/${addr}/txs → ${resp.status}`);
-  const txs = (await resp.json()) as Array<{
-    txid: string;
-    vin: Array<{ txid: string; vout: number }>;
-    vout: Array<{ value: number; scriptpubkey: string }>;
-    status: { confirmed: boolean };
-  }>;
-  const spent = new Set<string>();
-  for (const tx of txs) {
-    for (const inp of tx.vin) {
-      spent.add(`${inp.txid}:${inp.vout}`);
-    }
-  }
-  const utxos: Utxo[] = [];
-  for (const tx of txs) {
-    if (!tx.status.confirmed) continue;
-    tx.vout.forEach((out, idx) => {
-      if (out.scriptpubkey !== scriptHex) return;
-      if (spent.has(`${tx.txid}:${idx}`)) return;
-      utxos.push({
-        txid: tx.txid,
-        vout: idx,
-        value: BigInt(out.value),
-        scriptPubKey: hexToBytes(out.scriptpubkey),
-      });
-    });
-  }
-  return utxos;
-}
 
 async function btcPoll<T>(
   fn: () => Promise<T | null | undefined>,
   intervalMs: number,
   timeoutMs: number,
-  label: string,
+  label: string
 ): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -126,91 +88,6 @@ async function btcPoll<T>(
   throw new Error(`poll timed out after ${timeoutMs}ms: ${label}`);
 }
 
-async function faucetFund(addr: string): Promise<void> {
-  const url = `${FAUCET_URL}?address=${encodeURIComponent(addr)}&xlarge=true`;
-  const resp = await fetch(url, { method: 'POST' });
-  if (!resp.ok) {
-    console.warn(`faucet returned ${resp.status}: ${await resp.text()}`);
-  } else {
-    console.log('faucet response:', JSON.stringify(await resp.json()));
-  }
-}
-
-async function broadcast(rawHex: string): Promise<string> {
-  for (const path of ['/tx', '/v1/tx']) {
-    const resp = await fetch(`${MEMPOOL_BASE}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: rawHex,
-    });
-    const body = await resp.text();
-    if (resp.ok) {
-      console.log(`broadcast succeeded via POST ${MEMPOOL_BASE}${path}`);
-      return body.trim();
-    }
-    console.warn(`POST ${MEMPOOL_BASE}${path} → ${resp.status}: ${body}`);
-  }
-  throw new Error('broadcast failed on both /tx and /v1/tx');
-}
-
-async function waitForBtcConfirmation(txid: string): Promise<{ blockHash: string; blockHeight: number }> {
-  return btcPoll(
-    async () => {
-      const resp = await fetch(`${MEMPOOL_BASE}/tx/${txid}`);
-      if (!resp.ok) return null;
-      const tx = (await resp.json()) as {
-        status: { confirmed: boolean; block_hash?: string; block_height?: number };
-      };
-      if (tx.status.confirmed && tx.status.block_hash && tx.status.block_height != null) {
-        return { blockHash: tx.status.block_hash, blockHeight: tx.status.block_height };
-      }
-      return null;
-    },
-    15_000,
-    25 * 60_000,
-    `waiting for BTC tx ${txid} to confirm`,
-  );
-}
-
-async function fetchBlockHeader(blockHash: string): Promise<string> {
-  const resp = await fetch(`${MEMPOOL_BASE}/block/${blockHash}/header`);
-  if (!resp.ok) throw new Error(`GET /block/${blockHash}/header → ${resp.status}`);
-  return (await resp.text()).trim();
-}
-
-async function fetchMerkleProof(
-  txid: string,
-  blockHash: string,
-  blockHeight: number,
-): Promise<{ block_height: number; merkle: string[]; pos: number }> {
-  const resp = await fetch(`${MEMPOOL_BASE}/block/${blockHash}/txids`);
-  if (!resp.ok) throw new Error(`GET /block/${blockHash}/txids → ${resp.status}`);
-  const txids = (await resp.json()) as string[];
-  const pos = txids.indexOf(txid);
-  if (pos === -1) throw new Error(`txid ${txid} not in block ${blockHash}`);
-  const merkle = computeMerkleBranch(txids, pos);
-  return { block_height: blockHeight, merkle, pos };
-}
-
-async function fetchBlockTxCount(blockHash: string): Promise<number> {
-  const resp = await fetch(`${MEMPOOL_BASE}/block/${blockHash}`);
-  if (!resp.ok) throw new Error(`GET /block/${blockHash} → ${resp.status}`);
-  const data = (await resp.json()) as { tx_count: number };
-  return data.tx_count;
-}
-
-async function fetchRawTxHex(txid: string): Promise<string> {
-  const resp = await fetch(`${MEMPOOL_BASE}/tx/${txid}/hex`);
-  if (!resp.ok) throw new Error(`GET /tx/${txid}/hex → ${resp.status}`);
-  const segwitHex = (await resp.text()).trim();
-  const parsed = btc.Transaction.fromRaw(hexToBytes(segwitHex), {
-    allowUnknownOutputs: true,
-    disableScriptCheck: true,
-  });
-  const legacyBytes = parsed.toBytes(true, false); // withScriptSig=true, withWitness=false
-  return bytesToHex(legacyBytes);
-}
-
 beforeAll(async () => {
   useFixtures('e2e-single-l1-register');
 }, 60_000);
@@ -219,24 +96,20 @@ test('single-staker BTC L1 register: account5 end-to-end', async () => {
   useFixtures('e2e-single-l1-register');
   const network = getNetwork();
 
-  console.log('\n=== E2E: single-l1-register ===');
   console.log('staker:', staker.address);
 
-  // 1. Dynamic bond discovery
-  console.log('discovering bond with registration runway...');
-  // First fetch pox info to compute runway, then discover bond
+  // BOND DISCOVERY
   const { bondIndex, bondStartHeight, poxInfo } = await waitForBondWithRunway();
 
   console.log(`discovered bondIndex=${bondIndex} bondStartHeight=${bondStartHeight}`);
   console.log('currentBurnHeight:', poxInfo.currentBurnchainBlockHeight);
 
-  // 2. Fetch bond params
   const bond = await fetchBond({ bondIndex, network });
   if (!bond) throw new Error(`bond ${bondIndex} not found on-chain`);
   console.log('bond stxValueRatio:', bond.stxValueRatio.toString());
   console.log('bond earlyUnlockBytes:', bond.earlyUnlockBytes);
 
-  // 3. Derive unlock height + lockup scripts
+  // LOCKUP SCRIPTS
   const unlockHeightBig = await fetchBondL1UnlockHeight({ bondIndex, network });
   const unlockHeight = Number(unlockHeightBig);
   console.log('unlockHeight:', unlockHeight);
@@ -265,25 +138,25 @@ test('single-staker BTC L1 register: account5 end-to-end', async () => {
   const p2wshAddress = p2wshObj.address!;
   console.log('P2WSH address:', p2wshAddress);
 
-  // 4. Get / fund a confirmed UTXO
+  // FUND UTXO
   const p2wpkhObj = btc.p2wpkh(stakerBtcPub, REGTEST_BTC);
   const senderAddr = p2wpkhObj.address!;
   const senderScriptHex = bytesToHex(p2wpkhObj.script);
   console.log('sender P2WPKH addr:', senderAddr);
 
   const needed = AMOUNT_SATS + FEE_SATS;
-  let utxos = await fetchUtxos(senderAddr, senderScriptHex);
+  let utxos = await getUtxos(senderAddr, senderScriptHex);
   if (utxos.length === 0 || !utxos.some(u => u.value >= needed)) {
     console.log(`no sufficient confirmed UTXO (need ${needed} sats) — hitting faucet...`);
     await faucetFund(senderAddr);
     utxos = await btcPoll(
       async () => {
-        const fresh = await fetchUtxos(senderAddr, senderScriptHex);
+        const fresh = await getUtxos(senderAddr, senderScriptHex);
         return fresh.some(u => u.value >= needed) ? fresh : null;
       },
       15_000,
       25 * 60_000,
-      'waiting for confirmed UTXO after faucet',
+      'waiting for confirmed UTXO after faucet'
     );
   }
 
@@ -292,7 +165,7 @@ test('single-staker BTC L1 register: account5 end-to-end', async () => {
   const changeSats = utxo.value - AMOUNT_SATS - FEE_SATS;
   expect(changeSats).toBeGreaterThan(0n);
 
-  // 5. Build, sign, broadcast P2WSH funding tx
+  // BUILD + BROADCAST FUNDING TX
   const fundingTx = new btc.Transaction();
   fundingTx.addInput({
     txid: utxo.txid,
@@ -304,28 +177,26 @@ test('single-staker BTC L1 register: account5 end-to-end', async () => {
   fundingTx.sign(stakerPrivBytes);
   fundingTx.finalize();
 
-  const btcTxid = await broadcast(fundingTx.hex);
-  console.log('\n=== BTC FUNDING TXID:', btcTxid, '===');
+  const btcTxid = await broadcastBtc(fundingTx.hex);
+  console.log('BTC funding txid:', btcTxid);
   expect(btcTxid).toMatch(/^[0-9a-f]{64}$/);
   useFixtures('e2e-single-l1-register-btc-confirmed');
 
-  // 6. Wait for BTC confirmation
-  console.log('waiting for BTC confirmation...');
-  const { blockHash, blockHeight } = await waitForBtcConfirmation(btcTxid);
+  // WAIT FOR CONFIRMATION
+  const { block_hash: blockHash, block_height: blockHeight } = await waitForConfirmed(btcTxid);
   console.log('confirmed in block:', blockHash, 'height:', blockHeight);
 
-  // 7. Fetch SPV proof components
+  // SPV PROOF
   const headerHex = await fetchBlockHeader(blockHash);
   expect(headerHex.length).toBe(160);
   const merkleProof = await fetchMerkleProof(btcTxid, blockHash, blockHeight);
   const txCount = await fetchBlockTxCount(blockHash);
-  const legacyHex = await fetchRawTxHex(btcTxid);
+  const { legacyHex } = await fetchRawTxHex(btcTxid);
 
   console.log('headerHex:', headerHex);
   console.log('merkleProof:', JSON.stringify(merkleProof));
   console.log('txCount:', txCount);
 
-  // 8. Assemble SPV proof
   const lockupOutput = buildLockProof({
     txHex: legacyHex,
     header: headerHex,
@@ -338,7 +209,7 @@ test('single-staker BTC L1 register: account5 end-to-end', async () => {
   console.log('lockupOutput height:', lockupOutput.height);
   console.log('lockupOutput amount:', lockupOutput.amount.toString());
 
-  // 9. Compute minUstx and register
+  // REGISTER
   const minUstx = minUstxForSatsAmount({
     sats: AMOUNT_SATS,
     stxValueRatio: bond.stxValueRatio,
@@ -347,17 +218,17 @@ test('single-staker BTC L1 register: account5 end-to-end', async () => {
   const amountUstx = minUstx + 1_000_000n;
   console.log('amountUstx:', amountUstx.toString());
 
-  // Precondition / SELF-HEAL: account5 is allowlisted but may already be
-  // enrolled in an OLDER bond from a prior run (its bondIndex won't match the
-  // freshly-discovered window — e.g. 0). That's expected on a shared chain, so
-  // assert against the EXISTING membership rather than the discovered index.
+  // SELF-HEAL: account5 may already be enrolled in an OLDER bond from a prior
+  // run whose index won't match the freshly-discovered window (e.g. 0). Assert
+  // against the EXISTING membership rather than the discovered bondIndex.
   const existing = await fetchBondMembership({ address: staker.address, network });
   if (existing) {
-    console.warn('staker already enrolled:', JSON.stringify(existing, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)));
+    console.warn(
+      'staker already enrolled:',
+      JSON.stringify(existing, (_k, v) => (typeof v === 'bigint' ? v.toString() : v))
+    );
     expect(existing.isL1Lock).toBe(true);
-    // Do NOT assert existing.bondIndex === discovered bondIndex — the existing
-    // membership is from whatever bond account5 last registered in.
-    console.log(`=== ALREADY ENROLLED in bond ${existing.bondIndex} (isL1Lock=${existing.isL1Lock}) — self-heal pass ===`);
+    console.log(`already enrolled in bond ${existing.bondIndex}, self-heal pass`);
     return;
   }
 
@@ -378,9 +249,8 @@ test('single-staker BTC L1 register: account5 end-to-end', async () => {
   });
 
   const tx = signTransaction(unsigned, staker.key);
-  console.log('broadcasting register-for-bond (L1)...');
   const txid = await broadcastAndWait(tx, staker.address, network);
-  console.log('\n=== STACKS REGISTER TXID:', txid, '===');
+  console.log('register-for-bond txid:', txid);
   useFixtures('e2e-single-l1-register-after');
 
   // Best-effort result check
@@ -398,7 +268,7 @@ test('single-staker BTC L1 register: account5 end-to-end', async () => {
     }
   }
 
-  // 10. Assert membership
+  // ASSERT MEMBERSHIP
   let membership = await fetchBondMembership({ address: staker.address, network });
   const deadline = Date.now() + 2 * 60_000;
   while (!membership && Date.now() < deadline) {
@@ -406,14 +276,10 @@ test('single-staker BTC L1 register: account5 end-to-end', async () => {
     membership = await fetchBondMembership({ address: staker.address, network });
   }
 
-  console.log('\n=== BOND MEMBERSHIP ===');
-  console.log(JSON.stringify(membership, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)));
+  console.log('bond membership:', JSON.stringify(membership, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)));
 
   expect(membership).toBeDefined();
   expect(membership!.isL1Lock).toBe(true);
   expect(membership!.bondIndex).toBe(bondIndex);
-  // Relative assertion: locked sats match what we sent
   expect(membership!.amountSats).toBe(AMOUNT_SATS);
-
-  console.log(`\n=== E2E single-l1-register SUCCESS: account5 enrolled in bond ${bondIndex} ✓ ===`);
 }, 600_000);

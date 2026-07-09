@@ -1,34 +1,14 @@
 /**
  * ACTION — Prove the P2WSH lockup RECLAIM machinery end-to-end on the live
- * private-1 BTC network, INDEPENDENT of the bond contract (no Stacks txs).
- * Pure BTC — uses the mempool/esplora HTTP API + faucet; no regtest RPC needed.
+ * private-1 BTC network, independent of the bond contract (no Stacks txs).
+ * Pure BTC via mempool/esplora HTTP API + faucet; no regtest RPC needed.
  *
- * Builds TWO self-contained P2WSH lockups funded from a freshly-derived P2WPKH
- * address (so it never collides with other tests), then sweeps each back, proving
- * BOTH spend branches of the canonical `buildLockScript` layout (mirror of
- * pox-5 `construct-lockup-script`):
- *
- *   OP_IF
- *     <unlockHeight> OP_CHECKLOCKTIMEVERIFY
- *   OP_ELSE
- *     OP_SIZE 32 OP_EQUALVERIFY OP_SHA256 <H> OP_EQUALVERIFY   (H = sha256(sha256(consensus-buff(staker))))
- *     <earlyUnlockBytes>       <- <adminPub>  OP_CHECKSIG (account7) — leaves 1 for OP_VERIFY
- *   OP_ENDIF
- *   OP_VERIFY
- *   <unlockBytes>              <- <stakerPub> OP_CHECKSIG (runs in BOTH branches, final result)
- *
- * TEST 1 — EARLY branch (OP_ELSE). unlockHeight = burn + 100 (far future -> CLTV
- *   branch NOT spendable -> forces the early branch). The ELSE branch reveals the
- *   32-byte preimage = sha256(consensus-buff(staker)).
- *     Witness: [ staker_sig, admin_sig, preimage, <empty->ELSE>, witnessScript ]
- *
- * TEST 2 — TIMELOCK branch (OP_IF / CLTV). unlockHeight = burn - 10 (already past
- *   -> CLTV satisfiable now, no waiting).
- *     Witness: [ staker_sig, 0x01(truthy->IF), witnessScript ]
- *     tx.lockTime = unlockHeight, input sequence = 0xfffffffe
- *
- * BIP143 sighash: tx.preimageWitnessV0(0, witnessScript, SIGHASH_ALL=1, amountSats).
- * For P2WSH the scriptCode IS the witnessScript.
+ * Builds two self-contained P2WSH lockups from a freshly-derived P2WPKH
+ * address (avoids colliding with other tests), then sweeps each back,
+ * proving both spend branches of `buildLockScript` (mirrors pox-5
+ * `construct-lockup-script`): TEST 1 takes the OP_ELSE early-unlock branch
+ * (unlockHeight far in the future so CLTV isn't spendable), TEST 2 takes the
+ * OP_IF/CLTV branch (unlockHeight already past).
  *
  * Run (live):
  *   NETWORK=testnet NETWORK_ID=256 STACKS_API=https://api.private-1.hiro.so \
@@ -46,7 +26,7 @@ import * as btc from '@scure/btc-signer';
 import { signECDSA } from '@scure/btc-signer/utils.js';
 // @ts-ignore — same ESM transform
 import { secp256k1 } from '@noble/curves/secp256k1.js';
-import { bytesToHex, concatBytes, hexToBytes } from '@stacks/common';
+import { concatBytes, hexToBytes } from '@stacks/common';
 import {
   buildUnlockScript,
   buildLockScript,
@@ -69,20 +49,23 @@ import { ENV } from '../../helpers/utils';
 
 jest.setTimeout(30 * 60_000);
 
-// Keys
-
 // Dedicated roundtrip staker key — derived to avoid colliding with btc-lock.test.ts
-// which uses account5/6/7. This key is purely for the lockup roundtrip.
-const ROUNDTRIP_PRIV = hexToBytes('e9873d79c6d87dc0fb6a5778633389f4453213303da61f20bd67fc233aa33262');
+// which uses account5/6/7.
+const ROUNDTRIP_PRIV = hexToBytes(
+  'e9873d79c6d87dc0fb6a5778633389f4453213303da61f20bd67fc233aa33262'
+);
 const ROUNDTRIP_PUB = derivePubKey(ROUNDTRIP_PRIV);
 
 // account7 — the early-unlock admin cosigner
-const ACCOUNT7_PRIV = hexToBytes('16226f674796712dfbd53bf402304579b8b6d04d4bed4d466bf84ce6db973d44');
+const ACCOUNT7_PRIV = hexToBytes(
+  '16226f674796712dfbd53bf402304579b8b6d04d4bed4d466bf84ce6db973d44'
+);
 const ACCOUNT7_PUB = derivePubKey(ACCOUNT7_PRIV);
 
-// STX address for the roundtrip staker (consensus-buff in witness script)
 // getAccount expects hex key with compression byte appended
-const STAKER_STX_ADDRESS = getAccount('e9873d79c6d87dc0fb6a5778633389f4453213303da61f20bd67fc233aa33262' + '01').address;
+const STAKER_STX_ADDRESS = getAccount(
+  'e9873d79c6d87dc0fb6a5778633389f4453213303da61f20bd67fc233aa33262' + '01'
+).address;
 
 const ROUNDTRIP_ADDR = privKeyToP2wpkhAddress(ROUNDTRIP_PRIV);
 const ROUNDTRIP_SCRIPT_HEX = privKeyToP2wpkhScriptHex(ROUNDTRIP_PRIV);
@@ -93,11 +76,8 @@ const FUND_FEE = 500n;
 const SIGHASH_ALL = 1;
 const OP_CHECKSIG = 0xac;
 
-// Poll params from ENV (respect BITCOIN_TX_TIMEOUT and POLL_INTERVAL)
 const POLL_INTERVAL_MS = ENV.POLL_INTERVAL > 250 ? ENV.POLL_INTERVAL : 15_000;
 const TIMEOUT_MS = ENV.BITCOIN_TX_TIMEOUT > 10_000 ? ENV.BITCOIN_TX_TIMEOUT : 25 * 60_000;
-
-// Helpers
 
 /**
  * Build the `<adminPub> OP_CHECKSIG` early-unlock subscript.
@@ -141,22 +121,14 @@ async function fundP2wsh(p2wshScript: Uint8Array): Promise<{ txid: string; vout:
   return { txid, vout: 0 };
 }
 
-// TEST 1: EARLY branch round trip
-
 test('EARLY-branch (OP_ELSE) P2WSH lockup round trip', async () => {
   useFixtures('btc-lockup-roundtrip-early');
-  console.log('\n========== TEST 1: EARLY branch ==========');
-  console.log('Roundtrip staker address:', ROUNDTRIP_ADDR);
-  console.log('Staker STX address:', STAKER_STX_ADDRESS);
 
   const burn = await getBtcTipHeight();
   const unlockHeight = burn + 100; // far future -> CLTV NOT spendable -> forces early branch
-  console.log('tip burn:', burn, 'unlockHeight (far future):', unlockHeight);
 
   const unlockBytes = buildUnlockScript(ROUNDTRIP_PUB);
   const earlyUnlockBytes = buildEarlyUnlockCheckSig(ACCOUNT7_PUB);
-  console.log('unlockBytes:', bytesToHex(unlockBytes));
-  console.log('earlyUnlockBytes:', bytesToHex(earlyUnlockBytes));
 
   const witnessScript = buildLockScript({
     stxAddress: STAKER_STX_ADDRESS,
@@ -171,12 +143,9 @@ test('EARLY-branch (OP_ELSE) P2WSH lockup round trip', async () => {
     earlyUnlockBytes,
   });
   const p2wshAddr = btc.p2wsh({ type: 'wsh', script: witnessScript }, REGTEST).address!;
-  console.log('witnessScript:', bytesToHex(witnessScript));
-  console.log('P2WSH address:', p2wshAddr);
 
   const { txid: fundTxid, vout } = await fundP2wsh(p2wshScript);
 
-  // Sweep via EARLY branch back to roundtrip P2WPKH
   const sweepTx = new btc.Transaction({
     allowUnknownOutputs: true,
     disableScriptCheck: true,
@@ -191,55 +160,40 @@ test('EARLY-branch (OP_ELSE) P2WSH lockup round trip', async () => {
   sweepTx.addOutputAddress(ROUNDTRIP_ADDR, LOCK_SATS - SWEEP_FEE, REGTEST);
 
   const sighash = sweepTx.preimageWitnessV0(0, witnessScript, SIGHASH_ALL, LOCK_SATS);
-  const stakerSig = concatBytes(signECDSA(sighash, ROUNDTRIP_PRIV, true), new Uint8Array([SIGHASH_ALL]));
-  const adminSig = concatBytes(signECDSA(sighash, ACCOUNT7_PRIV, true), new Uint8Array([SIGHASH_ALL]));
+  const stakerSig = concatBytes(
+    signECDSA(sighash, ROUNDTRIP_PRIV, true),
+    new Uint8Array([SIGHASH_ALL])
+  );
+  const adminSig = concatBytes(
+    signECDSA(sighash, ACCOUNT7_PRIV, true),
+    new Uint8Array([SIGHASH_ALL])
+  );
 
-  // The ELSE branch requires revealing the 32-byte preimage:
-  //   preimage = sha256(toConsensusBuffStandardPrincipal(stxAddress))
-  //   (stakerHash = sha256(preimage) is committed in the script via OP_SHA256 <stakerHash> OP_EQUALVERIFY)
+  // ELSE branch requires revealing the 32-byte preimage; the script only commits
+  // to its hash (OP_SHA256 <stakerHash> OP_EQUALVERIFY), not the preimage itself.
   const stakerPreimage = computeRegisterPreimage(STAKER_STX_ADDRESS);
 
-  // Witness: [ staker_sig, admin_sig, <preimage>, <empty->ELSE>, witnessScript ]
-  // Stack at script start (top = rightmost): empty | preimage | admin_sig | staker_sig
-  // OP_IF pops empty -> falsy -> ELSE branch
-  // ELSE: OP_SIZE 32 OP_EQUALVERIFY OP_SHA256 <H> OP_EQUALVERIFY -> verifies preimage
-  //       <adminPub> OP_CHECKSIG -> verifies admin_sig, leaves 1 on the stack
-  // OP_ENDIF OP_VERIFY (consumes the ELSE branch's 1)
-  // <stakerPub> OP_CHECKSIG -> verifies staker_sig (final result, both branches)
+  // Witness: [ staker_sig, admin_sig, preimage, <empty->ELSE>, witnessScript ]
   const witnessItems = [stakerSig, adminSig, stakerPreimage, new Uint8Array(0), witnessScript];
   sweepTx.updateInput(0, { finalScriptWitness: witnessItems }, true);
   expect(sweepTx.isFinal).toBe(true);
 
   useFixtures('btc-lockup-roundtrip-early-sweep');
-  console.log('sweep tx hex:', sweepTx.hex);
   const sweepTxid = await broadcastBtc(sweepTx.hex);
-  console.log('=== EARLY SWEEP TXID:', sweepTxid, '===');
   expect(sweepTxid).toMatch(/^[0-9a-f]{64}$/);
   await waitForConfirmed(sweepTxid, { intervalMs: POLL_INTERVAL_MS, timeoutMs: TIMEOUT_MS });
 
-  console.log('\n=== TEST 1 SUMMARY (EARLY) ===');
-  console.log('P2WSH address :', p2wshAddr);
-  console.log('funding txid  :', fundTxid);
-  console.log('sweep txid    :', sweepTxid);
-  console.log('CONFIRMED     : yes');
+  console.log('EARLY roundtrip:', { p2wshAddr, fundTxid, sweepTxid });
 });
-
-// TEST 2: TIMELOCK / CLTV branch round trip
 
 test('TIMELOCK-branch (OP_IF / CLTV) P2WSH lockup round trip', async () => {
   useFixtures('btc-lockup-roundtrip-timelock');
-  console.log('\n========== TEST 2: TIMELOCK branch ==========');
-  console.log('Roundtrip staker address:', ROUNDTRIP_ADDR);
-  console.log('Staker STX address:', STAKER_STX_ADDRESS);
 
   const burn = await getBtcTipHeight();
   const unlockHeight = burn - 10; // already past -> CLTV satisfiable now
-  console.log('tip burn:', burn, 'unlockHeight (past):', unlockHeight);
 
   const unlockBytes = buildUnlockScript(ROUNDTRIP_PUB);
   const earlyUnlockBytes = buildEarlyUnlockCheckSig(ACCOUNT7_PUB);
-  console.log('unlockBytes:', bytesToHex(unlockBytes));
-  console.log('earlyUnlockBytes:', bytesToHex(earlyUnlockBytes));
 
   const witnessScript = buildLockScript({
     stxAddress: STAKER_STX_ADDRESS,
@@ -254,12 +208,9 @@ test('TIMELOCK-branch (OP_IF / CLTV) P2WSH lockup round trip', async () => {
     earlyUnlockBytes,
   });
   const p2wshAddr = btc.p2wsh({ type: 'wsh', script: witnessScript }, REGTEST).address!;
-  console.log('witnessScript:', bytesToHex(witnessScript));
-  console.log('P2WSH address:', p2wshAddr);
 
   const { txid: fundTxid, vout } = await fundP2wsh(p2wshScript);
 
-  // Sweep via TIMELOCK branch back to roundtrip P2WPKH
   const sweepTx = new btc.Transaction({
     allowUnknownOutputs: true,
     disableScriptCheck: true,
@@ -275,7 +226,10 @@ test('TIMELOCK-branch (OP_IF / CLTV) P2WSH lockup round trip', async () => {
   sweepTx.addOutputAddress(ROUNDTRIP_ADDR, LOCK_SATS - SWEEP_FEE, REGTEST);
 
   const sighash = sweepTx.preimageWitnessV0(0, witnessScript, SIGHASH_ALL, LOCK_SATS);
-  const stakerSig = concatBytes(signECDSA(sighash, ROUNDTRIP_PRIV, true), new Uint8Array([SIGHASH_ALL]));
+  const stakerSig = concatBytes(
+    signECDSA(sighash, ROUNDTRIP_PRIV, true),
+    new Uint8Array([SIGHASH_ALL])
+  );
 
   // Witness: [ staker_sig, 0x01 (truthy->IF), witnessScript ]
   const witnessItems = [stakerSig, new Uint8Array([0x01]), witnessScript];
@@ -283,16 +237,9 @@ test('TIMELOCK-branch (OP_IF / CLTV) P2WSH lockup round trip', async () => {
   expect(sweepTx.isFinal).toBe(true);
 
   useFixtures('btc-lockup-roundtrip-timelock-sweep');
-  console.log('sweep tx lockTime:', unlockHeight, 'sequence: 0xFFFFFFFE');
-  console.log('sweep tx hex:', sweepTx.hex);
   const sweepTxid = await broadcastBtc(sweepTx.hex);
-  console.log('=== TIMELOCK SWEEP TXID:', sweepTxid, '===');
   expect(sweepTxid).toMatch(/^[0-9a-f]{64}$/);
   await waitForConfirmed(sweepTxid, { intervalMs: POLL_INTERVAL_MS, timeoutMs: TIMEOUT_MS });
 
-  console.log('\n=== TEST 2 SUMMARY (TIMELOCK) ===');
-  console.log('P2WSH address :', p2wshAddr);
-  console.log('funding txid  :', fundTxid);
-  console.log('sweep txid    :', sweepTxid);
-  console.log('CONFIRMED     : yes');
+  console.log('TIMELOCK roundtrip:', { p2wshAddr, fundTxid, sweepTxid });
 });
