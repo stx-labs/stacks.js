@@ -16,32 +16,27 @@ resets, the endpoints don't).
 | Signer-manager                             | `ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager`                                             |
 | Bond daemon (creates bonds + calc-rewards) | VPS `root@178.104.61.86:/root/bond-daemon`, admin `ST1V2ASRWGR81W7GBN1Z4W2JQKXJWCADPVZG30X45`          |
 
-## Two modes
+## Record → replay
 
-**Mock (default / CI).** Every test replays recorded HTTP from
-`fixtures/fixtures*.json` — offline, ~1 min for the whole suite:
+Replay (offline) is the default; recording is a raw `npx jest` with env vars —
+no wrapper script. Always run from the package dir.
 
 ```sh
+# ALWAYS run from the package dir:
+cd packages/bitcoin-staking
+
+# replay (offline, default) — partial or full (~1 min):
+npx jest tests/privatenet/actions/<name> --collectCoverage=false
 npx jest tests/privatenet --collectCoverage=false
-```
 
-**Record (live).** `RECORD=1` disables the fetch mock, hits the live net, and
-captures every request/response into the active fixture file:
-
-```sh
+# record ONE suite (live). RECORD=1 disables the fetch mock, hits the live net,
+# and captures every request/response into that suite's fixture file:
 NETWORK=testnet NETWORK_ID=256 STACKS_API=https://api.private-1.hiro.so \
-STACKS_TX_TIMEOUT=300000 BITCOIN_TX_TIMEOUT=600000 POLL_INTERVAL=10000 RECORD=1 \
-npx jest tests/privatenet/<file> --runInBand --collectCoverage=false
-```
+POLL_INTERVAL=10000 STACKS_TX_TIMEOUT=300000 BITCOIN_TX_TIMEOUT=600000 \
+RECORD=1 npx jest tests/privatenet/actions/<name> --runInBand --collectCoverage=false
 
-After recording, ALWAYS verify the mock replay passes before moving on.
-
-**Full re-record, one command** (serial, dependency-ordered via
-`record-sequencer.js` — the L1 chain of suites must record in that order;
-fresh-account seed defaults to today so it never collides with a previous
-record on a non-wiped chain; takes a few hours):
-
-```sh
+# record the FULL suite, hands-off (serial, dependency-ordered). This is the one
+# canonical full-record command; takes a few hours (~2 min BTC blocks):
 NETWORK=testnet NETWORK_ID=256 STACKS_API=https://api.private-1.hiro.so \
 POLL_INTERVAL=10000 RETRY_INTERVAL=10000 \
 STACKS_TX_TIMEOUT=300000 BITCOIN_TX_TIMEOUT=600000 \
@@ -51,8 +46,34 @@ npx jest tests/privatenet --runInBand --collectCoverage=false \
   --testSequencer="$(pwd)/tests/privatenet/record-sequencer.js"
 ```
 
-`BOND_ADMIN_KEY` is only needed for `setup-bond` (self-heal still reads it
-under `RECORD`) — see "Current status / known skips" below.
+After recording, ALWAYS verify offline replay passes before moving on.
+
+Notes on the full-record command:
+
+- `--testSequencer=record-sequencer.js` orders the suites by their L1
+  dependency chain (`btc-lock` → `register-for-bond-l1` → `announce` →
+  `early-unlock-reclaim` → …); replay is order-independent so it needs no
+  sequencer.
+- `FRESH_ACCOUNT_SEED` defaults to today so seed-derived fresh accounts never
+  collide with a previous record on a non-wiped chain.
+- `BOND_ADMIN_KEY` is only needed to re-record `setup-bond` (self-heal still
+  reads it under `RECORD`) — env-only, never commit it. See "Current status".
+
+## Recording hooks (hands-off)
+
+Two RECORD-only jest hooks (wired in the shared `jest.config.js`, so they apply
+to privatenet exactly as to regtest) make a live re-record largely unattended:
+
+- `tests/helpers/jest-record-preflight.ts` (globalSetup) — once, before the run.
+  Regtest wipes/reboots a wedged chain; **privatenet can't be reset**, so it
+  instead does a read-only reachability check and fails FAST with a clear
+  message if the node is unreachable, not serving pox-5, or trailing the BTC
+  tip (bound by `PRIVATENET_MAX_LAG`, default 6) — rather than letting every
+  test hang on its own timeout.
+- `tests/helpers/jest-record-retry.ts` (setupFilesAfterEnv) — retries a flaky
+  RECORD attempt (`RECORD_RETRIES`, default 3), discarding the partial fixtures
+  that attempt wrote so the rerun records clean. Inert under replay: a replay
+  failure is a real regression, never retried.
 
 ## Recording rules (each one earned the hard way)
 
