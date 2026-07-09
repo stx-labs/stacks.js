@@ -14,12 +14,17 @@ import {
 import { c32address } from 'c32check';
 import {
   buildAnnounceL1EarlyExit,
+  buildCalculateRewards,
+  buildClaimRewards,
   buildClaimStakerRewardsForSigner,
   buildGrantSignerKey,
+  buildPauseRewards,
   buildRegisterForBond,
   buildRevokeSignerGrant,
   buildSetBondAdmin,
+  buildSetPauseAdmin,
   buildSetupBond,
+  buildStake,
   buildStakeUpdate,
   buildUnstake,
   buildUnstakeSbtc,
@@ -352,6 +357,76 @@ describe('buildClaimStakerRewardsForSigner', () => {
     });
     const payload = payloadOf(tx);
     expect(payload.functionArgs[2].type).toBe(ClarityType.OptionalNone);
+  });
+});
+
+describe('buildSetPauseAdmin', () => {
+  it('emits set-pause-admin with the new admin as its single principal arg', async () => {
+    const tx = await buildSetPauseAdmin({ newAdmin: STAKER, ...COMMON_TX });
+    const payload = payloadOf(tx);
+    expect(payload.functionName.content).toBe('set-pause-admin');
+    expect(payload.functionArgs).toHaveLength(1);
+    expect(payload.functionArgs[0].type).toBe(ClarityType.PrincipalStandard);
+  });
+});
+
+describe('buildPauseRewards', () => {
+  it('emits pause-rewards with no args', async () => {
+    const tx = await buildPauseRewards(COMMON_TX);
+    const payload = payloadOf(tx);
+    expect(payload.functionName.content).toBe('pause-rewards');
+    expect(payload.functionArgs).toHaveLength(0);
+  });
+});
+
+describe('buildStake', () => {
+  it('emits stake with 5 args, calldata defaulting to none', async () => {
+    const tx = await buildStake({
+      signerManager: SIGNER_MANAGER,
+      amountUstx: 1_000_000n,
+      numCycles: 6,
+      startBurnHt: 100,
+      ...COMMON_TX,
+    });
+    const payload = payloadOf(tx);
+    expect(payload.functionName.content).toBe('stake');
+    expect(payload.functionArgs).toHaveLength(5);
+    expect(payload.functionArgs[0].type).toBe(ClarityType.PrincipalContract);
+    expect(payload.functionArgs[4].type).toBe(ClarityType.OptionalNone);
+  });
+
+  it('encodes provided signerCalldata as some(buffer)', async () => {
+    const tx = await buildStake({
+      signerManager: SIGNER_MANAGER,
+      amountUstx: 1_000_000n,
+      numCycles: 6,
+      startBurnHt: 100,
+      signerCalldata: '0x1234',
+      ...COMMON_TX,
+    });
+    const payload = payloadOf(tx);
+    expect(payload.functionArgs[4].type).toBe(ClarityType.OptionalSome);
+  });
+});
+
+describe('buildCalculateRewards', () => {
+  it('emits calculate-rewards with a list of bond indices', async () => {
+    const tx = await buildCalculateRewards({ bondIndices: [1, 2, 3], ...COMMON_TX });
+    const payload = payloadOf(tx);
+    expect(payload.functionName.content).toBe('calculate-rewards');
+    expect(payload.functionArgs).toHaveLength(1);
+    expect(payload.functionArgs[0].type).toBe(ClarityType.List);
+  });
+});
+
+describe('buildClaimRewards', () => {
+  it('emits claim-rewards with a bond-index list and the reward cycle', async () => {
+    const tx = await buildClaimRewards({ rewardCycle: 5, bondIndices: [1, 2], ...COMMON_TX });
+    const payload = payloadOf(tx);
+    expect(payload.functionName.content).toBe('claim-rewards');
+    expect(payload.functionArgs).toHaveLength(2);
+    expect(payload.functionArgs[0].type).toBe(ClarityType.List);
+    expect(payload.functionArgs[1].type).toBe(ClarityType.UInt);
   });
 });
 
