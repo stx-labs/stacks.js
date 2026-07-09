@@ -11,8 +11,12 @@ import {
   Pox5ErrorCode,
 } from '../../../src';
 import {
+  fetchEligibleAnnounceL1EarlyExit,
+  fetchEligibleCalculateRewards,
+  fetchEligibleClaimRewards,
   fetchEligibleGrantSignerKey,
   fetchEligibleRegisterForBond,
+  fetchEligibleRevokeSignerGrant,
   fetchEligibleSetBondAdmin,
   fetchEligibleSetupBond,
   fetchEligibleStake,
@@ -22,8 +26,10 @@ import {
   fetchEligibleUpdateBondRegistration,
   type EligibilityResult,
 } from '../../../src/eligibility';
-import { fetchBondAdmin } from '../../../src/fetch';
+import { currentDistributionCycle } from '../../../src/cycles';
+import { fetchBondAdmin, fetchEarned, fetchRewardsPaused } from '../../../src/fetch';
 import { signSignerGrant } from '../../../src/signer';
+import { getAddressFromPublicKey } from '@stacks/transactions';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { deriveFreshAccount } from '../../helpers/fresh-account';
 import { getNetwork } from '../../helpers/utils';
@@ -294,4 +300,117 @@ test('register-for-bond: enrolled staker and non-allowlisted stranger are both r
     staker: nobody.address,
   });
   expectResult('registerForBond(nobody)', stranger, false, [Pox5ErrorCode.NotAllowlisted]);
+});
+
+test('announce-l1-early-exit: enrolled staker vs stranger', async () => {
+  const poxInfo = await fetchPoxInfo({ network });
+  const membership = await fetchBondMembership({ address: account5.address, network });
+  console.log(
+    'account5 membership:',
+    JSON.stringify(membership, (_k, v) => (typeof v === 'bigint' ? v.toString() : v))
+  );
+
+  const forAccount5 = await fetchEligibleAnnounceL1EarlyExit({
+    staker: account5.address,
+    oldSignerManager: membership?.signer ?? SIGNER_MANAGER,
+    poxInfo,
+    network,
+  });
+  console.log('announceL1EarlyExit(account5):', JSON.stringify(forAccount5));
+  if (membership) {
+    // an enrolled staker must never read as a non-participant
+    if (!forAccount5.ok) {
+      expect(forAccount5.reasons).not.toContain(Pox5ErrorCode.NotBondParticipant);
+    }
+    const wrongOld = await fetchEligibleAnnounceL1EarlyExit({
+      staker: account5.address,
+      oldSignerManager: BOGUS_SIGNER_MANAGER,
+      poxInfo,
+      network,
+    });
+    expectResult('announceL1EarlyExit(account5, wrongOld)', wrongOld, false, [
+      Pox5ErrorCode.InvalidOldSignerManager,
+    ]);
+  }
+
+  const stranger = await fetchEligibleAnnounceL1EarlyExit({
+    staker: nobody.address,
+    oldSignerManager: SIGNER_MANAGER,
+    poxInfo,
+    network,
+  });
+  expectResult('announceL1EarlyExit(nobody)', stranger, false, [
+    Pox5ErrorCode.NotBondParticipant,
+  ]);
+});
+
+test('calculate-rewards: a non-existent bond reads as not-found', async () => {
+  const poxInfo = await fetchPoxInfo({ network });
+  // Before the first distribution cycle completes the wrapper throws rather than
+  // returning a result — nothing can be calculated yet, so there is no read to
+  // exercise.
+  if (currentDistributionCycle(poxInfo) < 1) {
+    console.log('calculateRewards: distribution cycle 0, skipping');
+    return;
+  }
+
+  const bogusBondIndex = 999_999;
+  const result = await fetchEligibleCalculateRewards({
+    bondIndices: [bogusBondIndex],
+    poxInfo,
+    network,
+  });
+  console.log('calculateRewards(bogus bond):', JSON.stringify(result));
+  expectResult('calculateRewards(bogus bond)', result, false, [Pox5ErrorCode.BondNotFound]);
+});
+
+test('claim-rewards: result agrees with independently-read earned', async () => {
+  const poxInfo = await fetchPoxInfo({ network });
+  const rewardCycle = poxInfo.rewardCycleId;
+
+  const [paused, earned] = await Promise.all([
+    fetchRewardsPaused({ network }),
+    fetchEarned({ signerManager: SIGNER_MANAGER, rewardCycle, network }),
+  ]);
+  console.log(`claimRewards inputs: paused=${paused} earned=${earned}`);
+
+  const result = await fetchEligibleClaimRewards({
+    signerManager: SIGNER_MANAGER,
+    rewardCycle,
+    bondIndices: [],
+    network,
+  });
+
+  // Derive the expected outcome from the same state the wrapper reads.
+  if (paused) {
+    expectResult('claimRewards', result, false, [Pox5ErrorCode.RewardsPaused]);
+  } else if (earned <= 0n) {
+    expectResult('claimRewards', result, false, [Pox5ErrorCode.NoClaimableRewards]);
+  } else {
+    expectResult('claimRewards', result, true);
+  }
+});
+
+test('revoke-signer-grant: only the key owner may revoke', async () => {
+  const owner = getAddressFromPublicKey(account6.publicKey, network);
+
+  expectResult(
+    'revokeSignerGrant(owner)',
+    await fetchEligibleRevokeSignerGrant({
+      signerKey: account6.publicKey,
+      caller: owner,
+      network,
+    }),
+    true
+  );
+  expectResult(
+    'revokeSignerGrant(stranger)',
+    await fetchEligibleRevokeSignerGrant({
+      signerKey: account6.publicKey,
+      caller: nobody.address,
+      network,
+    }),
+    false,
+    [Pox5ErrorCode.Unauthorized]
+  );
 });
