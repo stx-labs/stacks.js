@@ -32,7 +32,6 @@ import {
   buildLockScript,
   buildRegisterForBond,
   buildUnlockScript,
-  computeMerkleBranch,
   computeRegisterPreimage,
   describePox5Error,
   fetchBond,
@@ -46,12 +45,21 @@ import { broadcastAndWait, getNextNonce, getTransaction } from '../../helpers/wa
 import { waitForBondWithRunway } from '../../helpers/bond';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
+import {
+  broadcastBtc,
+  faucetFund,
+  fetchBlockHeader,
+  fetchBlockTxCount,
+  fetchMerkleProof,
+  fetchRawTxHex,
+  getUtxos,
+  waitForConfirmed,
+} from '../../helpers/btc-wallet';
 
 const SIGNER_MANAGER =
   process.env.SIGNER_MANAGER ?? 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 
 const MEMPOOL_BASE = 'https://mempool.bitcoin.private-1.hiro.so/api';
-const FAUCET_URL = 'https://api.private-1.hiro.so/extended/v1/faucets/btc';
 
 const AMOUNT_SATS = BigInt(process.env.AMOUNT_SATS ?? 30_000);
 const FEE_SATS = BigInt(process.env.FEE_SATS ?? 500);
@@ -75,45 +83,7 @@ const COSIGNER_PRIV_HEX = '5b8303150239eceaba43892af7cdd1fa7fc26eda5182ebaaa568e
 const staker = getAccount(REGTEST_KEYS.account5);
 const network = getNetwork();
 
-// Inlined BTC helpers (from single-l1-register.e2e.test.ts)
-
-interface Utxo {
-  txid: string;
-  vout: number;
-  value: bigint;
-  scriptPubKey: Uint8Array;
-}
-
-async function fetchUtxos(addr: string, scriptHex: string): Promise<Utxo[]> {
-  const resp = await fetch(`${MEMPOOL_BASE}/address/${addr}/txs`);
-  if (!resp.ok) throw new Error(`GET /address/${addr}/txs → ${resp.status}`);
-  const txs = (await resp.json()) as Array<{
-    txid: string;
-    vin: Array<{ txid: string; vout: number }>;
-    vout: Array<{ value: number; scriptpubkey: string }>;
-    status: { confirmed: boolean };
-  }>;
-  const spent = new Set<string>();
-  for (const tx of txs) {
-    for (const inp of tx.vin) spent.add(`${inp.txid}:${inp.vout}`);
-  }
-  const utxos: Utxo[] = [];
-  for (const tx of txs) {
-    if (!tx.status.confirmed) continue;
-    tx.vout.forEach((out, idx) => {
-      if (out.scriptpubkey !== scriptHex) return;
-      if (spent.has(`${tx.txid}:${idx}`)) return;
-      utxos.push({
-        txid: tx.txid,
-        vout: idx,
-        value: BigInt(out.value),
-        scriptPubKey: hexToBytes(out.scriptpubkey),
-      });
-    });
-  }
-  return utxos;
-}
-
+// Generic poll loop (no request-identical shared equivalent).
 async function btcPoll<T>(
   fn: () => Promise<T | null | undefined>,
   intervalMs: number,
@@ -127,93 +97,6 @@ async function btcPoll<T>(
     await new Promise(r => setTimeout(r, intervalMs));
   }
   throw new Error(`poll timed out after ${timeoutMs}ms: ${label}`);
-}
-
-async function faucetFund(addr: string): Promise<void> {
-  const url = `${FAUCET_URL}?address=${encodeURIComponent(addr)}&xlarge=true`;
-  const resp = await fetch(url, { method: 'POST' });
-  if (!resp.ok) {
-    console.warn(`faucet returned ${resp.status}: ${await resp.text()}`);
-  } else {
-    console.log('faucet response:', JSON.stringify(await resp.json()));
-  }
-}
-
-async function broadcastBtc(rawHex: string): Promise<string> {
-  for (const path of ['/tx', '/v1/tx']) {
-    const resp = await fetch(`${MEMPOOL_BASE}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: rawHex,
-    });
-    const body = await resp.text();
-    if (resp.ok) {
-      console.log(`BTC broadcast succeeded via POST ${MEMPOOL_BASE}${path}`);
-      return body.trim();
-    }
-    console.warn(`POST ${MEMPOOL_BASE}${path} → ${resp.status}: ${body}`);
-  }
-  throw new Error('BTC broadcast failed on both /tx and /v1/tx');
-}
-
-async function waitForBtcConfirmation(
-  txid: string
-): Promise<{ blockHash: string; blockHeight: number }> {
-  return btcPoll(
-    async () => {
-      const resp = await fetch(`${MEMPOOL_BASE}/tx/${txid}`);
-      if (!resp.ok) return null;
-      const tx = (await resp.json()) as {
-        status: { confirmed: boolean; block_hash?: string; block_height?: number };
-      };
-      if (tx.status.confirmed && tx.status.block_hash && tx.status.block_height != null) {
-        return { blockHash: tx.status.block_hash, blockHeight: tx.status.block_height };
-      }
-      return null;
-    },
-    15_000,
-    25 * 60_000,
-    `waiting for BTC tx ${txid} to confirm`
-  );
-}
-
-async function fetchBlockHeader(blockHash: string): Promise<string> {
-  const resp = await fetch(`${MEMPOOL_BASE}/block/${blockHash}/header`);
-  if (!resp.ok) throw new Error(`GET /block/${blockHash}/header → ${resp.status}`);
-  return (await resp.text()).trim();
-}
-
-async function fetchMerkleProof(
-  txid: string,
-  blockHash: string,
-  blockHeight: number
-): Promise<{ block_height: number; merkle: string[]; pos: number }> {
-  const resp = await fetch(`${MEMPOOL_BASE}/block/${blockHash}/txids`);
-  if (!resp.ok) throw new Error(`GET /block/${blockHash}/txids → ${resp.status}`);
-  const txids = (await resp.json()) as string[];
-  const pos = txids.indexOf(txid);
-  if (pos === -1) throw new Error(`txid ${txid} not in block ${blockHash}`);
-  const merkle = computeMerkleBranch(txids, pos);
-  return { block_height: blockHeight, merkle, pos };
-}
-
-async function fetchBlockTxCount(blockHash: string): Promise<number> {
-  const resp = await fetch(`${MEMPOOL_BASE}/block/${blockHash}`);
-  if (!resp.ok) throw new Error(`GET /block/${blockHash} → ${resp.status}`);
-  const data = (await resp.json()) as { tx_count: number };
-  return data.tx_count;
-}
-
-async function fetchRawTxHex(txid: string): Promise<string> {
-  const resp = await fetch(`${MEMPOOL_BASE}/tx/${txid}/hex`);
-  if (!resp.ok) throw new Error(`GET /tx/${txid}/hex → ${resp.status}`);
-  const segwitHex = (await resp.text()).trim();
-  const parsed = btc.Transaction.fromRaw(hexToBytes(segwitHex), {
-    allowUnknownOutputs: true,
-    disableScriptCheck: true,
-  });
-  const legacyBytes = parsed.toBytes(true, false); // withScriptSig=true, withWitness=false
-  return bytesToHex(legacyBytes);
 }
 
 beforeAll(async () => {
@@ -326,7 +209,7 @@ test('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5', asyn
     const existingP2wsh = btc.p2wsh({ type: 'wsh', script: existingWitnessScript }, REGTEST_BTC);
     const existingScriptHex = bytesToHex(existingP2wsh.script);
     console.log('searching existing P2WSH UTXO at:', existingP2wsh.address);
-    const utxos = await fetchUtxos(existingP2wsh.address!, existingScriptHex);
+    const utxos = await getUtxos(existingP2wsh.address!, existingScriptHex);
     const utxo = utxos.sort((a, b) => (b.value > a.value ? 1 : -1))[0];
     if (!utxo) {
       console.warn(
@@ -354,13 +237,13 @@ test('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5', asyn
     console.log('sender P2WPKH addr:', senderAddr);
 
     const needed = AMOUNT_SATS + FEE_SATS;
-    let utxos = await fetchUtxos(senderAddr, senderScriptHex);
+    let utxos = await getUtxos(senderAddr, senderScriptHex);
     if (utxos.length === 0 || !utxos.some(u => u.value >= needed)) {
       console.log(`no sufficient confirmed UTXO (need ${needed} sats) — hitting faucet...`);
       await faucetFund(senderAddr);
       utxos = await btcPoll(
         async () => {
-          const fresh = await fetchUtxos(senderAddr, senderScriptHex);
+          const fresh = await getUtxos(senderAddr, senderScriptHex);
           return fresh.some(u => u.value >= needed) ? fresh : null;
         },
         15_000,
@@ -391,14 +274,14 @@ test('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5', asyn
     useFixtures('e2e-exit-l1-announce-and-reclaim-btc-confirmed');
 
     // Wait for confirmation + assemble SPV proof.
-    const { blockHash, blockHeight } = await waitForBtcConfirmation(btcTxid);
+    const { block_hash: blockHash, block_height: blockHeight } = await waitForConfirmed(btcTxid);
     console.log('confirmed in block:', blockHash, 'height:', blockHeight);
 
     const headerHex = await fetchBlockHeader(blockHash);
     expect(headerHex.length).toBe(160);
     const merkleProof = await fetchMerkleProof(btcTxid, blockHash, blockHeight);
     const txCount = await fetchBlockTxCount(blockHash);
-    const legacyHex = await fetchRawTxHex(btcTxid);
+    const { legacyHex } = await fetchRawTxHex(btcTxid);
 
     const lockupOutput = buildLockProof({
       txHex: legacyHex,
@@ -589,12 +472,12 @@ test('L1 early-exit: announce then P2WSH ELSE-branch reclaim for account5', asyn
   expect(seenTx.fee).toBeGreaterThan(0);
 
   // Wait for the reclaim to confirm so the ELSE branch is proven by consensus.
-  const reclaimConf = await waitForBtcConfirmation(reclaimTxid);
+  const reclaimConf = await waitForConfirmed(reclaimTxid);
   console.log(
     'reclaim confirmed in block:',
-    reclaimConf.blockHash,
+    reclaimConf.block_hash,
     'height:',
-    reclaimConf.blockHeight
+    reclaimConf.block_height
   );
 
   console.log('bondIndex:', bondIndex, 'announceTxid:', announceTxid, 'reclaimTxid:', reclaimTxid);

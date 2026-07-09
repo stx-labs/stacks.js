@@ -45,12 +45,16 @@ import { broadcastAndWait, getNextNonce, getTransaction, parseErrCode } from '..
 import { signTransaction } from '../../helpers/sign';
 import { waitForBondWithRunway } from '../../helpers/bond';
 import { useFixtures } from '../../helpers/mock';
-import { BtcLockArtifact } from '../../helpers/btc-wallet';
+import {
+  BtcLockArtifact,
+  broadcastBtc,
+  faucetFund,
+  fetchBlockHeader,
+} from '../../helpers/btc-wallet';
 
 const SIGNER_MANAGER =
   process.env.SIGNER_MANAGER ?? 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 const MEMPOOL_BASE = 'https://mempool.bitcoin.private-1.hiro.so/api';
-const FAUCET_URL = 'https://api.private-1.hiro.so/extended/v1/faucets/btc';
 const FEE_USTX = 10_000n;
 const LOCK_AMOUNT_SATS = 50_000n; // 50k sats per lock
 const FEE_SATS = 500n;
@@ -68,32 +72,11 @@ const STAKER_RAW_KEY_HEX = 'cb3df38053d132895220b9ce471f6b676db5b9bf0b4adefb55f2
 const staker = getAccount(REGTEST_KEYS['account5']);
 const network = getNetwork();
 
-
 function stakerPrivBytes(): Uint8Array {
   return hexToBytes(STAKER_RAW_KEY_HEX);
 }
 function stakerPubBytes(): Uint8Array {
   return secp256k1.getPublicKey(stakerPrivBytes(), true);
-}
-
-async function faucetDrip(btcAddress: string): Promise<void> {
-  const resp = await fetch(`${FAUCET_URL}?address=${btcAddress}&xlarge=true`, { method: 'POST' });
-  const body = await resp.text();
-  console.log(`  faucet -> ${btcAddress}: HTTP ${resp.status} ${body.slice(0, 120)}`);
-}
-
-async function broadcastBtcTx(rawHex: string): Promise<string> {
-  for (const path of ['/tx', '/v1/tx']) {
-    const resp = await fetch(`${MEMPOOL_BASE}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: rawHex,
-    });
-    const body = await resp.text();
-    if (resp.ok) return body.trim();
-    console.warn(`POST ${MEMPOOL_BASE}${path} -> ${resp.status}: ${body.slice(0, 200)}`);
-  }
-  throw new Error('BTC broadcast failed on both /tx and /v1/tx');
 }
 
 async function pollUntil<T>(
@@ -135,12 +118,6 @@ async function fetchMempoolTx(txid: string): Promise<MempoolTx | null> {
   const resp = await fetch(`${MEMPOOL_BASE}/tx/${txid}`);
   if (!resp.ok) return null;
   return resp.json();
-}
-
-async function fetchBlockHeader(blockHash: string): Promise<string | null> {
-  const resp = await fetch(`${MEMPOOL_BASE}/block/${blockHash}/header`);
-  if (!resp.ok) return null;
-  return resp.text();
 }
 
 async function fetchBlockTxids(blockHash: string): Promise<string[]> {
@@ -185,7 +162,7 @@ async function executeBtcLock(bondIndex: number, amountSats: bigint): Promise<Lo
   const senderPub = stakerPubBytes();
   const senderAddr = btc.p2wpkh(senderPub, BTC_NETWORK).address!;
   console.log(`  [btc-lock] sender (P2WPKH): ${senderAddr}`);
-  await faucetDrip(senderAddr);
+  await faucetFund(senderAddr);
 
   const utxos = await pollUntil(
     async () => {
@@ -221,7 +198,7 @@ async function executeBtcLock(bondIndex: number, amountSats: bigint): Promise<Lo
   fundTx.finalize();
 
   console.log(`  [btc-lock] broadcasting funding tx...`);
-  const fundTxid = await broadcastBtcTx(fundTx.hex);
+  const fundTxid = await broadcastBtc(fundTx.hex);
   console.log(`  [btc-lock] funding txid: ${fundTxid}`);
 
   const confirmedTx = await pollUntil(
