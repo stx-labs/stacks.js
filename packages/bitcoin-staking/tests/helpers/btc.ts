@@ -73,6 +73,42 @@ export const getBlockHeaderHex = (blockHash: string) =>
 /** Block with its ordered txid list (verbosity 1). */
 export const getBlockV1 = (blockHash: string) => bitcoinRpc<BlockV1>('getblock', [blockHash, 1]);
 
+interface RawTxVout {
+  value: number;
+  n: number;
+  scriptPubKey: { hex: string };
+}
+interface RawTxVerbose {
+  txid: string;
+  confirmations?: number;
+  vout: RawTxVout[];
+}
+
+/** Verbose raw tx (works for any tx known to the node, wallet or not). */
+export const getRawTransactionVerbose = (txid: string) =>
+  bitcoinRpc<RawTxVerbose>('getrawtransaction', [txid, true]);
+
+/** Broadcast a raw signed tx (hex) via `sendrawtransaction`. Returns the txid. */
+export const sendRawTransaction = (txHex: string) =>
+  bitcoinRpc<string>('sendrawtransaction', [txHex]);
+
+/**
+ * Find the vout of `txid` paying `scriptPubKeyHex` (e.g. a freshly-derived
+ * P2WSH lockup address) and return it as a spendable `Utxo`-shaped object.
+ * Throws if no matching vout is found.
+ */
+export async function findVoutByScript(
+  txid: string,
+  scriptPubKeyHex: string
+): Promise<{ txid: string; vout: number; value: bigint; scriptPubKeyHex: string }> {
+  const tx = await getRawTransactionVerbose(txid);
+  const match = tx.vout.find(v => v.scriptPubKey.hex === scriptPubKeyHex);
+  if (!match) throw new Error(`findVoutByScript: no vout of ${txid} pays ${scriptPubKeyHex}`);
+  // BTC value from bitcoind RPC is a float (e.g. 0.0002); round to avoid fp drift.
+  const sats = BigInt(Math.round(match.value * 1e8));
+  return { txid, vout: match.n, value: sats, scriptPubKeyHex: match.scriptPubKey.hex };
+}
+
 /**
  * Fetch the RPC pieces the SDK's `buildLockProofFromBlock` needs for a
  * confirmed wallet tx: the raw `txHex` (segwit serialization — the SDK strips
@@ -92,7 +128,7 @@ export async function getBtcTxProofInputs(
 }> {
   const walletTx = await getWalletTransaction(txid, wallet);
   if (!walletTx.blockhash || walletTx.confirmations < 1) {
-    throw `tx ${txid} not confirmed yet (confirmations=${walletTx.confirmations})`;
+    throw new Error(`tx ${txid} not confirmed yet (confirmations=${walletTx.confirmations})`);
   }
   const blockHash = walletTx.blockhash;
   const [header, block] = await Promise.all([getBlockHeaderHex(blockHash), getBlockV1(blockHash)]);

@@ -26,9 +26,7 @@ export async function getBondAdminAccount(): Promise<Account> {
   if (key) {
     const account = getAccount(key);
     if (account.address !== BOND_ADMIN_ADDRESS) {
-      throw new Error(
-        `BOND_ADMIN_KEY derives ${account.address}, expected ${BOND_ADMIN_ADDRESS}`
-      );
+      throw new Error(`BOND_ADMIN_KEY derives ${account.address}, expected ${BOND_ADMIN_ADDRESS}`);
     }
     return account;
   }

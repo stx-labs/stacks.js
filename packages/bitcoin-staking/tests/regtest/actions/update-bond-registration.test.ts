@@ -107,7 +107,8 @@ test('update-bond-registration: rotate the membership signer-manager', async () 
   });
   // Setup register (means to the update under test) — dogfood the preflight but
   // don't gate on it; the real check is the membership/update assertion below.
-  if (!registerEligible.ok) console.log('setup-register preflight reasons', registerEligible.reasons);
+  if (!registerEligible.ok)
+    console.log('setup-register preflight reasons', registerEligible.reasons);
 
   const registerUnsigned = await buildRegisterForBond({
     bondIndex,

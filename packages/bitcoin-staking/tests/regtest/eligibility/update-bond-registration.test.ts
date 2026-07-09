@@ -14,7 +14,14 @@ import {
   Pox5ErrorCode,
   type PoxInfo,
 } from '../../../src';
-import { ACCOUNTS, REGTEST_KEYS, SIGNER_MANAGER, SIGNER_MANAGER_2, getAccount, type Account } from '../regtest';
+import {
+  ACCOUNTS,
+  REGTEST_KEYS,
+  SIGNER_MANAGER,
+  SIGNER_MANAGER_2,
+  getAccount,
+  type Account,
+} from '../regtest';
 import { getBondAdminAccount } from '../../helpers/bondAdmin';
 import { getNetwork } from '../../helpers/utils';
 import {
@@ -29,6 +36,7 @@ import { waitForBondWithRunway } from '../../helpers/bond';
 import { useFixtures } from '../../helpers/mock';
 import { signTransaction } from '../../helpers/sign';
 import { deploySbtcMinter, mintSbtc } from '../../helpers/sbtc';
+import { expectIneligible } from '../../helpers/asserts';
 
 jest.setTimeout(6 * 60_000);
 
@@ -131,14 +139,12 @@ test('NotBondParticipant — clean account has no membership', async () => {
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.NotBondParticipant);
+  expectIneligible(r, Pox5ErrorCode.NotBondParticipant);
 });
 
 test('StakeInPreparePhase — poxInfo override puts burnHeight in prepare window', async () => {
   const pox = await getPoxInfo();
-  const cycleEnd =
-    (pox.rewardCycleId + 1) * pox.rewardCycleLength + pox.firstBurnchainBlockHeight;
+  const cycleEnd = (pox.rewardCycleId + 1) * pox.rewardCycleLength + pox.firstBurnchainBlockHeight;
   const prepPox: PoxInfo = { ...pox, currentBurnchainBlockHeight: cycleEnd - 1 };
   const r = await fetchEligibleUpdateBondRegistration({
     staker: clean.address,
@@ -147,8 +153,7 @@ test('StakeInPreparePhase — poxInfo override puts burnHeight in prepare window
     poxInfo: prepPox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.StakeInPreparePhase);
+  expectIneligible(r, Pox5ErrorCode.StakeInPreparePhase);
 });
 
 test('UpdateBondSameSigner — signerManager === oldSignerManager', async () => {
@@ -161,8 +166,7 @@ test('UpdateBondSameSigner — signerManager === oldSignerManager', async () => 
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.UpdateBondSameSigner);
+  expectIneligible(r, Pox5ErrorCode.UpdateBondSameSigner);
 });
 
 test('SignerNotFound — new signerManager does not exist on-chain', async () => {
@@ -174,8 +178,7 @@ test('SignerNotFound — new signerManager does not exist on-chain', async () =>
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.SignerNotFound);
+  expectIneligible(r, Pox5ErrorCode.SignerNotFound);
 });
 
 test('InvalidOldSignerManager — wrong oldSignerManager for enrolled staker', async () => {
@@ -188,8 +191,7 @@ test('InvalidOldSignerManager — wrong oldSignerManager for enrolled staker', a
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.InvalidOldSignerManager);
+  expectIneligible(r, Pox5ErrorCode.InvalidOldSignerManager);
 });
 
 // TODO(coverage): SignerKeyGrantNotFound — needs a signer-manager that IS

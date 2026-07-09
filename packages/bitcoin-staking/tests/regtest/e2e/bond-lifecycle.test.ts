@@ -89,7 +89,11 @@ test('bond lifecycle: setup → register → bond starts → rewards settle → 
 
   // admin: setup-bond
   const { bondIndex, bondStartHeight, poxInfo } = await waitForBondWithRunway(15);
-  console.log('chosen bond', { bondIndex, bondStartHeight, burn: poxInfo.currentBurnchainBlockHeight });
+  console.log('chosen bond', {
+    bondIndex,
+    bondStartHeight,
+    burn: poxInfo.currentBurnchainBlockHeight,
+  });
   expect(await fetchBondStatus({ bondIndex, network })).toBe('eligible');
 
   const setupUnsigned = await buildSetupBond({
@@ -162,9 +166,9 @@ test('bond lifecycle: setup → register → bond starts → rewards settle → 
   expect(membership.isL1Lock).toBe(false);
   expect(membership.amountSats).toBe(MAX_SATS);
   // Relative assert: prior runs may have minted to this account already.
-  expect(await fetchSbtcBalance({ tokenContract: SBTC_TOKEN, address: staker.address, network })).toBe(
-    sbtcBeforeRegister - MAX_SATS
-  );
+  expect(
+    await fetchSbtcBalance({ tokenContract: SBTC_TOKEN, address: staker.address, network })
+  ).toBe(sbtcBeforeRegister - MAX_SATS);
   expect(await fetchBondStatus({ bondIndex, network })).toBe('open');
 
   // chain: bond starts

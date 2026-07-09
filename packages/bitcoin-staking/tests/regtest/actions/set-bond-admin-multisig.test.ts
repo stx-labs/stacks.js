@@ -21,7 +21,6 @@ import {
   AddressHashMode,
   AddressVersion,
   type PrincipalCV,
-  type StacksTransactionWire,
   addressFromPublicKeys,
   addressToString,
   createStacksPublicKey,
@@ -85,21 +84,6 @@ async function fetchBondAdmin(): Promise<string> {
   const { data } = (await res.json()) as { data: string };
   return cvToValue(deserializeCV(data) as PrincipalCV) as string;
 }
-
-/** Single-key `set-bond-admin`, signed + confirmed (node-only). */
-const setBondAdmin = async (newAdmin: string, from: Account, nonce: number) =>
-  broadcastAndWait(
-    signTransaction(
-      await buildSetBondAdmin({ newAdmin, publicKey: from.publicKey, fee: FEE, nonce, network }),
-      from.key
-    ),
-    from.address,
-    network
-  );
-
-/** Sign a multisig tx with the first two accounts + append the third's key. */
-const signMs = (tx: StacksTransactionWire) =>
-  signMultiSigTransaction(tx, [ms[0].key, ms[1].key], [ms[2].publicKey]);
 
 /** `setup-bond` args (shared by the single-key negative path and the multisig). */
 const setupBondParams = (bondIndex: number, staker: string) => ({
@@ -195,7 +179,20 @@ test('bond-admin can be a 2-of-3 multisig that acts as admin', async () => {
   });
 
   // 3. single-key admin hands the role to the multisig.
-  await setBondAdmin(multisig, admin, await getNextNonce(admin.address));
+  await broadcastAndWait(
+    signTransaction(
+      await buildSetBondAdmin({
+        newAdmin: multisig,
+        publicKey: admin.publicKey,
+        fee: FEE,
+        nonce: await getNextNonce(admin.address),
+        network,
+      }),
+      admin.key
+    ),
+    admin.address,
+    network
+  );
   useFixtures('set-bond-admin-multisig-rotated');
   expect(await fetchBondAdmin()).toBe(multisig);
 
@@ -241,13 +238,15 @@ test('bond-admin can be a 2-of-3 multisig that acts as admin', async () => {
   // 5a. the MULTISIG creates the bond — SAME SDK builder, `{ publicKeys,
   //     numSignatures }` instead of `publicKey`, signed by 2 of 3 + 1 appended.
   await broadcastAndWait(
-    signMs(
+    signMultiSigTransaction(
       await buildSetupBond({
         ...setupBondParams(bondIndex, ms[0].address),
         publicKeys: msPublicKeys,
         numSignatures: 2,
         nonce: await getNextNonce(multisig),
-      })
+      }),
+      [ms[0].key, ms[1].key], // 2 of 3 sign
+      [ms[2].publicKey] // the third's key is appended, unsigned
     ),
     multisig,
     network
@@ -262,7 +261,7 @@ test('bond-admin can be a 2-of-3 multisig that acts as admin', async () => {
 
   // 5b. the MULTISIG rotates the role back to the original admin.
   await broadcastAndWait(
-    signMs(
+    signMultiSigTransaction(
       await buildSetBondAdmin({
         newAdmin: admin.address,
         publicKeys: msPublicKeys,
@@ -270,7 +269,9 @@ test('bond-admin can be a 2-of-3 multisig that acts as admin', async () => {
         fee: FEE,
         nonce: await getNextNonce(multisig),
         network,
-      })
+      }),
+      [ms[0].key, ms[1].key], // 2 of 3 sign
+      [ms[2].publicKey] // the third's key is appended, unsigned
     ),
     multisig,
     network

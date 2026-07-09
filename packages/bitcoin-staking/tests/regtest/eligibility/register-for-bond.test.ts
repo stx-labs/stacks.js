@@ -23,7 +23,7 @@ import {
 import { waitForBondWithRunway } from '../../helpers/bond';
 import { getBondAdminAccount } from '../../helpers/bondAdmin';
 import { signTransaction } from '../../helpers/sign';
-
+import { expectIneligible } from '../../helpers/asserts';
 
 jest.setTimeout(5 * 60_000);
 
@@ -88,8 +88,7 @@ test('BondNotFound — bondIndex 200 has no setup bond', async () => {
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.BondNotFound);
+  expectIneligible(r, Pox5ErrorCode.BondNotFound);
 });
 
 test('NotAllowlisted — clean account has no allowance on any bond', async () => {
@@ -105,16 +104,14 @@ test('NotAllowlisted — clean account has no allowance on any bond', async () =
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.NotAllowlisted);
+  expectIneligible(r, Pox5ErrorCode.NotAllowlisted);
 });
 
 test('StakeInPreparePhase — poxInfo override puts burnHeight in prepare window', async () => {
   const pox = await getPoxInfo();
   const bondIndex = openBondIndex;
   // Craft a burnHeight that falls in the prepare phase
-  const cycleEnd =
-    (pox.rewardCycleId + 1) * pox.rewardCycleLength + pox.firstBurnchainBlockHeight;
+  const cycleEnd = (pox.rewardCycleId + 1) * pox.rewardCycleLength + pox.firstBurnchainBlockHeight;
   const prepareStart = cycleEnd - pox.prepareCycleLength;
   const prepPox: PoxInfo = { ...pox, currentBurnchainBlockHeight: prepareStart + 1 };
   const r = await fetchEligibleRegisterForBond({
@@ -126,8 +123,7 @@ test('StakeInPreparePhase — poxInfo override puts burnHeight in prepare window
     poxInfo: prepPox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.StakeInPreparePhase);
+  expectIneligible(r, Pox5ErrorCode.StakeInPreparePhase);
 });
 
 test('BondAlreadyStarted — poxInfo override pushes burnHeight past bond start', async () => {
@@ -147,8 +143,7 @@ test('BondAlreadyStarted — poxInfo override pushes burnHeight past bond start'
     poxInfo: farFuture,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.BondAlreadyStarted);
+  expectIneligible(r, Pox5ErrorCode.BondAlreadyStarted);
 });
 
 test('SignerNotFound — unknown signer-manager contract', async () => {
@@ -163,8 +158,7 @@ test('SignerNotFound — unknown signer-manager contract', async () => {
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.SignerNotFound);
+  expectIneligible(r, Pox5ErrorCode.SignerNotFound);
 });
 
 test('InsufficientStx — amountUstx vastly exceeds any real balance', async () => {
@@ -180,8 +174,7 @@ test('InsufficientStx — amountUstx vastly exceeds any real balance', async () 
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.InsufficientStx);
+  expectIneligible(r, Pox5ErrorCode.InsufficientStx);
 });
 
 test('TooMuchSats — satsTotal exceeds the per-staker allowance', async () => {
@@ -197,8 +190,7 @@ test('TooMuchSats — satsTotal exceeds the per-staker allowance', async () => {
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.TooMuchSats);
+  expectIneligible(r, Pox5ErrorCode.TooMuchSats);
 });
 
 test('DuplicateLockupOutpoint — same tx+outputIndex appears twice in outputs', async () => {
@@ -209,10 +201,16 @@ test('DuplicateLockupOutpoint — same tx+outputIndex appears twice in outputs',
   // The txid is deterministic from these bytes; two outputs with identical tx and outputIndex
   // trigger the client-side dedup before any network call.
   const minimalTx = new Uint8Array([
-    0x01, 0x00, 0x00, 0x00, // version = 1
-    0x00,                   // input count = 0
-    0x00,                   // output count = 0
-    0x00, 0x00, 0x00, 0x00, // locktime = 0
+    0x01,
+    0x00,
+    0x00,
+    0x00, // version = 1
+    0x00, // input count = 0
+    0x00, // output count = 0
+    0x00,
+    0x00,
+    0x00,
+    0x00, // locktime = 0
   ]);
   const fakeOutput = {
     height: pox.currentBurnchainBlockHeight - 10,
@@ -235,19 +233,13 @@ test('DuplicateLockupOutpoint — same tx+outputIndex appears twice in outputs',
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.DuplicateLockupOutpoint);
+  expectIneligible(r, Pox5ErrorCode.DuplicateLockupOutpoint);
 });
 
 test('InvalidBtcHeader — zeroed 80-byte header fails verify-block-header', async () => {
   const pox = await getPoxInfo();
   const bondIndex = openBondIndex;
-  const minimalTx = new Uint8Array([
-    0x01, 0x00, 0x00, 0x00,
-    0x00,
-    0x00,
-    0x00, 0x00, 0x00, 0x00,
-  ]);
+  const minimalTx = new Uint8Array([0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
   const fakeOutput = {
     height: pox.currentBurnchainBlockHeight - 10,
     tx: minimalTx,
@@ -269,19 +261,13 @@ test('InvalidBtcHeader — zeroed 80-byte header fails verify-block-header', asy
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.InvalidBtcHeader);
+  expectIneligible(r, Pox5ErrorCode.InvalidBtcHeader);
 });
 
 test('InvalidUnlockHeight — unlock-burn-height at/above BITCOIN_LOCKTIME_THRESHOLD is rejected but just below is not', async () => {
   const pox = await getPoxInfo();
   const bondIndex = openBondIndex;
-  const minimalTx = new Uint8Array([
-    0x01, 0x00, 0x00, 0x00,
-    0x00,
-    0x00,
-    0x00, 0x00, 0x00, 0x00,
-  ]);
+  const minimalTx = new Uint8Array([0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
   const baseOutput = {
     height: pox.currentBurnchainBlockHeight - 10,
     tx: minimalTx,
@@ -307,11 +293,9 @@ test('InvalidUnlockHeight — unlock-burn-height at/above BITCOIN_LOCKTIME_THRES
   const threshold = Number(BITCOIN_LOCKTIME_THRESHOLD);
   // At and above the threshold → rejected.
   const at = await call(threshold);
-  expect(at.ok).toBe(false);
-  if (!at.ok) expect(at.reasons).toContain(Pox5ErrorCode.InvalidUnlockHeight);
+  expectIneligible(at, Pox5ErrorCode.InvalidUnlockHeight);
   const above = await call(threshold + 1);
-  expect(above.ok).toBe(false);
-  if (!above.ok) expect(above.reasons).toContain(Pox5ErrorCode.InvalidUnlockHeight);
+  expectIneligible(above, Pox5ErrorCode.InvalidUnlockHeight);
   // Just below the threshold → this gate does not flag (other gates may still fail).
   const below = await call(threshold - 1);
   if (!below.ok) expect(below.reasons).not.toContain(Pox5ErrorCode.InvalidUnlockHeight);

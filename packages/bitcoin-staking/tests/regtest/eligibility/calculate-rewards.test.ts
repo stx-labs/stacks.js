@@ -8,11 +8,7 @@
  * so it is NOT active at calcHeight (which looks at the previous distribution
  * cycle boundary). BondNotFound and BondNotActive are unconditionally covered.
  */
-import {
-  buildSetupBond,
-  fetchEligibleCalculateRewards,
-  Pox5ErrorCode,
-} from '../../../src';
+import { buildSetupBond, fetchEligibleCalculateRewards, Pox5ErrorCode } from '../../../src';
 import { ACCOUNTS, type Account } from '../regtest';
 import { getBondAdminAccount } from '../../helpers/bondAdmin';
 import { getNetwork } from '../../helpers/utils';
@@ -20,6 +16,7 @@ import { broadcastAndWait, ensurePox5, getNextNonce, getPoxInfo } from '../../he
 import { waitForBondWithRunway } from '../../helpers/bond';
 import { useFixtures } from '../../helpers/mock';
 import { signTransaction } from '../../helpers/sign';
+import { expectIneligible } from '../../helpers/asserts';
 
 jest.setTimeout(6 * 60_000);
 
@@ -66,8 +63,7 @@ test('BondNotFound — non-existent bondIndex', async () => {
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.BondNotFound);
+  expectIneligible(r, Pox5ErrorCode.BondNotFound);
 });
 
 test('BondNotActive — bond exists but start height is in the future at calcHeight', async () => {
@@ -79,8 +75,7 @@ test('BondNotActive — bond exists but start height is in the future at calcHei
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.BondNotActive);
+  expectIneligible(r, Pox5ErrorCode.BondNotActive);
 });
 
 // TODO(coverage): ActiveBondNotIncluded — requires a bond whose active window

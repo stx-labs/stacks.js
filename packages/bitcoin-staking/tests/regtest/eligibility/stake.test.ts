@@ -4,15 +4,12 @@
  * InvalidStartBurnHeight, InvalidNumCycles, AlreadyStaked, InsufficientStx.
  * RolloverTooEarly needs a prior L1 membership — deferred.
  */
-import {
-  fetchEligibleStake,
-  Pox5ErrorCode,
-  type PoxInfo,
-} from '../../../src';
+import { fetchEligibleStake, Pox5ErrorCode, type PoxInfo } from '../../../src';
 import { ACCOUNTS, REGTEST_KEYS, SIGNER_MANAGER, getAccount } from '../regtest';
 import { getNetwork } from '../../helpers/utils';
 import { useFixtures } from '../../helpers/mock';
 import { ensurePox5, getPoxInfo, waitForSignerManager } from '../../helpers/wait';
+import { expectIneligible } from '../../helpers/asserts';
 
 jest.setTimeout(5 * 60_000);
 
@@ -30,8 +27,7 @@ beforeAll(async () => {
 
 test('StakeInPreparePhase — poxInfo override puts burnHeight in prepare window', async () => {
   const pox = await getPoxInfo();
-  const cycleEnd =
-    (pox.rewardCycleId + 1) * pox.rewardCycleLength + pox.firstBurnchainBlockHeight;
+  const cycleEnd = (pox.rewardCycleId + 1) * pox.rewardCycleLength + pox.firstBurnchainBlockHeight;
   const prepPox: PoxInfo = { ...pox, currentBurnchainBlockHeight: cycleEnd - 1 };
   const r = await fetchEligibleStake({
     staker: clean.address,
@@ -42,8 +38,7 @@ test('StakeInPreparePhase — poxInfo override puts burnHeight in prepare window
     poxInfo: prepPox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.StakeInPreparePhase);
+  expectIneligible(r, Pox5ErrorCode.StakeInPreparePhase);
 });
 
 test('SignerNotFound — unknown signer-manager contract', async () => {
@@ -57,8 +52,7 @@ test('SignerNotFound — unknown signer-manager contract', async () => {
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.SignerNotFound);
+  expectIneligible(r, Pox5ErrorCode.SignerNotFound);
 });
 
 test('InvalidStartBurnHeight — startBurnHt far in the past (wrong cycle)', async () => {
@@ -72,8 +66,7 @@ test('InvalidStartBurnHeight — startBurnHt far in the past (wrong cycle)', asy
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.InvalidStartBurnHeight);
+  expectIneligible(r, Pox5ErrorCode.InvalidStartBurnHeight);
 });
 
 test('InvalidNumCycles — numCycles 0 is below minimum', async () => {
@@ -87,8 +80,7 @@ test('InvalidNumCycles — numCycles 0 is below minimum', async () => {
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.InvalidNumCycles);
+  expectIneligible(r, Pox5ErrorCode.InvalidNumCycles);
 });
 
 test('InvalidNumCycles — numCycles > MAX_NUM_CYCLES (12)', async () => {
@@ -102,8 +94,7 @@ test('InvalidNumCycles — numCycles > MAX_NUM_CYCLES (12)', async () => {
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.InvalidNumCycles);
+  expectIneligible(r, Pox5ErrorCode.InvalidNumCycles);
 });
 
 test('AlreadyStaked — sbtcDeployer is daemon-staked every cycle', async () => {
@@ -117,8 +108,7 @@ test('AlreadyStaked — sbtcDeployer is daemon-staked every cycle', async () => 
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.AlreadyStaked);
+  expectIneligible(r, Pox5ErrorCode.AlreadyStaked);
 });
 
 test('InsufficientStx — amountUstx vastly exceeds any real balance', async () => {
@@ -132,8 +122,7 @@ test('InsufficientStx — amountUstx vastly exceeds any real balance', async () 
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.InsufficientStx);
+  expectIneligible(r, Pox5ErrorCode.InsufficientStx);
 });
 
 // TODO(coverage): SignerKeyGrantNotFound — requires a registered signer-manager

@@ -240,7 +240,9 @@ test('happy register, then re-register aborts AlreadyRegistered (u9)', async () 
   const good = await registerTx({ from: staker, sats: MAX_SATS });
   const reg = await broadcastAndWaitForTransaction(signTransaction(good, staker.key), network);
   expect(reg.tx_status).toBe('success');
-  expect((await fetchBondMembership({ address: staker.address, network }))?.bondIndex).toBe(bondIndex);
+  expect((await fetchBondMembership({ address: staker.address, network }))?.bondIndex).toBe(
+    bondIndex
+  );
 
   useFixtures('adversarial-u9');
   const dup = await registerTx({ from: staker, sats: MAX_SATS });

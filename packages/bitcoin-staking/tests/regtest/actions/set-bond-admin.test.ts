@@ -27,22 +27,6 @@ async function fetchBondAdmin(): Promise<string> {
   return cvToValue(deserializeCV(data) as PrincipalCV) as string;
 }
 
-const setBondAdmin = async (newAdmin: string, from: typeof admin) =>
-  broadcastAndWait(
-    signTransaction(
-      await buildSetBondAdmin({
-        newAdmin,
-        publicKey: from.publicKey,
-        fee: FEE,
-        nonce: await getNextNonce(from.address),
-        network,
-      }),
-      from.key
-    ),
-    from.address,
-    network
-  );
-
 beforeAll(async () => {
   admin = await getBondAdminAccount();
   useFixtures('set-bond-admin');
@@ -52,11 +36,39 @@ beforeAll(async () => {
 test('set-bond-admin: rotate to a temp admin and back', async () => {
   expect(await fetchBondAdmin()).toBe(admin.address);
 
-  await setBondAdmin(tempAdmin.address, admin);
+  // admin -> tempAdmin
+  await broadcastAndWait(
+    signTransaction(
+      await buildSetBondAdmin({
+        newAdmin: tempAdmin.address,
+        publicKey: admin.publicKey,
+        fee: FEE,
+        nonce: await getNextNonce(admin.address),
+        network,
+      }),
+      admin.key
+    ),
+    admin.address,
+    network
+  );
   useFixtures('set-bond-admin-rotated');
   expect(await fetchBondAdmin()).toBe(tempAdmin.address);
 
-  await setBondAdmin(admin.address, tempAdmin);
+  // tempAdmin -> admin (only the current admin may rotate the role, so tempAdmin sends it back)
+  await broadcastAndWait(
+    signTransaction(
+      await buildSetBondAdmin({
+        newAdmin: admin.address,
+        publicKey: tempAdmin.publicKey,
+        fee: FEE,
+        nonce: await getNextNonce(tempAdmin.address),
+        network,
+      }),
+      tempAdmin.key
+    ),
+    tempAdmin.address,
+    network
+  );
   useFixtures('set-bond-admin-restored');
   expect(await fetchBondAdmin()).toBe(admin.address);
 });

@@ -11,7 +11,7 @@ import {
 } from '@stacks/transactions';
 import type { StacksNetwork } from '@stacks/network';
 import { describePox5Error, fetchPoxInfo, fetchSignerInfo, type PoxInfo } from '../../src';
-import { ENV, getNetwork, isMocking, networkReset, timeout, withRetry } from './utils';
+import { ENV, getNetwork, isMocking, timeout, withRetry } from './utils';
 
 /**
  * Retry-wrapped `fetch` for the raw node GETs below. These idempotent reads hit
@@ -47,6 +47,7 @@ export async function waitFor(
 }
 
 /**
+ * @internal
  * Poll `condition` until true, failing fast if the burn chain stalls: if no new
  * burn block appears for `BITCOIN_TX_TIMEOUT`, the condition never will, so throw
  * instead of hanging to the jest timeout. No-op under replay (the fixture is the
@@ -156,6 +157,7 @@ interface RawPoxInfo {
 }
 
 /**
+ * @internal
  * Raw `/v2/pox` via the global `fetch`, used by the readiness waits. Under
  * `RECORD=1` the global `fetch` is wrapped (see `utils.ts`) so these polls are
  * captured into `fixtures.json` too — deduped to a single latest-wins entry, so
@@ -174,38 +176,15 @@ export async function waitForNetwork(): Promise<void> {
   await waitForFulfilled(async () => {
     const pox = await getPoxInfoRaw();
     if (!pox.current_cycle) throw new Error('pox not ready');
-  });
-}
-
-/** Current burn height via raw /v2/pox, or null if the node isn't responding. */
-async function currentBurnHeight(): Promise<number | null> {
-  try {
-    return (await getPoxInfoRaw()).current_burnchain_block_height;
-  } catch {
-    return null;
-  }
+  }, ENV.POLL_INTERVAL, ENV.BOOT_TIMEOUT);
 }
 
 /**
- * Get the chain into a usable pox-5 state before a test:
- * - node down -> fresh chain (with `env`, e.g. `{ POX5_STACKING_ENABLED: 'false' }`);
- * - otherwise reuse the running chain.
- * Then wait until pox-5 is active.
+ * Wait until the chain is ready for a test: node responsive and pox-5 active.
+ * Pure waits — getting a wedged/down chain healthy again is the record harness's
+ * job (see tests/helpers/jest-record-preflight.ts), not the test's. No-op under replay.
  */
-export async function ensurePox5({
-  env = {},
-}: { env?: Record<string, string> } = {}): Promise<void> {
-  // Replay never touches the chain lifecycle — the fixture IS the chain state.
-  // (Guards against a null burn-height read triggering networkReset/docker wipe.)
-  if (!isMocking) {
-    const burn = await currentBurnHeight();
-    if (burn === null) {
-      console.log('node not ready — starting fresh chain');
-      await networkReset(env);
-    } else {
-      console.log(`chain up (burn ${burn}) — reusing`);
-    }
-  }
+export async function ensurePox5(): Promise<void> {
   await waitForNetwork();
   await waitForPox5();
 }
@@ -218,7 +197,7 @@ export async function waitForPox5(): Promise<void> {
       throw new Error(`waiting for pox-5 (active ${pox.contract_id})`);
     }
     console.log(`pox-5 active (burn ${pox.current_burnchain_block_height}, cycle ${pox.reward_cycle_id})`);
-  });
+  }, ENV.POLL_INTERVAL, ENV.BOOT_TIMEOUT);
 }
 
 /**
@@ -231,7 +210,7 @@ export async function waitForSignerManager(signerManager: string): Promise<void>
   await waitForFulfilled(async () => {
     const info = await fetchSignerInfo({ signerManager, network: getNetwork() });
     if (!info) throw new Error('signer-manager not registered yet');
-  });
+  }, ENV.POLL_INTERVAL, ENV.BOOT_TIMEOUT);
   console.log('signer-manager registered');
 }
 
@@ -363,18 +342,25 @@ export async function waitForNextNonce(
  * Poll until `fn` resolves without throwing, returning its value. Ported from
  * functional-tests' `waitForFulfilled` (which discarded the result) — here the
  * resolved value is returned so callers can `const x = await waitForFulfilled(…)`
- * instead of hand-rolling a poll loop. Bound the wait by the caller's jest
- * timeout (no internal ceiling), matching the functional-tests idiom.
+ * instead of hand-rolling a poll loop. `timeoutMs` bounds the wait, rethrowing
+ * `fn`'s last error so a stuck wait fails with WHY, not a generic jest timeout;
+ * omit it (the default) for post-effect reads that a healthy chain settles in a
+ * block or two — those stay bound by the caller's jest timeout.
  */
 export async function waitForFulfilled<T>(
   fn: () => Promise<T>,
-  interval: number = ENV.POLL_INTERVAL
+  interval: number = ENV.POLL_INTERVAL,
+  timeoutMs?: number
 ): Promise<T> {
   if (isMocking) return fn(); // replay: one shot — the fixture is the ready state
+  const startedAt = Date.now();
   while (true) {
     try {
       return await fn();
-    } catch {
+    } catch (err) {
+      if (timeoutMs !== undefined && Date.now() - startedAt > timeoutMs) {
+        throw new Error(`waitForFulfilled: not fulfilled within ${timeoutMs / 1000}s (last: ${err})`);
+      }
       await timeout(interval);
     }
   }

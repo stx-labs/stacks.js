@@ -7,6 +7,7 @@ import { REGTEST_KEYS, getAccount } from '../regtest';
 import { getNetwork } from '../../helpers/utils';
 import { useFixtures } from '../../helpers/mock';
 import { ensurePox5, getPoxInfo } from '../../helpers/wait';
+import { expectIneligible } from '../../helpers/asserts';
 
 jest.setTimeout(5 * 60_000);
 
@@ -28,8 +29,7 @@ test('NoClaimableRewards — unknown signer-manager with no earned rewards', asy
     bondIndices: [],
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.NoClaimableRewards);
+  expectIneligible(r, Pox5ErrorCode.NoClaimableRewards);
 });
 
 // ok:true is not tested here — it requires a signer-manager that has accrued

@@ -8,6 +8,7 @@ import { getNetwork } from '../../helpers/utils';
 import { useFixtures } from '../../helpers/mock';
 import { ensurePox5 } from '../../helpers/wait';
 import { BOND_ADMIN_ADDRESS } from '../../helpers/bondAdmin';
+import { expectIneligible } from '../../helpers/asserts';
 
 jest.setTimeout(5 * 60_000);
 
@@ -24,8 +25,7 @@ test('Unauthorized — non-admin caller', async () => {
     caller: clean.address,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.Unauthorized);
+  expectIneligible(r, Pox5ErrorCode.Unauthorized);
 });
 
 test('ok: true — bond-admin caller', async () => {

@@ -2,7 +2,7 @@
  * Dev utility (NOT a test): rotate `bond-admin` back to the env admin
  * (`ST1V2ASRWG…`) from the multisig, in case a killed/failed multisig run left
  * the role on the 2-of-3. Run with the live node:
- *   STACKS_API=http://host.docker.internal:3999 npx tsx tests/regtest/restore-bond-admin.tsx
+ *   STACKS_API=http://host.docker.internal:3999 npx tsx tests/regtest/restore-bond-admin.ts
  */
 import { generateWallet, generateNewAccount } from '@stacks/wallet-sdk';
 import {
@@ -33,7 +33,11 @@ const nonce = async (a: string) =>
 const admin = async () =>
   cvToValue(
     deserializeCV(
-      (await (await fetch(`${API}/v2/data_var/ST000000000000000000002AMW42H/pox-5/bond-admin?proof=0`)).json()).data
+      (
+        await (
+          await fetch(`${API}/v2/data_var/ST000000000000000000002AMW42H/pox-5/bond-admin?proof=0`)
+        ).json()
+      ).data
     )
   );
 

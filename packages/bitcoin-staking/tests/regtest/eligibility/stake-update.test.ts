@@ -3,15 +3,12 @@
  * Gates: NotStaking, StakeInPreparePhase, InvalidOldSignerManager,
  * SignerNotFound, SignerKeyGrantNotFound, InvalidNumCycles, InsufficientStx.
  */
-import {
-  fetchEligibleStakeUpdate,
-  Pox5ErrorCode,
-  type PoxInfo,
-} from '../../../src';
+import { fetchEligibleStakeUpdate, Pox5ErrorCode, type PoxInfo } from '../../../src';
 import { ACCOUNTS, REGTEST_KEYS, SIGNER_MANAGER, getAccount } from '../regtest';
 import { getNetwork } from '../../helpers/utils';
 import { useFixtures } from '../../helpers/mock';
 import { ensurePox5, getPoxInfo, waitForSignerManager } from '../../helpers/wait';
+import { expectIneligible } from '../../helpers/asserts';
 
 jest.setTimeout(5 * 60_000);
 
@@ -36,14 +33,12 @@ test('NotStaking — clean account has no stake', async () => {
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.NotStaking);
+  expectIneligible(r, Pox5ErrorCode.NotStaking);
 });
 
 test('StakeInPreparePhase — poxInfo override puts burnHeight in prepare window', async () => {
   const pox = await getPoxInfo();
-  const cycleEnd =
-    (pox.rewardCycleId + 1) * pox.rewardCycleLength + pox.firstBurnchainBlockHeight;
+  const cycleEnd = (pox.rewardCycleId + 1) * pox.rewardCycleLength + pox.firstBurnchainBlockHeight;
   const prepPox: PoxInfo = { ...pox, currentBurnchainBlockHeight: cycleEnd - 1 };
   const r = await fetchEligibleStakeUpdate({
     staker: clean.address,
@@ -52,8 +47,7 @@ test('StakeInPreparePhase — poxInfo override puts burnHeight in prepare window
     poxInfo: prepPox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.StakeInPreparePhase);
+  expectIneligible(r, Pox5ErrorCode.StakeInPreparePhase);
 });
 
 test('SignerNotFound — unknown signer-manager contract', async () => {
@@ -65,8 +59,7 @@ test('SignerNotFound — unknown signer-manager contract', async () => {
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.SignerNotFound);
+  expectIneligible(r, Pox5ErrorCode.SignerNotFound);
 });
 
 test('InsufficientStx — amountIncrease far exceeds clean account balance', async () => {
@@ -79,8 +72,7 @@ test('InsufficientStx — amountIncrease far exceeds clean account balance', asy
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.InsufficientStx);
+  expectIneligible(r, Pox5ErrorCode.InsufficientStx);
 });
 
 test('InvalidOldSignerManager — wrong old signer for staker', async () => {
@@ -93,8 +85,7 @@ test('InvalidOldSignerManager — wrong old signer for staker', async () => {
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.InvalidOldSignerManager);
+  expectIneligible(r, Pox5ErrorCode.InvalidOldSignerManager);
 });
 
 test('InvalidNumCycles — cyclesToExtend produces tail period <= 0', async () => {
@@ -108,8 +99,7 @@ test('InvalidNumCycles — cyclesToExtend produces tail period <= 0', async () =
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.InvalidNumCycles);
+  expectIneligible(r, Pox5ErrorCode.InvalidNumCycles);
 });
 
 // TODO(coverage): SignerKeyGrantNotFound — requires a registered signer-manager

@@ -35,11 +35,6 @@ export const BASE_POX5: Record<string, string> = {
 };
 
 /**
- * Replay map, built ADDITIVELY across `useFixtures` calls so a phase switch
- * layers its changed endpoints on top of the previous phase (your "…going into
- * that" model). Seeded once with fallbacks + the default file.
- */
-/**
  * Replay is a dumb switch: each useFixtures(key) installs a FRESH flat map —
  * fallbacks < default file < key file — with no carry-over between calls.
  * A phase's fixture file is self-contained (the recorder captures every request

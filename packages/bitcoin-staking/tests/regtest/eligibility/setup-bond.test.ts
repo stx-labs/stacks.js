@@ -10,6 +10,7 @@ import { broadcastAndWait, ensurePox5, getNextNonce, getPoxInfo } from '../../he
 import { pickBondIndex } from '../../helpers/bond';
 import { BOND_ADMIN_ADDRESS, getBondAdminAccount } from '../../helpers/bondAdmin';
 import { signTransaction } from '../../helpers/sign';
+import { expectIneligible } from '../../helpers/asserts';
 jest.setTimeout(5 * 60_000);
 
 const network = getNetwork();
@@ -57,8 +58,7 @@ test('Unauthorized — non-admin caller', async () => {
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.Unauthorized);
+  expectIneligible(r, Pox5ErrorCode.Unauthorized);
 });
 
 test('BondAlreadySetup — bondIndex that already has a bond', async () => {
@@ -70,8 +70,7 @@ test('BondAlreadySetup — bondIndex that already has a bond', async () => {
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.BondAlreadySetup);
+  expectIneligible(r, Pox5ErrorCode.BondAlreadySetup);
 });
 
 test('StakerAlreadyAdded — duplicate staker in allowlist', async () => {
@@ -87,8 +86,7 @@ test('StakerAlreadyAdded — duplicate staker in allowlist', async () => {
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.StakerAlreadyAdded);
+  expectIneligible(r, Pox5ErrorCode.StakerAlreadyAdded);
 });
 
 test('CannotSetupBondTooSoon — far-future bondIndex outside registration window', async () => {
@@ -102,8 +100,7 @@ test('CannotSetupBondTooSoon — far-future bondIndex outside registration windo
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.CannotSetupBondTooSoon);
+  expectIneligible(r, Pox5ErrorCode.CannotSetupBondTooSoon);
 });
 
 test('CannotSetupBondTooLate — poxInfo override puts burnHeight past bond start', async () => {
@@ -121,6 +118,5 @@ test('CannotSetupBondTooLate — poxInfo override puts burnHeight past bond star
     poxInfo: latePox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.CannotSetupBondTooLate);
+  expectIneligible(r, Pox5ErrorCode.CannotSetupBondTooLate);
 });

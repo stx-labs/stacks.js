@@ -11,17 +11,21 @@ import {
   makeContractDeploy,
 } from '@stacks/transactions';
 import type { StacksNetwork } from '@stacks/network';
-import { ENV } from './utils';
 import { waitForContract } from './wait';
 
 const DEPLOYER_PLACEHOLDER = 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4';
+
+// Contract `.clar` sources live in the sibling regtest-env checkout. This is a
+// deploy-time staging concern (RECORD only), deliberately NOT part of the network
+// lifecycle abstraction (which is command-only, environment-agnostic).
+const REGTEST_ENV_DIR = '../../../stacks-regtest-env';
 
 /** Read a regtest `.clar` source and apply the standard placeholder rewrites. */
 export function loadContractSource(
   relPath: string,
   opts: { bootAddress: string; deployer: string }
 ): string {
-  return readFileSync(join(ENV.REGTEST_WORKING_DIR, relPath), 'utf8')
+  return readFileSync(join(REGTEST_ENV_DIR, relPath), 'utf8')
     .replaceAll(' .pox-5', ` '${opts.bootAddress}.pox-5`)
     .replaceAll(DEPLOYER_PLACEHOLDER, opts.deployer);
 }

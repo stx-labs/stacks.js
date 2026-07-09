@@ -5,7 +5,7 @@
  *
  * The bond index is chosen at run time: pox-5 only allows setup-bond within
  * ~BOND_GAP_CYCLES of the start and register before it, and the chain mines fast,
- * so we take the furthest-out open window for runway before D0.
+ * so we take the furthest-out open window for runway before the bond starts.
  *
  * Env preconditions: bond-admin == ACCOUNTS.admin, and the daemon has registered
  * SIGNER_MANAGER + deployed sbtc-token.

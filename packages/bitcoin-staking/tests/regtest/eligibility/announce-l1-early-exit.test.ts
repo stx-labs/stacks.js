@@ -30,6 +30,7 @@ import { waitForBondWithRunway } from '../../helpers/bond';
 import { useFixtures } from '../../helpers/mock';
 import { signTransaction } from '../../helpers/sign';
 import { deploySbtcMinter, mintSbtc } from '../../helpers/sbtc';
+import { expectIneligible } from '../../helpers/asserts';
 
 jest.setTimeout(6 * 60_000);
 
@@ -131,14 +132,12 @@ test('NotBondParticipant — clean account has no membership', async () => {
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.NotBondParticipant);
+  expectIneligible(r, Pox5ErrorCode.NotBondParticipant);
 });
 
 test('StakeInPreparePhase — poxInfo override puts burnHeight in prepare window', async () => {
   const pox = await getPoxInfo();
-  const cycleEnd =
-    (pox.rewardCycleId + 1) * pox.rewardCycleLength + pox.firstBurnchainBlockHeight;
+  const cycleEnd = (pox.rewardCycleId + 1) * pox.rewardCycleLength + pox.firstBurnchainBlockHeight;
   const prepPox: PoxInfo = { ...pox, currentBurnchainBlockHeight: cycleEnd - 1 };
   const r = await fetchEligibleAnnounceL1EarlyExit({
     staker: clean.address,
@@ -146,8 +145,7 @@ test('StakeInPreparePhase — poxInfo override puts burnHeight in prepare window
     poxInfo: prepPox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.StakeInPreparePhase);
+  expectIneligible(r, Pox5ErrorCode.StakeInPreparePhase);
 });
 
 test('CannotAnnounceL1EarlyUnlock — staker membership is sBTC (isL1Lock=false)', async () => {
@@ -159,8 +157,7 @@ test('CannotAnnounceL1EarlyUnlock — staker membership is sBTC (isL1Lock=false)
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.CannotAnnounceL1EarlyUnlock);
+  expectIneligible(r, Pox5ErrorCode.CannotAnnounceL1EarlyUnlock);
 });
 
 test('InvalidOldSignerManager — wrong old signer for the enrolled staker', async () => {
@@ -172,8 +169,7 @@ test('InvalidOldSignerManager — wrong old signer for the enrolled staker', asy
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.InvalidOldSignerManager);
+  expectIneligible(r, Pox5ErrorCode.InvalidOldSignerManager);
 });
 
 // TODO(coverage): L1EarlyExitAlreadyAnnounced — requires an L1-lock membership that

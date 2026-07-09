@@ -3,14 +3,12 @@
  * Gates: SignerKeyGrantUsed (requires prior state — deferred), InvalidSignaturePubkey.
  * Both checks are pure local — no network calls beyond the grant-used lookup.
  */
-import {
-  fetchEligibleGrantSignerKey,
-  Pox5ErrorCode,
-} from '../../../src';
+import { fetchEligibleGrantSignerKey, Pox5ErrorCode } from '../../../src';
 import { ACCOUNTS, SIGNER_MANAGER } from '../regtest';
 import { getNetwork } from '../../helpers/utils';
 import { useFixtures } from '../../helpers/mock';
 import { ensurePox5 } from '../../helpers/wait';
+import { expectIneligible } from '../../helpers/asserts';
 
 jest.setTimeout(5 * 60_000);
 
@@ -30,8 +28,7 @@ test('InvalidSignaturePubkey — all-zero signature does not recover to signerKe
     signerSignature: new Uint8Array(65), // invalid signature
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.InvalidSignaturePubkey);
+  expectIneligible(r, Pox5ErrorCode.InvalidSignaturePubkey);
 });
 
 // TODO(coverage): SignerKeyGrantUsed — requires the (signerKey, signerManager, authId)

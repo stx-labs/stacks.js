@@ -3,15 +3,12 @@
  * Gates: NotStaking, InvalidOldSignerManager, UnstakeInPreparePhase.
  * All gates are fully covered here.
  */
-import {
-  fetchEligibleUnstake,
-  Pox5ErrorCode,
-  type PoxInfo,
-} from '../../../src';
+import { fetchEligibleUnstake, Pox5ErrorCode, type PoxInfo } from '../../../src';
 import { ACCOUNTS, REGTEST_KEYS, SIGNER_MANAGER, getAccount } from '../regtest';
 import { getNetwork } from '../../helpers/utils';
 import { useFixtures } from '../../helpers/mock';
 import { ensurePox5, getPoxInfo, waitForSignerManager } from '../../helpers/wait';
+import { expectIneligible } from '../../helpers/asserts';
 
 jest.setTimeout(5 * 60_000);
 
@@ -34,8 +31,7 @@ test('NotStaking — clean account has no stake', async () => {
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.NotStaking);
+  expectIneligible(r, Pox5ErrorCode.NotStaking);
 });
 
 test('InvalidOldSignerManager — wrong old signer for staker', async () => {
@@ -46,14 +42,12 @@ test('InvalidOldSignerManager — wrong old signer for staker', async () => {
     poxInfo: pox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.InvalidOldSignerManager);
+  expectIneligible(r, Pox5ErrorCode.InvalidOldSignerManager);
 });
 
 test('UnstakeInPreparePhase — poxInfo override puts burnHeight in prepare window', async () => {
   const pox = await getPoxInfo();
-  const cycleEnd =
-    (pox.rewardCycleId + 1) * pox.rewardCycleLength + pox.firstBurnchainBlockHeight;
+  const cycleEnd = (pox.rewardCycleId + 1) * pox.rewardCycleLength + pox.firstBurnchainBlockHeight;
   const prepPox: PoxInfo = { ...pox, currentBurnchainBlockHeight: cycleEnd - 1 };
   const r = await fetchEligibleUnstake({
     staker: clean.address,
@@ -61,6 +55,5 @@ test('UnstakeInPreparePhase — poxInfo override puts burnHeight in prepare wind
     poxInfo: prepPox,
     network,
   });
-  expect(r.ok).toBe(false);
-  if (!r.ok) expect(r.reasons).toContain(Pox5ErrorCode.UnstakeInPreparePhase);
+  expectIneligible(r, Pox5ErrorCode.UnstakeInPreparePhase);
 });

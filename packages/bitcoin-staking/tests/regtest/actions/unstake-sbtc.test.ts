@@ -109,7 +109,8 @@ test('sbtc unstake: register → unstake-sbtc → sBTC returned, total falls bac
   });
   // Setup register (means to the unstake under test) — dogfood but don't gate;
   // the real check is the unstake preflight + on-chain assertions below.
-  if (!registerEligible.ok) console.log('setup-register preflight reasons', registerEligible.reasons);
+  if (!registerEligible.ok)
+    console.log('setup-register preflight reasons', registerEligible.reasons);
 
   const registerUnsigned = await buildRegisterForBond({
     bondIndex,

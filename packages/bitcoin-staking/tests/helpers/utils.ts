@@ -57,19 +57,17 @@ export const ENV = {
   STACKS_API: process.env.STACKS_API ?? 'http://localhost:3999',
   BITCOIND_URL: process.env.BITCOIND_URL ?? 'http://btc:btc@localhost:18443',
 
-  /** stacks-regtest-env checkout (contract sources for `deploy.ts`), relative to this package dir. */
-  REGTEST_WORKING_DIR: process.env.REGTEST_WORKING_DIR ?? '../../../stacks-regtest-env',
-
   /**
-   * Network lifecycle commands (inversion of control): the harness never runs
-   * docker itself — `networkUp`/`networkDown`/`networkReset` only exec these.
-   * Whoever runs the suite decides what each op means for their environment;
-   * see `.env.example` for the local stacks-regtest-env commands. An unset
-   * command makes the op a no-op (right for remote/externally-managed nets).
+   * Network lifecycle commands (inversion of control): the harness runs no
+   * docker/environment specifics itself — `networkUp`/`networkDown`/`networkReset`
+   * only exec these opaque command strings. Whoever runs the suite decides what
+   * each means (docker, a remote script, nothing); an unset command is a no-op.
+   * The abstraction carries no filesystem/working-dir knowledge — any paths live
+   * inside the commands. See the regtest README for example commands.
    */
   NETWORK_UP_CMD: process.env.NETWORK_UP_CMD ?? '',
   NETWORK_DOWN_CMD: process.env.NETWORK_DOWN_CMD ?? '',
-  NETWORK_WIPE_CMD: process.env.NETWORK_WIPE_CMD ?? '',
+  NETWORK_RESET_CMD: process.env.NETWORK_RESET_CMD ?? '',
 
   // On the hosted private testnet the API rate-limits at ~1 req/s (HTTP 429).
   // Devnet is local and can be polled fast (250 ms is fine). Testnet callers
@@ -87,6 +85,13 @@ export const ENV = {
   // ample; if the chain freezes (node quiet → 30s miner fallback) we fail fast
   // and retry rather than wait it out. Override up for slow live nets.
   BITCOIN_TX_TIMEOUT: Number(process.env.BITCOIN_TX_TIMEOUT ?? 15_000),
+  // Boot/activation budget — a DIFFERENT regime from the stall guards above: a
+  // fresh chain reaching epoch 4.0 / pox-5 legitimately takes ~4 min, so we can't
+  // fail-fast on it. Bound it anyway (a boot that never activates shouldn't hang
+  // to the jest global timeout with a generic message). Only the readiness waits
+  // (waitForNetwork/waitForPox5/waitForSignerManager) use it; on the hosted
+  // testnet pox-5 is already live, so they resolve well under this ceiling.
+  BOOT_TIMEOUT: Number(process.env.BOOT_TIMEOUT ?? 8 * 60_000),
 
   /**
    * The canonical fixtures store the recorder maintains (relative to cwd, the
@@ -125,7 +130,7 @@ export const timeout = (ms: number) => new Promise<void>(resolve => setTimeout(r
 
 // Recorder: programmatically maintain the canonical JSON fixtures store.
 
-/** Pull the request URL out of any `fetch` input shape. */
+/** @internal Pull the request URL out of any `fetch` input shape. */
 function inputToUrl(input: Parameters<typeof fetch>[0]): URL {
   const raw = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
   return new URL(raw);
@@ -139,7 +144,7 @@ function inputToUrl(input: Parameters<typeof fetch>[0]): URL {
  */
 let activeFixtureKey: string | undefined;
 
-// Optional observer of keyed fixture writes. The record-retry harness registers
+// Optional observer of keyed fixture writes. The jest-record-retry harness registers
 // here to learn which files a test wrote (so it can discard them before a
 // re-attempt) — keeping all retry state in the harness, not in this module.
 let onFixtureWrite: ((path: string) => void) | undefined;
@@ -164,10 +169,10 @@ export function fixturePath(key?: string): string {
 }
 
 /**
- * Fixtures file for the CURRENT test. An explicit `FIXTURES_JSON` env wins;
- * otherwise privatenet tests always resolve to their own fixtures dir (by jest
- * test path), so a bare `npx jest tests/privatenet` replays correctly without
- * the NETWORK=testnet env combo. Everything else keeps the env-based default.
+ * @internal Fixtures file for the CURRENT test. An explicit `FIXTURES_JSON` env
+ * wins; otherwise privatenet tests always resolve to their own fixtures dir (by
+ * jest test path), so a bare `npx jest tests/privatenet` replays correctly
+ * without the NETWORK=testnet env combo. Everything else keeps the env-based default.
  */
 function fixturesJsonFor(): string {
   if (process.env.FIXTURES_JSON) return process.env.FIXTURES_JSON;
@@ -213,7 +218,7 @@ export function loadFixtures(key?: string): Record<string, Fixture> {
   return map;
 }
 
-/** Write the store back as sorted JSON (stable key order -> clean diffs). */
+/** @internal Write the store back as sorted JSON (stable key order -> clean diffs). */
 function writeFixtures(key: string | undefined, map: Record<string, Fixture>): void {
   const sorted: Record<string, Fixture> = {};
   for (const k of Object.keys(map).sort()) sorted[k] = map[k];
@@ -270,7 +275,7 @@ export function fixtureKey(
 }
 
 /**
- * Record one request/response into the active fixtures file (see
+ * @internal Record one request/response into the active fixtures file (see
  * {@link setFixtureFile}), keyed by {@link fixtureKey}, merged + deduped (latest
  * wins). Best-effort — never fails a request over recording.
  */
@@ -381,47 +386,26 @@ export function withTimeout<T, A extends unknown[]>(
   };
 }
 
-// Network lifecycle (inversion of control).
-// The harness has no docker/compose knowledge — it only execs the agent-provided
-// `NETWORK_*_CMD` commands (see `ENV`). The agent chooses what to run and when
-// to wipe; with no command set the op is a no-op.
+// Network lifecycle (inversion of control): a clean up / down / reset abstraction.
+// The harness has no docker/compose knowledge — it only execs the caller-provided
+// `NETWORK_*_CMD` commands (see `ENV`); an unset command makes the op a no-op.
 
-/** Exec an agent-provided lifecycle command; no-op (logged) when unset. */
-async function networkCmd(
-  label: string,
-  cmd: string,
-  env: Record<string, string> = {}
-): Promise<string | undefined> {
+/** @internal Exec a lifecycle command; no-op (logged) when unset. */
+async function networkCmd(label: string, cmd: string): Promise<string | undefined> {
   if (!cmd) {
     console.log(`skip ${label}: no command set (externally managed network)`);
     return;
   }
-  const vars = Object.entries(env)
-    .map(([k, v]) => `${k}=${v}`)
-    .join(' ');
-  console.log(`${label}...${vars ? ` ${vars}` : ''}`);
+  console.log(`${label}...`);
   // command output (e.g. docker builds) can be large; give exec room
-  return (
-    await sh(cmd, {
-      maxBuffer: 64 * 1024 * 1024,
-      env: { ...process.env, ...env },
-    })
-  ).stdout;
+  return (await sh(cmd, { maxBuffer: 64 * 1024 * 1024 })).stdout;
 }
 
-/**
- * Bring the network up. `env` is forwarded to the command's environment, e.g.
- * `{ POX5_STACKING_ENABLED: 'false' }` to disable regtest-env's keep-alive
- * staking daemon so a test can drive stake txs itself.
- */
-export const networkUp = (env: Record<string, string> = {}) =>
-  networkCmd('network up', ENV.NETWORK_UP_CMD, env);
+/** Start the network, keeping chain state. */
+export const networkUp = () => networkCmd('network up', ENV.NETWORK_UP_CMD);
 
-/** Stop the network, KEEPING chain state. */
+/** Stop the network, keeping chain state. */
 export const networkDown = () => networkCmd('network down', ENV.NETWORK_DOWN_CMD);
 
-/** Fresh chain: wipe state (`NETWORK_WIPE_CMD`), then up (forwarding `env`). */
-export async function networkReset(env: Record<string, string> = {}) {
-  await networkCmd('network wipe', ENV.NETWORK_WIPE_CMD);
-  return networkUp(env);
-}
+/** Fresh chain: one command that wipes state and starts back up. */
+export const networkReset = () => networkCmd('network reset', ENV.NETWORK_RESET_CMD);
