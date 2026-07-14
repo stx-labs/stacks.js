@@ -35,29 +35,24 @@ NETWORK=testnet NETWORK_ID=256 STACKS_API=https://api.private-1.hiro.so \
 POLL_INTERVAL=10000 STACKS_TX_TIMEOUT=300000 BITCOIN_TX_TIMEOUT=600000 \
 RECORD=1 npx jest tests/privatenet/actions/<name> --runInBand --collectCoverage=false
 
-# record the FULL suite, hands-off (serial, dependency-ordered). This is the one
-# canonical full-record command; takes a few hours (~2 min BTC blocks):
+# record the FULL suite, hands-off. This is the one canonical full-record
+# command; takes a few hours (~2 min BTC blocks):
 NETWORK=testnet NETWORK_ID=256 STACKS_API=https://api.private-1.hiro.so \
 POLL_INTERVAL=10000 RETRY_INTERVAL=10000 \
 STACKS_TX_TIMEOUT=300000 BITCOIN_TX_TIMEOUT=600000 \
 FRESH_ACCOUNT_SEED="privatenet-$(date +%F)" \
 BOND_ADMIN_KEY=... RECORD=1 \
-npx jest tests/privatenet --runInBand --collectCoverage=false \
-  --testSequencer="$(pwd)/tests/privatenet/record-sequencer.js"
+npx jest tests/privatenet --runInBand --collectCoverage=false
 ```
 
 After recording, ALWAYS verify offline replay passes before moving on.
 
-Notes on the full-record command:
-
-- `--testSequencer=record-sequencer.js` orders the suites by their L1
-  dependency chain (`btc-lock` → `register-for-bond-l1` → `announce` →
-  `early-unlock-reclaim` → …); replay is order-independent so it needs no
-  sequencer.
+- Run order is lexicographical by path (`tests/helpers/alpha-sequencer.js`); a
+  suite that must run in a fixed position gets a numeric filename prefix. None
+  currently need one.
 - `FRESH_ACCOUNT_SEED` defaults to today so seed-derived fresh accounts never
   collide with a previous record on a non-wiped chain.
-- `BOND_ADMIN_KEY` is only needed to re-record `setup-bond` (self-heal still
-  reads it under `RECORD`) — env-only, never commit it. See "Current status".
+- `BOND_ADMIN_KEY` is only needed to re-record `setup-bond`; env-only, never commit it.
 
 ## Recording hooks (hands-off)
 

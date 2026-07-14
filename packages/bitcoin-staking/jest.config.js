@@ -14,6 +14,9 @@ config.setupFilesAfterEnv = [
 // wedged or down regtest chain ONCE before the run so a re-record self-heals.
 config.globalSetup = path.resolve(__dirname, 'tests/helpers/jest-record-preflight.ts');
 
+// Deterministic lexicographical run order.
+config.testSequencer = path.resolve(__dirname, 'tests/helpers/alpha-sequencer.js');
+
 // @scure/btc-signer and its deps are ESM-only — transform them with ts-jest
 const esmPackages = ['@scure/btc-signer', '@scure/base', '@noble/hashes', '@noble/curves', 'micro-packed'].join('|');
 config.transformIgnorePatterns = [`/node_modules/(?!(${esmPackages})/)`];
