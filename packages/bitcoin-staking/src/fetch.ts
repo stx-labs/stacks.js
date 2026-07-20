@@ -94,7 +94,7 @@ export async function fetchStakerInfo(
     contractName: POX5_CONTRACT_NAME,
     functionName: 'get-staker-info',
     functionArgs: [Cl.address(opts.address)],
-    senderAddress: opts.address,
+    senderAddress: network.bootAddress,
     network: opts.network,
     client: opts.client,
   });
@@ -167,7 +167,7 @@ export async function fetchBondMembership(
     contractName: POX5_CONTRACT_NAME,
     functionName: 'get-bond-membership',
     functionArgs: [Cl.address(opts.address)],
-    senderAddress: opts.address,
+    senderAddress: network.bootAddress,
     network: opts.network,
     client: opts.client,
   });
@@ -231,7 +231,7 @@ export async function fetchStakerSharesStakedForCycle(
       bondIndexCV(opts.bondIndex),
       Cl.address(opts.signer),
     ],
-    senderAddress: opts.staker,
+    senderAddress: network.bootAddress,
     network: opts.network,
     client: opts.client,
   });

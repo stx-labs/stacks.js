@@ -280,6 +280,11 @@ export function buildLockProof(
     txIndex: input.merkleProof.pos,
   });
 
+  const amount = tx.getOutput(outputIndex).amount;
+  if (amount === undefined) {
+    throw new Error('buildLockProof: matched output has no decodable amount');
+  }
+
   return {
     height: input.merkleProof.block_height,
     tx: serializeBitcoinTx(legacy),
@@ -288,7 +293,7 @@ export function buildLockProof(
     leafHashes,
     txCount: input.txCount,
     txIndex: input.merkleProof.pos,
-    amount: tx.getOutput(outputIndex).amount ?? 0n,
+    amount,
     unlockBurnHeight: Number(input.unlockHeight),
   };
 }
