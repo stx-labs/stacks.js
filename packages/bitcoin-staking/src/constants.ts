@@ -1,10 +1,9 @@
 /** @internal PoX-5 contract name (on boot address, null address)  */
 export const POX5_CONTRACT_NAME = 'pox-5';
 
-/** @internal Length of a paired-BTC bond in reward cycles (≈ 6 months). */
+/** @internal Length of a paired-BTC bond in reward cycles (~6 months). */
 export const BOND_LENGTH_CYCLES = 12;
 
-// todo: check with core if these will be configurable later
 /** @internal Gap between consecutive bond starts, in reward cycles. */
 export const BOND_GAP_CYCLES = 2;
 

@@ -9,11 +9,11 @@ import {
   computeRegisterPreimage,
   computeUnlockHeight,
   lockScriptToAddress,
-  parseUnlockScript,
   serializeCScriptNum,
   toConsensusBuff,
   validateEarlyUnlockBytes,
 } from '../src/script';
+import { parseUnlockScript } from './helpers/script';
 
 // A known compressed public key (33 bytes)
 const TEST_PUBKEY_HEX = '0316e35d38b52d4886e40065e4952a49535ce914e02294be58e252d1998f129b19';
@@ -269,6 +269,18 @@ describe('buildLockScript', () => {
     ).not.toThrow();
   });
 
+  it('rejects an unlockHeight at/above the BIP-65 timestamp threshold', () => {
+    const base = {
+      stxAddress: TEST_STX_ADDRESS,
+      unlockBytes,
+      earlyUnlockBytes: TEST_EARLY_UNLOCK,
+    };
+    expect(() => buildLockScript({ ...base, unlockHeight: 500_000_000 })).toThrow(
+      'ERR_INVALID_UNLOCK_HEIGHT'
+    );
+    expect(() => buildLockScript({ ...base, unlockHeight: 499_999_999 })).not.toThrow();
+  });
+
   it('rejects malformed earlyUnlockBytes (truncated push would corrupt the script)', () => {
     const base = {
       stxAddress: TEST_STX_ADDRESS,
@@ -304,10 +316,14 @@ describe('buildLockScript', () => {
 describe('validateEarlyUnlockBytes', () => {
   const key = (fill: number) => new Uint8Array(33).fill(fill);
 
-  it('accepts the documented templates: <pubkey> CHECKSIG and M-of-N CHECKMULTISIG', () => {
+  it('accepts the documented single-key template: <pubkey> CHECKSIG', () => {
     expect(() => validateEarlyUnlockBytes(TEST_EARLY_UNLOCK)).not.toThrow();
+  });
+
+  it('rejects multi-key templates (the early-unlock part carries a single key)', () => {
     const multisig = btc.Script.encode([2, key(0x02), key(0x03), key(0x04), 3, 'CHECKMULTISIG']);
-    expect(() => validateEarlyUnlockBytes(multisig)).not.toThrow();
+    expect(() => validateEarlyUnlockBytes(multisig)).toThrow('exactly one 33-byte public-key');
+    expect(() => validateEarlyUnlockBytes(multisig, { shape: false })).not.toThrow();
   });
 
   it('always rejects empty and undecodable bytes, even with shape disabled', () => {
@@ -319,7 +335,7 @@ describe('validateEarlyUnlockBytes', () => {
 
   it('shape: rejects missing 33-byte push, wrong tail, and conditional opcodes', () => {
     expect(() => validateEarlyUnlockBytes(btc.Script.encode(['CHECKSIG']))).toThrow(
-      'no 33-byte public-key push'
+      'exactly one 33-byte public-key push, found 0'
     );
     expect(() => validateEarlyUnlockBytes(btc.Script.encode([key(0x02), 'EQUAL']))).toThrow(
       'must end in OP_CHECKSIG'
@@ -327,7 +343,7 @@ describe('validateEarlyUnlockBytes', () => {
     expect(() => validateEarlyUnlockBytes(btc.Script.encode([key(0x02)]))).toThrow(
       'must end in OP_CHECKSIG'
     );
-    const conditional = btc.Script.encode(['IF', key(0x02), 'ENDIF', key(0x03), 'CHECKSIG']);
+    const conditional = btc.Script.encode(['IF', 'ENDIF', key(0x03), 'CHECKSIG']);
     expect(() => validateEarlyUnlockBytes(conditional)).toThrow('conditional opcodes');
     // ...but all of these pass with the shape heuristic disabled.
     expect(() => validateEarlyUnlockBytes(conditional, { shape: false })).not.toThrow();

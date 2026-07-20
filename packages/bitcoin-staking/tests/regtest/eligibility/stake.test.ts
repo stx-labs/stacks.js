@@ -83,7 +83,7 @@ test('InvalidNumCycles — numCycles 0 is below minimum', async () => {
   expectIneligible(r, Pox5ErrorCode.InvalidNumCycles);
 });
 
-test('InvalidNumCycles — numCycles > MAX_NUM_CYCLES (12)', async () => {
+test('InvalidNumCycles — numCycles > MAX_NUM_CYCLES (96)', async () => {
   const pox = await getPoxInfo();
   const r = await fetchEligibleStake({
     staker: clean.address,

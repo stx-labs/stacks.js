@@ -8,6 +8,7 @@ import {
   type BufferCV,
   type OptionalCV,
   type PrincipalCV,
+  type ResponseErrorCV,
   type TupleCV,
   type UIntCV,
   cvToValue,
@@ -16,7 +17,7 @@ import {
 } from '@stacks/transactions';
 import { POX5_CONTRACT_NAME } from './constants';
 import { type BondStatusName, bondStatus } from './cycles';
-import { describePox5Error } from './errors';
+import { Pox5ErrorCode, describePox5Error } from './errors';
 import type {
   AccountStatus,
   Bond,
@@ -1646,9 +1647,9 @@ export async function fetchSignerInfo(
  * Wraps the contract's `verify-signer-key-grant` read-only.
  *
  * Returns `true` when an active grant exists in `signer-key-grants` for the
- * `(signer-key, signer-manager)` pair, `false` otherwise (the contract
- * returns `(err ERR_SIGNER_KEY_GRANT_NOT_FOUND)` in the absent case — both
- * branches are normalized to a boolean here).
+ * `(signer-key, signer-manager)` pair, `false` when the contract returns
+ * `(err ERR_SIGNER_KEY_GRANT_NOT_FOUND)` — its only error branch. Any other
+ * error code throws.
  */
 export async function fetchVerifySignerKeyGrant(
   opts: {
@@ -1671,8 +1672,16 @@ export async function fetchVerifySignerKeyGrant(
     client: opts.client,
   });
 
-  // Response is `(ok bool)` on success, `(err uint)` on missing grant.
-  return result.type === ClarityType.ResponseOk;
+  // Response is `(ok bool)` on success, `(err u17)` on missing grant — the
+  // read-only's only error branch.
+  if (result.type === ClarityType.ResponseOk) return true;
+  const code = Number(((result as ResponseErrorCV).value as UIntCV).value);
+  if (code === Pox5ErrorCode.SignerKeyGrantNotFound) return false;
+  const info = describePox5Error(code);
+  throw new Error(
+    `verify-signer-key-grant returned (err u${code})` +
+      (info ? ` — ${info.name}: ${info.description}` : '')
+  );
 }
 
 /**

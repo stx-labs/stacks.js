@@ -161,9 +161,9 @@ export async function buildSetupBond(
     minUstxRatioBps: IntegerType;
     /**
      * Pre-pushed Bitcoin script subscript spliced into the OP_ELSE early-exit
-     * branch of the locking script, validating an early L1 unlock — e.g.
-     * `<pubkey> OP_CHECKSIG` or an M-of-N CHECKMULTISIG template (buff 683). Its
-     * result is consumed by the locking script's shared OP_VERIFY.
+     * branch of the locking script, validating an early L1 unlock — a
+     * single-key `<pubkey> OP_CHECKSIG` template (buff 683). Its result is
+     * consumed by the locking script's shared OP_VERIFY.
      */
     earlyUnlockBytes: Uint8Array | string;
     allowlist: { staker: string; maxSats: IntegerType }[];
@@ -202,7 +202,9 @@ export async function buildSetupBond(
  *   tx-index/tx-count, raw tx bytes); the contract reconstructs and verifies
  *   each P2WSH output against the bitcoin chainstate.
  * - `kind: 'sbtc'` — no L1 (BTC) lockup; the contract pulls `sbtcSats` from the caller
- *   via `lock-sbtc`. Requires `postConditions` covering the sBTC transfer.
+ *   via `lock-sbtc`. The caller must supply `postConditions` covering the sBTC
+ *   transfer (the sBTC token principal is deploy-configured per network, so no
+ *   default is attached) — the default deny mode aborts the transfer otherwise.
  *
  * Dry-run the registration first with {@link fetchEligibleRegisterForBond} — it
  * replays the contract's gates (allowlist, timing, STX minimum/balance, signer
@@ -236,7 +238,7 @@ export async function buildSetupBond(
  * });
  * ```
  */
-export function buildRegisterForBond(
+export async function buildRegisterForBond(
   args: {
     bondIndex: number;
     signerManager: string;
@@ -250,27 +252,6 @@ export function buildRegisterForBond(
     signerCalldata?: Uint8Array | string;
   } & TxParams
 ): Promise<StacksTransactionWire> {
-  // NOTE: the `kind: 'sbtc'` lockup makes `lock-sbtc` transfer sBTC FROM the
-  // caller, which the default deny mode aborts unless covered — pass an explicit
-  // `postConditions` (sBTC contract is deploy-configured, so it's caller-supplied).
-  //
-  // TODO(sbtc-default-pc): once the sBTC token contract is finalized per network,
-  // attach this post-condition by DEFAULT here (keyed by network) so callers on
-  // mainnet don't have to. Skip when the caller already supplied `postConditions`.
-  // Something like:
-  //
-  //   let postConditions = args.postConditions;
-  //   if (args.lockup.kind === 'sbtc' && postConditions === undefined) {
-  //     const sender = getAddressFromPublicKey(args.publicKey, args.network);
-  //     const sbtcContract = SBTC_TOKEN_CONTRACT[networkName(args.network)]; // hardcoded per network
-  //     postConditions = [
-  //       Pc.principal(sender).willSendEq(args.lockup.sbtcSats).ft(sbtcContract, SBTC_ASSET_NAME),
-  //     ];
-  //   }
-  //   return callPox5('register-for-bond', [...], { ...args, postConditions });
-  //
-  // Not done now: the sBTC token principal still changes (deploy-configured on
-  // testnet/regtest), so hardcoding it would be wrong.
   return callPox5(
     'register-for-bond',
     [
@@ -486,11 +467,12 @@ export async function buildStake(
  * — the contract asserts it matches the recorded signer
  * (`ERR_INVALID_OLD_SIGNER_MANAGER`) before applying the update.
  *
- * unsure: todo: the API takes `cyclesToExtend`/`amountIncrease` with `0` meaning
- * "skip". The contract's own min-num-cycles guard (`check-pox-lock-period`)
- * is computed against `(unlock-cycle - current-cycle - 1)`, so a pure rotate
- * (both zeros, already-extended position) only succeeds if the existing tail
- * still satisfies the bound. No client-side guard added.
+ * The contract recomputes the lock period from the remaining tail
+ * (`unlock-cycle - current-cycle - 1`) and asserts `check-pox-lock-period`
+ * on it, so a pure rotate (both zeros) aborts with `ERR_INVALID_NUM_CYCLES`
+ * when the position is in its final locked cycle — rotate and extend
+ * together in that case. Dry-run with {@link fetchEligibleStakeUpdate},
+ * which mirrors this gate.
  *
  * @example
  * ```ts
@@ -595,10 +577,9 @@ export async function buildUnstake(
  * `calculation-height` (`assert-all-active-bonds-included`); pass the full
  * `activeBondIndices` set the dashboard surfaces, not a filtered subset.
  *
- * unsure: todo: whether to expose a client-side ordering helper. Today the caller
- * must pre-sort by descending `stx-value-ratio` (on ties the higher
- * `bond-index` comes first). Could wrap once a fetch helper surfaces
- * per-bond `stx-value-ratio` in a single call.
+ * The caller must pre-sort `bondIndices` by descending `stx-value-ratio` (on
+ * ties the lower `bond-index` comes first) — the contract enforces the order
+ * via `ERR_INVALID_BOND_PERIOD_ORDERING`.
  *
  * @example
  * ```ts
@@ -619,6 +600,11 @@ export async function buildCalculateRewards(
 ): Promise<StacksTransactionWire> {
   return callPox5('calculate-rewards', [Cl.list(args.bondIndices.map(i => Cl.uint(i)))], args);
 }
+
+// todo: next: optional — add a helper that returns the active bond indices in
+// the contract's required order (descending stx-value-ratio, ties by lower
+// bond-index). Deliberately out of scope for now; ordering stays a caller
+// responsibility.
 
 /**
  * Build an unsigned `claim-rewards` transaction.

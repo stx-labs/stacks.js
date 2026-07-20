@@ -55,33 +55,6 @@ export function buildUnlockScript(publicKey: Uint8Array | string): Uint8Array {
 }
 
 /**
- * Validate that `unlockBytes` matches the default format (`<pubkey> OP_CHECKSIG`).
- *
- * Returns the extracted compressed public key if valid, or `undefined` if the
- * script doesn't match the default shape.
- */
-export function parseUnlockScript(unlockBytes: Uint8Array | string): Uint8Array | undefined {
-  const bytes = typeof unlockBytes === 'string' ? hexToBytes(unlockBytes) : unlockBytes;
-
-  try {
-    const decoded = btc.Script.decode(bytes);
-
-    if (
-      decoded.length === 2 &&
-      decoded[0] instanceof Uint8Array &&
-      decoded[0].length === 33 &&
-      (decoded[0][0] === 0x02 || decoded[0][0] === 0x03) &&
-      decoded[1] === 'CHECKSIG'
-    ) {
-      return decoded[0];
-    }
-  } catch {
-    // malformed script
-  }
-  return undefined;
-}
-
-/**
  * @internal
  * Mirrors `pox-5.push-script-bytes`: prefixes `bytes` with the right push
  * opcode(s) — empty -> `OP_0`, <=75 -> direct push, <=255 -> `OP_PUSHDATA1`, <=65535
@@ -98,16 +71,10 @@ export function pushScriptBytes(bytes: Uint8Array): Uint8Array {
 
 /**
  * @internal
- * Mirrors `pox-5.serialize-c-script-num`: the minimal little-endian signed
- * ScriptNum encoding of a non-negative integer (`0` -> `[]`; a `0x00` sign byte
- * is appended when the top byte's high bit is set, to keep the value positive).
- * Encoding delegated to `@scure/btc-signer`'s `ScriptNum`.
- *
- * The contract rejects `n >= 2^39` with `ERR_INVALID_UNLOCK_HEIGHT` — the
- * ceiling of what a 5-byte minimally-encoded ScriptNum can represent (a higher
- * value needs a 6th sign byte). We mirror that bound.
- *
- * @throws if `n` is negative or `n >= 2^39` (`ERR_INVALID_UNLOCK_HEIGHT`).
+ * The contract's ceiling for ScriptNum-encoded heights: `2^39`, the largest
+ * value a 5-byte minimally-encoded ScriptNum can represent (a higher value
+ * needs a 6th sign byte). Values at or above are rejected with
+ * `ERR_INVALID_UNLOCK_HEIGHT`.
  */
 export const C_SCRIPT_NUM_MAX = 549755813888n; // 2^39
 
@@ -119,6 +86,19 @@ export const C_SCRIPT_NUM_MAX = 549755813888n; // 2^39
  */
 export const BITCOIN_LOCKTIME_THRESHOLD = 500000000n; // 500,000,000
 
+/**
+ * @internal
+ * Mirrors `pox-5.serialize-c-script-num`: the minimal little-endian signed
+ * ScriptNum encoding of a non-negative integer (`0` -> `[]`; a `0x00` sign byte
+ * is appended when the top byte's high bit is set, to keep the value positive).
+ * Encoding delegated to `@scure/btc-signer`'s `ScriptNum`.
+ *
+ * The contract rejects `n >= 2^39` with `ERR_INVALID_UNLOCK_HEIGHT` — the
+ * ceiling of what a 5-byte minimally-encoded ScriptNum can represent (a higher
+ * value needs a 6th sign byte). We mirror that bound.
+ *
+ * @throws if `n` is negative or `n >= 2^39` (`ERR_INVALID_UNLOCK_HEIGHT`).
+ */
 export function serializeCScriptNum(n: number | bigint): Uint8Array {
   const big = typeof n === 'bigint' ? n : BigInt(n);
   if (big < 0n) throw new Error('serializeCScriptNum: negative values not supported');
@@ -170,6 +150,75 @@ export function computeRegisterPreimage(stxAddress: string): Uint8Array {
   return sha256(toConsensusBuff(stxAddress));
 }
 
+/** @internal */
+const CONDITIONAL_OPS = ['IF', 'NOTIF', 'ELSE', 'ENDIF'];
+
+/**
+ * Validate a bond's `early-unlock-bytes` subscript before it is spliced raw
+ * into a lockup script. The contract stores and splices the bytes without
+ * inspection, so a malformed value (e.g. a truncated data push) corrupts the
+ * assembled script — {@link buildLockScript} still derives a fundable P2WSH
+ * address from it, but the sats would be unspendable in both branches.
+ *
+ * Structural checks (always): the bytes are non-empty and decode as Bitcoin
+ * script (a truncated push fails to decode).
+ *
+ * Shape heuristic (`shape: true`, the default): the fragment contains exactly
+ * one 33-byte public-key push (the early-unlock part of the script carries a
+ * single key), ends in `OP_CHECKSIG` (it must leave a boolean for the shared
+ * `OP_VERIFY`), and contains no `OP_IF`/`OP_NOTIF`/`OP_ELSE`/`OP_ENDIF`
+ * (which would unbalance the outer `OP_IF … OP_ENDIF` scaffold). Disable for
+ * bond templates that are intentionally exotic but chain-valid.
+ *
+ * Returns the decoded bytes.
+ *
+ * @throws on a structural or (when enabled) shape violation.
+ */
+export function validateEarlyUnlockBytes(
+  earlyUnlockBytes: Uint8Array | string,
+  opts: { shape?: boolean } = {}
+): Uint8Array {
+  const bytes =
+    typeof earlyUnlockBytes === 'string' ? hexToBytes(earlyUnlockBytes) : earlyUnlockBytes;
+
+  if (bytes.length === 0) {
+    throw new Error(
+      'earlyUnlockBytes: empty subscript — the early-exit branch would not require a cosigner'
+    );
+  }
+
+  let decoded: btc.ScriptType;
+  try {
+    decoded = btc.Script.decode(bytes);
+  } catch (error) {
+    throw new Error(
+      `earlyUnlockBytes: not decodable as Bitcoin script (a truncated push corrupts the lockup script): ${error}`
+    );
+  }
+
+  if (opts.shape ?? true) {
+    const keyPushes = decoded.filter(op => op instanceof Uint8Array && op.length === 33).length;
+    if (keyPushes !== 1) {
+      throw new Error(
+        `earlyUnlockBytes: expected exactly one 33-byte public-key push, found ${keyPushes}`
+      );
+    }
+    const tail = decoded[decoded.length - 1];
+    if (tail !== 'CHECKSIG') {
+      throw new Error(
+        'earlyUnlockBytes: subscript must end in OP_CHECKSIG (its result feeds the shared OP_VERIFY)'
+      );
+    }
+    if (decoded.some(op => typeof op === 'string' && CONDITIONAL_OPS.includes(op))) {
+      throw new Error(
+        'earlyUnlockBytes: conditional opcodes (OP_IF/OP_NOTIF/OP_ELSE/OP_ENDIF) would unbalance the lockup script scaffold'
+      );
+    }
+  }
+
+  return bytes;
+}
+
 /**
  * Build the canonical L1 lockup script that the pox-5 contract verifies.
  * Byte-for-byte mirror of `pox-5.construct-lockup-script`:
@@ -203,9 +252,9 @@ export function computeRegisterPreimage(stxAddress: string): Uint8Array {
  * - `unlockBytes`: the staker-signature subscript (e.g. `<pubkey> OP_CHECKSIG`
  *   from {@link buildUnlockScript}); it always runs and its result is the
  *   final result of the script.
- * - `earlyUnlockBytes`: the early-unlock-key subscript for the early-exit branch
- *   (e.g. `<pubkey> OP_CHECKSIG`, or an M-of-N CHECKMULTISIG template); its
- *   result is consumed by the shared `OP_VERIFY`.
+ * - `earlyUnlockBytes`: the single-key early-unlock subscript for the
+ *   early-exit branch (`<pubkey> OP_CHECKSIG`); its result is consumed by the
+ *   shared `OP_VERIFY`.
  *
  * The `early-unlock-bytes` come from the per-bond `protocol-bonds.early-unlock-bytes`
  * configuration on-chain; the SDK does not synthesize them — callers fetch them
@@ -214,72 +263,6 @@ export function computeRegisterPreimage(stxAddress: string): Uint8Array {
  * `staker` may be a standard or a contract address — both are serialized by
  * their Clarity consensus buffer, matching pox-5.
  */
-const CONDITIONAL_OPS = ['IF', 'NOTIF', 'ELSE', 'ENDIF'];
-const BOOLEAN_TAIL_OPS = ['CHECKSIG', 'CHECKMULTISIG'];
-
-/**
- * Validate a bond's `early-unlock-bytes` subscript before it is spliced raw
- * into a lockup script. The contract stores and splices the bytes without
- * inspection, so a malformed value (e.g. a truncated data push) corrupts the
- * assembled script — {@link buildLockScript} still derives a fundable P2WSH
- * address from it, but the sats would be unspendable in both branches.
- *
- * Structural checks (always): the bytes are non-empty and decode as Bitcoin
- * script (a truncated push fails to decode).
- *
- * Shape heuristic (`shape: true`, the default): the fragment contains at least
- * one 33-byte public-key push, ends in `OP_CHECKSIG`/`OP_CHECKMULTISIG` (it
- * must leave a boolean for the shared `OP_VERIFY`), and contains no
- * `OP_IF`/`OP_NOTIF`/`OP_ELSE`/`OP_ENDIF` (which would unbalance the outer
- * `OP_IF … OP_ENDIF` scaffold). Disable for bond templates that are
- * intentionally exotic but chain-valid.
- *
- * Returns the decoded bytes.
- *
- * @throws on a structural or (when enabled) shape violation.
- */
-export function validateEarlyUnlockBytes(
-  earlyUnlockBytes: Uint8Array | string,
-  opts: { shape?: boolean } = {}
-): Uint8Array {
-  const bytes =
-    typeof earlyUnlockBytes === 'string' ? hexToBytes(earlyUnlockBytes) : earlyUnlockBytes;
-
-  if (bytes.length === 0) {
-    throw new Error(
-      'earlyUnlockBytes: empty subscript — the early-exit branch would not require a cosigner'
-    );
-  }
-
-  let decoded: btc.ScriptType;
-  try {
-    decoded = btc.Script.decode(bytes);
-  } catch (error) {
-    throw new Error(
-      `earlyUnlockBytes: not decodable as Bitcoin script (a truncated push corrupts the lockup script): ${error}`
-    );
-  }
-
-  if (opts.shape ?? true) {
-    if (!decoded.some(op => op instanceof Uint8Array && op.length === 33)) {
-      throw new Error('earlyUnlockBytes: no 33-byte public-key push found');
-    }
-    const tail = decoded[decoded.length - 1];
-    if (typeof tail !== 'string' || !BOOLEAN_TAIL_OPS.includes(tail)) {
-      throw new Error(
-        'earlyUnlockBytes: subscript must end in OP_CHECKSIG or OP_CHECKMULTISIG (its result feeds the shared OP_VERIFY)'
-      );
-    }
-    if (decoded.some(op => typeof op === 'string' && CONDITIONAL_OPS.includes(op))) {
-      throw new Error(
-        'earlyUnlockBytes: conditional opcodes (OP_IF/OP_NOTIF/OP_ELSE/OP_ENDIF) would unbalance the lockup script scaffold'
-      );
-    }
-  }
-
-  return bytes;
-}
-
 export function buildLockScript(opts: {
   /** Stacks address of the staker (standard or contract address). */
   stxAddress: string;
@@ -306,7 +289,14 @@ export function buildLockScript(opts: {
     shape: opts.validateEarlyUnlockBytes ?? true,
   });
 
-  // Validate the height fits the contract's 5-byte ScriptNum cap before pushing.
+  // Validate the height before pushing: below the BIP-65 threshold (the
+  // contract's `unlock-burn-height < BITCOIN_LOCKTIME_THRESHOLD` assert) and
+  // within the 5-byte ScriptNum cap.
+  if (BigInt(opts.unlockHeight) >= BITCOIN_LOCKTIME_THRESHOLD) {
+    throw new Error(
+      'buildLockScript: unlockHeight >= 500,000,000 is rejected by the contract (ERR_INVALID_UNLOCK_HEIGHT) — Bitcoin would interpret the CLTV value as a timestamp (BIP-65)'
+    );
+  }
   serializeCScriptNum(opts.unlockHeight);
   // The committed staker hash <H> = sha256(sha256(consensus-buff(staker))).
   const stakerHash = sha256(computeRegisterPreimage(opts.stxAddress));

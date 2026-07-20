@@ -35,11 +35,8 @@ import {
   isInPreparePhase,
   bondRegisterRanges,
 } from '../../../src/cycles';
-import {
-  lockScriptToAddress,
-  parseUnlockScript,
-  computeBondUnlockHeight,
-} from '../../../src/script';
+import { lockScriptToAddress, computeBondUnlockHeight } from '../../../src/script';
+import { parseUnlockScript } from '../../helpers/script';
 import * as btcAddress from '../../../src/btc-address';
 import { buildSignerCalldata, parseSignerCalldata } from '../../../src/signer';
 import {

@@ -95,7 +95,7 @@ test('InvalidNumCycles — cyclesToExtend produces tail period <= 0', async () =
     staker,
     signerManager: SIGNER_MANAGER,
     oldSignerManager: SIGNER_MANAGER,
-    cyclesToExtend: 10_000, // far exceeds MAX_NUM_CYCLES (12)
+    cyclesToExtend: 10_000, // far exceeds MAX_NUM_CYCLES (96)
     poxInfo: pox,
     network,
   });
