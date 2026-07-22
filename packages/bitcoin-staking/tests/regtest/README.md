@@ -2,7 +2,7 @@
 
 Hand-run Jest tests exercising the `@stacks/bitcoin-staking` SDK against the
 local regtest env at `../stacks-regtest-env`. Live traffic is captured to
-`fixtures-*.json` and replayed offline by default (no Docker needed).
+`fixtures/fixtures-*.json` and replayed offline by default (no Docker needed).
 
 ```bash
 # ALWAYS run from the package dir (repo-root jest uses the wrong config):
@@ -57,6 +57,8 @@ Two RECORD-only jest hooks make a live re-record largely unattended:
 - `tests/regtest/{actions,eligibility,e2e}/*.test.ts` — the tests. `actions/` = one
   action demo per file; `eligibility/` = preflight gates + their abort codes (incl. the
   `*-aborts` negative-path suites); `e2e/` = the full bond-lifecycle story.
+- `tests/regtest/fixtures/` — the record/replay store: `fixtures.json` (default) +
+  `fixtures-<key>.json` (per-phase), nested to match privatenet's layout.
 
 ## Conventions
 
@@ -71,6 +73,11 @@ Two RECORD-only jest hooks make a live re-record largely unattended:
   on a live chain stay unbounded (jest timeout). Override any via env for slow nets.
 - pox-5 asset-moving calls (register/stake/unstake/rewards) need `postConditionMode: 'allow'`
   (the string — the enum doesn't typecheck), else `abort_by_post_condition`.
+- **Confirmation helper — pick by what you assert.** `broadcastAndWait` (node-nonce)
+  for the happy path: it can't tell success from a runtime abort, so assert the on-chain
+  *effect* afterwards (a read). `broadcastAndWaitForTransaction` (reads `/extended`) only
+  when you must inspect `tx_status`/the abort code — abort-probe negative tests. Never
+  hand-roll a `broadcastTransaction` + poll loop; both helpers no-op the wait under replay.
 
 ## Accounts (`regtest.ts`)
 
@@ -96,8 +103,6 @@ which makes phase boundaries load-bearing:
 `fixtureKey` is body-aware: REST → `path+search`; RPC → `host#method:params`;
 `call-read` → `path#sender:args` (distinguishes stakers); broadcast → path only.
 Waiters short-circuit under replay. Don't hand-edit fixtures — re-record.
-
-`pox5-readonly` still uses the legacy path-keyed `setApiMocks` and stays live-oriented.
 
 ## Re-recording gotchas
 
@@ -130,3 +135,33 @@ Waiters short-circuit under replay. Don't hand-edit fixtures — re-record.
 - Fresh chain boot to epoch 4.0: **~4 min**.
 - Per-suite record: reads/actions ~10–45s; `bond-lifecycle` ~60–75s; `register-aborts` ~3–5 min (u47 wait).
 - Full suite record (~30 files, fresh chain): **~40 min**. Full offline replay: **~6s**.
+
+## Reward payout (what the reward-payout suites encode)
+
+The `reward-payout-{sbtc,signer,l1-withdrawal}` + `vault-rewards-payout` suites verify
+pox-5 reward mechanics end-to-end. The non-obvious findings, all SDK-relevant:
+
+- **Rewards are ALL sBTC — there is no STX reward payout.** The bond-index=none "STX-only
+  leg" is rewards for STX-only stakers, still paid in sBTC to the signer.
+- **The pot is MEASURED, not pushed.** `get-rewards = pox-5's sBTC balance − total-staked −
+  reserve`; there is no deposit fn. Rewards enter only by transferring sBTC into the pox-5
+  principal. On regtest nothing funds it, so a test must send its own "fuel" sBTC to observe
+  a payout — else `earned` is 0 / abort `u32`.
+- **`earned` is bounded by STAKE (shares × rate × cycles), NOT the fuel.** Raise the stake to
+  hit a target earned; excess fuel just goes to reserve.
+- **The settle bridge.** `calculate-rewards` writes the GLOBAL rewards-per-token map, but
+  `get-earned-staker-rewards` reads a per-signer map populated only by `settle-rewards` (run
+  on a claim/stake mutation). So the order is: calculate-rewards → signer-manager
+  `claim-rewards` (settles) → THEN staker `earned` reads > 0. `calculate-rewards` +
+  `claim-rewards` need the FULL sorted active-bond set (top 6), else `u33`/`u29`.
+- **Two-hop payout via the signer-manager (not pox-5's own `claim-rewards`, which needs
+  contract-caller == signer).** pox-5 → signer-manager, then `claim-staker-rewards` → sBTC to
+  the staker (no pox-addr) or an L1 withdrawal request (pox-addr staker). sBTC withdrawals
+  have a **DUST_LIMIT of 546** (`earned − max-fee > 546` or abort `u502`).
+- **Cycle-search probe (robustness).** `calculate-rewards` credits exactly ONE cycle (the
+  reward cycle of `distributionStart − 1`), which drifts run-to-run → pinning a fixed cycle
+  intermittently aborts `u32`. All four suites probe the SIGNER-level `fetchEarned` (the
+  global map, populated without a settle) across `[firstRewardCycle, +3]` to find the credited
+  cycle, then claim THAT cycle. Read-only → replay-safe.
+- The L1 final BTC sweep needs the real signer set (privatenet) — regtest asserts only the
+  withdrawal request + lock.

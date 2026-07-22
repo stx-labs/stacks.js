@@ -217,7 +217,6 @@ test('bond-admin can be a 2-of-3 multisig that acts as admin', async () => {
   // Pick a bond period with runway for the negative + multisig setup-bond pair
   // (the open window is only a couple cycles wide and the chain mines fast).
   const bondIndex = await selectBondIndex();
-  console.log('multisig bond test', { bondIndex, multisig });
 
   //   b) the old admin's setup-bond reverts (unauthorized, before any timing
   //      check) -> no bond is created.

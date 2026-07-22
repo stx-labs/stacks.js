@@ -255,7 +255,7 @@ test('every SDK read wrapper resolves against live state', async () => {
   for (const [name, call] of sweep) {
     try {
       const value = await call();
-      console.log(`${name} →`, typeof value === 'bigint' ? value.toString() : value);
+      console.log(`${name} ->`, typeof value === 'bigint' ? value.toString() : value);
     } catch (e) {
       failures.push({ name, error: (e as Error).message });
     }

@@ -291,12 +291,12 @@ test('InvalidUnlockHeight — unlock-burn-height at/above BITCOIN_LOCKTIME_THRES
     });
 
   const threshold = Number(BITCOIN_LOCKTIME_THRESHOLD);
-  // At and above the threshold → rejected.
+  // At and above the threshold -> rejected.
   const at = await call(threshold);
   expectIneligible(at, Pox5ErrorCode.InvalidUnlockHeight);
   const above = await call(threshold + 1);
   expectIneligible(above, Pox5ErrorCode.InvalidUnlockHeight);
-  // Just below the threshold → this gate does not flag (other gates may still fail).
+  // Just below the threshold -> this gate does not flag (other gates may still fail).
   const below = await call(threshold - 1);
   if (!below.ok) expect(below.reasons).not.toContain(Pox5ErrorCode.InvalidUnlockHeight);
 });

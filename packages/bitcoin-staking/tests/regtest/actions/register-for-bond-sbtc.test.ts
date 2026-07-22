@@ -137,7 +137,7 @@ test('sbtc register-for-bond happy path: setup-bond → mint → register → en
   expect(eligible.ok).toBe(true);
 
   // a2888b9 pox-5 moves STX (feat/staking-post-condition) AND the sBTC; the
-  // sBTC-only PC under default Deny doesn't cover the STX move → aborts by PC.
+  // sBTC-only PC under default Deny doesn't cover the STX move -> aborts by PC.
   // Allow the contract's own transfers (mirrors the keep-alive daemon's stake).
   const registerUnsigned = await buildRegisterForBond({
     bondIndex,

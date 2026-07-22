@@ -48,7 +48,7 @@ jest.setTimeout(6 * 60_000); // runway (<=70s) + bond-start wait (<=40s) + 1 cyc
 const network = getNetwork();
 let admin: Account;
 const sbtcDeployer = ACCOUNTS.sbtcDeployer;
-const staker = getAccount(REGTEST_KEYS.account23); // fresh: registers (sBTC) and never unstakes → permanent membership
+const staker = getAccount(REGTEST_KEYS.account23); // fresh: registers (sBTC) and never unstakes -> permanent membership
 const signerManager = SIGNER_MANAGER;
 
 const MAX_SATS = 10_000n;
@@ -158,7 +158,7 @@ test('bond lifecycle: setup → register → bond starts → rewards settle → 
   // enrolled staker) must NOT share the preflight's phase — the preflight above
   // reads get-bond-membership expecting NO membership yet, and latest-wins would
   // otherwise overwrite that with the enrolled result, sending the replayed
-  // preflight down the bond-overlaps-new-position path (uncaptured → no fixture).
+  // preflight down the bond-overlaps-new-position path (uncaptured -> no fixture).
   useFixtures('bond-lifecycle-registered-after');
   const membership = await fetchBondMembership({ address: staker.address, network });
   if (!membership) throw 'register-for-bond aborted';

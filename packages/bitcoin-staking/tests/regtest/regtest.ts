@@ -125,7 +125,7 @@ export function getAccount(key: string) {
  * - `sbtcDeployer`: `STACKING_KEYS[0]` (ST3NBRSFK…). It deployed `sbtc-token`
  *   (= `pox_5_sbtc_contract`) and hosts the daemon-registered, STAKED
  *   `signer-manager`. It's staked every cycle, so NEVER send test txs from it
- *   (would race the keep-alive daemon → BadNonce) — use it only as the owner of
+ *   (would race the keep-alive daemon -> BadNonce) — use it only as the owner of
  *   the `sbtc-token` / `sbtc-deposit` / `signer-manager` contracts.
  */
 export const ACCOUNTS = {

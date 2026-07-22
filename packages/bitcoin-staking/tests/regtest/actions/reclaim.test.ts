@@ -1,6 +1,6 @@
 /**
  * ACTION — Exercise `src/reclaim.ts` end-to-end against the LIVE regtest
- * bitcoind: build → sign → finalize → broadcast a real P2WSH lockup-reclaim
+ * bitcoind: build -> sign -> finalize -> broadcast a real P2WSH lockup-reclaim
  * tx, covering both spend paths.
  *
  * Self-contained (no bond, no Stacks txs) — pure BTC, funded + broadcast via
