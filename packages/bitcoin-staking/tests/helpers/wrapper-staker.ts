@@ -77,6 +77,11 @@ export function wrapperStakerSource(bootAddress: string): string {
     (try! (contract-call? ${pox5} register-for-bond
        bond-index signer-manager amount-ustx (ok btc-lockup) none))))
 
+(define-public (update-bond-registration (signer-manager <signer-manager-trait>)
+                                         (old-signer-manager <signer-manager-trait>))
+  (as-contract? ((with-all-assets-unsafe))
+    (try! (contract-call? ${pox5} update-bond-registration signer-manager old-signer-manager none))))
+
 (define-public (announce-early-exit (old-signer-manager <signer-manager-trait>))
   (as-contract? ((with-all-assets-unsafe))
     ;; tx-sender is THIS contract under as-contract?, satisfying pox-5's

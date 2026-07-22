@@ -1,0 +1,18 @@
+{
+  "/extended/v1/address/ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP/nonces": {
+    "status": 200,
+    "body": "{\"last_mempool_tx_nonce\":null,\"last_executed_tx_nonce\":9,\"possible_next_nonce\":10,\"detected_missing_nonces\":[],\"detected_mempool_nonces\":[]}"
+  },
+  "/v2/contracts/interface/ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP/sbtc-deposit": {
+    "status": 200,
+    "body": "{\"functions\":[{\"name\":\"mint\",\"access\":\"public\",\"args\":[{\"name\":\"amount\",\"type\":\"uint128\"},{\"name\":\"recipient\",\"type\":\"principal\"}],\"outputs\":{\"type\":{\"response\":{\"ok\":\"bool\",\"error\":\"uint128\"}}}}],\"variables\":[],\"maps\":[],\"fungible_tokens\":[],\"non_fungible_tokens\":[],\"epoch\":\"Epoch40\",\"clarity_version\":\"Clarity4\"}"
+  },
+  "/v2/fees/transaction": {
+    "status": 200,
+    "body": "{\"estimated_cost\":{\"write_length\":12177,\"write_count\":8,\"read_length\":391,\"read_count\":9,\"runtime\":586384},\"estimated_cost_scalar\":18,\"estimations\":[{\"fee_rate\":32.80505248300307,\"fee\":590},{\"fee_rate\":846.7976860716306,\"fee\":15242},{\"fee_rate\":24908.81670744988,\"fee\":448358}],\"cost_scalar_change_by_byte\":0.00476837158203125}"
+  },
+  "/v2/transactions": {
+    "status": 200,
+    "body": "\"59672ab4821299e758cf4431b139001bbc93680299ff5c3b09169742d4e01363\""
+  }
+}
