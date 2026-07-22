@@ -11,3 +11,10 @@
  */
 export const SIGNER_MANAGER =
   process.env.SIGNER_MANAGER ?? 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
+
+/**
+ * The private testnet's Clarity `chain-id` (0x100). Baked into SIP-018 hashes,
+ * so replay must use the record-time value — not the generic testnet default.
+ * Override with `NETWORK_ID` env when targeting a different net.
+ */
+export const CHAIN_ID = Number(process.env.NETWORK_ID ?? 256);

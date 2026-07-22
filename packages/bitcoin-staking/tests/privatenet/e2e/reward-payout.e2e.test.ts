@@ -43,7 +43,7 @@ import {
 import { SIGNER_MANAGER } from '../constants';
 import { sbtcBalance } from '../sbtc';
 import { REGTEST_KEYS, getAccount, resolveAccount } from '../../regtest/regtest';
-import { getNetwork } from '../../helpers/utils';
+import { getNetwork, isMocking } from '../../helpers/utils';
 import {
   broadcastAndWaitForTransaction,
   getNextNonce,
@@ -131,7 +131,12 @@ async function claimCycle(): Promise<number> {
 let cycle: number;
 let bondIndices: number[];
 
-test('settle: calculate-rewards + claim-rewards populate positive staker rewards', async () => {
+// LIVE-ONLY: settle/claim are one-shot on-chain (a cycle's rewards claim once)
+// and the discovery inputs (claim cycle, active bond set) are record-time
+// chain state, so the flow can't replay deterministically from fixtures.
+const liveTest = isMocking ? test.skip : test;
+
+liveTest('settle: calculate-rewards + claim-rewards populate positive staker rewards', async () => {
   useFixtures('e2e-reward-payout-settle');
   cycle = await claimCycle();
   const poxInfo = await fetchPoxInfo({ network });
@@ -187,13 +192,13 @@ test('settle: calculate-rewards + claim-rewards populate positive staker rewards
   // The per-signer map is now populated: the staker's earned amount is POSITIVE.
   const earned = await earnedStaker(staker.address, cycle, BOND_INDEX);
   console.log('account5 earned (cycle', cycle, '):', earned.toString());
-  expect(earned).toBeGreaterThan(0n);
+  expect(earned > 0n).toBe(true);
 
   // Settle pulls the signer's cut into the signer-manager (never decreases).
-  expect(signerAfter).toBeGreaterThanOrEqual(signerBefore);
+  expect(signerAfter >= signerBefore).toBe(true);
 });
 
-test('sBTC payout: claim-staker-rewards raises a plain staker sBTC balance', async () => {
+liveTest('sBTC payout: claim-staker-rewards raises a plain staker sBTC balance', async () => {
   useFixtures('e2e-reward-payout-sbtc');
   const before = await sbtcBalance(staker.address, network);
   console.log('account5 sBTC before claim:', before.toString());
@@ -217,10 +222,12 @@ test('sBTC payout: claim-staker-rewards raises a plain staker sBTC balance', asy
 
   const after = await sbtcBalance(staker.address, network);
   console.log('account5 sBTC after claim:', after.toString(), 'delta', (after - before).toString());
-  expect(after).toBeGreaterThan(before);
+  // Compared as a boolean — a bigint in a failed expect diff crashes jest-worker
+  // ("Do not know how to serialize a BigInt") and masks the real failure in CI.
+  expect(after > before).toBe(true);
 });
 
-test('L1 withdrawal: pox-addr staker claim opens an sBTC→BTC withdrawal request', async () => {
+liveTest('L1 withdrawal: pox-addr staker claim opens an sBTC→BTC withdrawal request', async () => {
   useFixtures('e2e-reward-payout-l1');
   const idBefore = await lastWithdrawalId();
   const sbtcBefore = await sbtcBalance(poxStaker.address, network);
@@ -246,7 +253,7 @@ test('L1 withdrawal: pox-addr staker claim opens an sBTC→BTC withdrawal reques
   // The payout routes to an L1 BTC withdrawal request, NOT the staker's sBTC balance.
   const idAfter = await lastWithdrawalId();
   console.log('last-withdrawal-request-id after:', idAfter.toString());
-  expect(idAfter).toBe(idBefore + 1n);
+  expect(idAfter.toString()).toBe((idBefore + 1n).toString());
 
   const [regAddr, regName] = REGISTRY.split('.');
   const reqCv = await fetchCallReadOnlyFunction({
@@ -261,7 +268,7 @@ test('L1 withdrawal: pox-addr staker claim opens an sBTC→BTC withdrawal reques
   console.log('withdrawal request:', JSON.stringify(req, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)));
   const request = (req.value ?? req) as Record<string, { value: unknown }>;
   const amount = BigInt((request.amount as { value: bigint }).value);
-  expect(amount).toBeGreaterThan(0n);
+  expect(amount > 0n).toBe(true);
 
   // Recipient descriptor is account6's elected pox-addr (version + hashbytes).
   const recipient = (request.recipient as { value: Record<string, { value: string }> }).value;

@@ -34,7 +34,7 @@ import {
   fetchSignerGrantMessageHash,
   lockScriptToAddress,
 } from '../../../src';
-import { SIGNER_MANAGER } from '../constants';
+import { CHAIN_ID, SIGNER_MANAGER } from '../constants';
 import { getNetwork } from '../../helpers/utils';
 import { useFixtures } from '../../helpers/mock';
 import golden from '../fixtures/golden-stacks-core.json';
@@ -65,8 +65,8 @@ const GOLDEN_LOCK_SCRIPT =
 const GOLDEN_LOCK_OUTPUT = '0020b44af4b2338a31e256085ac92c3d79f620b244921586cae9230952b888574c5f';
 const GOLDEN_LOCK_ADDR_TESTNET = 'tb1qk390fv3n3gc7y4sgttyjc0te7csty3yjzkrv46frp9ft3zzhf30sl4wjxj';
 
-// SIP-018 grant hash inputs — signer-manager fixed, authId fixed. chainId comes
-// from the target net so the hash matches the on-chain read.
+// SIP-018 grant hash inputs — signer-manager fixed, authId fixed. CHAIN_ID is
+// baked into the hash, so replay pins the record-time value (see constants.ts).
 const GRANT_AUTH_ID = 1;
 
 beforeAll(async () => {
@@ -148,7 +148,7 @@ describe('SIP-018 structured-data hash (signer.ts computeSignerGrantHash)', () =
       computeSignerGrantHash({
         signerManager: SIGNER_MANAGER,
         authId: GRANT_AUTH_ID,
-        chainId: Number(network.chainId),
+        chainId: CHAIN_ID,
       })
     );
     const onchain = await fetchSignerGrantMessageHash({

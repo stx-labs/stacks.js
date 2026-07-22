@@ -39,8 +39,11 @@ export async function discoverActiveBonds(opts: {
 export function pickBondIndex(poxInfo: PoxInfo): { bondIndex: number; bondStartHeight: number } {
   const burn = poxInfo.currentBurnchainBlockHeight;
   const windowBlocks = BOND_GAP_CYCLES * poxInfo.rewardCycleLength;
+  // Bond periods advance with the chain, so bound the scan by burn height
+  // (+2 covers the not-yet-started periods) rather than a fixed ceiling.
+  const maxIndex = Math.ceil(burn / windowBlocks) + 2;
   let chosen: { bondIndex: number; bondStartHeight: number } | undefined;
-  for (let bondIndex = 0; bondIndex < 256; bondIndex++) {
+  for (let bondIndex = 0; bondIndex < maxIndex; bondIndex++) {
     const bondStartHeight = bondPeriodToBurnHeight({ bondIndex, poxInfo });
     if (bondStartHeight > burn && bondStartHeight <= burn + windowBlocks) {
       chosen = { bondIndex, bondStartHeight }; // keep the furthest-out match
