@@ -51,7 +51,10 @@ const FEE = 10_000n;
 const account5 = getAccount(REGTEST_KEYS.account5); // enrolled in bond 65 (L1 lock)
 
 const SIGNER = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
-const SBTC = 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token';
+// Real privatenet sBTC token (the pot's actual FT). The SM3VDXK3… id is a
+// regtest/mainnet deployer — NoSuchContract here, which silently made the
+// balance read return -1. See e2e/reward-payout.e2e.test.ts for positive proof.
+const SBTC = 'SN3R84XZYA63QS28932XQF3G1J8R9PC3W76P9CSQS.sbtc-token';
 // Candidate active-bond indices to scan (per rewards-sweep MAX_BOND_INDEX=70).
 const MAX_BOND_INDEX = Number(process.env.MAX_BOND_INDEX ?? 70);
 

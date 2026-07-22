@@ -359,9 +359,10 @@ describe('validateEarlyUnlockBytes', () => {
   });
 });
 
-// TODO(coverage): assert one full golden lockup address literal (currently only
-// prefix regexes) so P2WSH derivation regressions fail on the exact string, and
-// a golden script hex for buildLockScript from fixed inputs.
+// Golden literals below pin the exact P2WSH script + address so any drift in
+// script assembly or address derivation fails on the string (not just a prefix).
+// The script layout is cross-checked byte-for-byte against the live pox-5
+// construct-lockup-script in privatenet/actions/golden-vectors.test.ts.
 describe('buildLockAddress', () => {
   const unlockBytes = buildUnlockScript(TEST_PUBKEY);
   const baseOpts = {
@@ -391,6 +392,21 @@ describe('buildLockAddress', () => {
     const script = buildLockScript(baseOpts);
     const expectedMainnet = lockScriptToAddress(script, 'mainnet');
     expect(buildLockAddress({ ...baseOpts, network: 'mainnet' })).toBe(expectedMainnet);
+  });
+
+  it('freezes the golden P2WSH script + per-network address literals', () => {
+    expect(bytesToHex(buildLockScript(baseOpts))).toBe(
+      '630350f80cb16782012088a820ef6ec08b34e94a690ae76e59d1e2a7d3e686cc6764179951a74e949346d7d9698821020202020202020202020202020202020202020202020202020202020202020202ac6869210316e35d38b52d4886e40065e4952a49535ce914e02294be58e252d1998f129b19ac'
+    );
+    expect(buildLockAddress({ ...baseOpts, network: 'mainnet' })).toBe(
+      'bc1qfkead9658jluffuf9jjle5yezkh4ma64aqm2gf9x3u2jgy2u9d4scae4pt'
+    );
+    expect(buildLockAddress({ ...baseOpts, network: 'testnet' })).toBe(
+      'tb1qfkead9658jluffuf9jjle5yezkh4ma64aqm2gf9x3u2jgy2u9d4s0406my'
+    );
+    expect(buildLockAddress({ ...baseOpts, network: 'devnet' })).toBe(
+      'bcrt1qfkead9658jluffuf9jjle5yezkh4ma64aqm2gf9x3u2jgy2u9d4szv9uw7'
+    );
   });
 
   it('is deterministic', () => {

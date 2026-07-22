@@ -1,3 +1,4 @@
+import { bytesToHex } from '@stacks/common';
 import {
   Cl,
   ClarityType,
@@ -64,6 +65,11 @@ describe('computeSignerGrantHash', () => {
     const a = computeSignerGrantHash(opts);
     const b = computeSignerGrantHash(opts);
     expect(Buffer.from(a)).toEqual(Buffer.from(b));
+  });
+
+  it('matches the frozen golden hash for fixed inputs', () => {
+    const hash = computeSignerGrantHash({ signerManager: SIGNER_MANAGER, authId: 1n, chainId: CHAIN_ID });
+    expect(bytesToHex(hash)).toBe('33b15ac6e3b6a588de6e4e6860d88802e17decabf8ef0c3efc03f8d250fb47e5');
   });
 });
 
@@ -141,12 +147,11 @@ describe('signSignerGrant + verifySignerGrant', () => {
   });
 });
 
-// TODO(coverage): add a golden vector freezing the SIP-018 grant hash — a fixed
-// (signerManager, authId, chainId) asserting the exact computeSignerGrantHash
-// hex. The domain/message literals were verified against
-// pox-5.get-signer-grant-message-hash on 2026-07-06; a golden pins them so any
-// drift (topic, domain name/version, tuple keys) fails offline instead of
-// breaking grant recovery on-chain.
+// The golden hash below pins the exact computeSignerGrantHash output for fixed
+// (signerManager, authId, chainId), so any drift in topic / domain name+version
+// / tuple keys fails offline. The same function is cross-checked against the
+// live pox-5 get-signer-grant-message-hash in
+// privatenet/actions/golden-vectors.test.ts (matched e5188aeb… on privatenet).
 describe('signer calldata', () => {
   it.each([
     'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4', // P2WPKH

@@ -1,13 +1,17 @@
-// TODO(coverage): nothing in CI executes the lockup script against Bitcoin
-// consensus — these tests assert witness STRUCTURE only (item counts, isFinal,
-// cross-variant byte equality), and reclaim builds with disableScriptCheck.
-// Needed (regtest suite, recorded): fund a lockup P2WSH, then
-//   1. early-exit spend accepted (staker sig + cosigner sig + preimage)
-//   2. locktime spend accepted after maturing the CLTV height
-//   3. negatives rejected by bitcoind: CLTV-immature broadcast (non-final),
-//      wrong preimage, swapped staker/cosigner sigs
-// bitcoind JSON-RPC fixture keys hash the request body, so recorded
-// sendrawtransaction fixtures fail loudly if any witness byte regresses.
+// These tests assert witness STRUCTURE (item counts, isFinal, cross-variant
+// byte equality) plus a frozen golden finalized-tx hex per branch (see
+// GOLDEN_*_TXHEX) — RFC6979-deterministic, so any reorder/splice of the witness
+// stack flips the bytes and fails offline.
+//
+// On-chain EXECUTION of both branches against Bitcoin consensus is covered live
+// by the privatenet L1 e2e: exit-l1-timelock-reclaim (IF/CLTV branch) and
+// exit-l1-announce-and-reclaim (ELSE/early-exit branch) broadcast real spends
+// that bitcoind accepts. The embedded witnessScript equals the on-chain
+// construct-lockup-script (privatenet/actions/golden-vectors.test.ts).
+//
+// TODO(coverage): a dedicated regtest suite could additionally record the
+// NEGATIVE cases against bitcoind — CLTV-immature (non-final), wrong preimage,
+// swapped staker/cosigner sigs — which the e2e happy-paths don't exercise.
 import * as btc from '@scure/btc-signer';
 import { secp256k1 } from '@noble/curves/secp256k1.js';
 import { bytesToHex, hexToBytes } from '@stacks/common';
@@ -43,6 +47,18 @@ const LOCK_SCRIPT = buildLockScript({
 
 const UTXO: Utxo = { txid: 'a'.repeat(64), vout: 0, value: 30_000n };
 const OUTPUT = { address: btc.p2wpkh(STAKER_PUB, btc.TEST_NETWORK).address!, feeSats: 1_000n };
+
+// Frozen golden finalized-tx hex for each reclaim branch (ECDSA is RFC6979
+// deterministic, so these are stable). Any reorder/splice of the witness stack
+// — stakerSig / cosignerSig / preimage / branch selector / witnessScript — or a
+// different sighash flips these bytes. On-chain EXECUTION of both branches is
+// covered by the privatenet L1 e2e (exit-l1-timelock-reclaim = IF/CLTV branch,
+// exit-l1-announce-and-reclaim = ELSE/early-exit branch), whose real spends
+// bitcoind accepts; this pins the exact bytes those spends carry.
+const GOLDEN_LOCKTIME_TXHEX =
+  '02000000000101aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0000000000feffffff014871000000000000160014164247d6f2b425ac5771423ae6c80c754f7172b003483045022100fef6465ee021db8cd2a9686740601d0a057f951027b1faa6b701b53ccc47902e0220179a5c54b34e5b06f275a0035b24daf366f8e827f508542b3752ccc55c6c674a010101766303cbf80cb16782012088a82041dfc564373f06b57e724a29efeb4d19e7cf9a1f0a04a308908074b0deb8c8e98821022bb4b050afd84f0a7eedd02d4ea6ebe426bbb02744dfcca0b789a643eff6e78cac68692103797dd653040d344fd048c1ad05d4cbcb2178b30c6a0c4276994795f3e833da41accbf80c00';
+const GOLDEN_EARLYEXIT_TXHEX =
+  '02000000000101aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0000000000ffffffff014871000000000000160014164247d6f2b425ac5771423ae6c80c754f7172b005483045022100bb5a00c9674e1119b49ed6c2540d0aabbe7da52665fa048c19bac17f97fbf8ec02207ef6bb17677467692d17e343b876802f5dea45635b7f4d15b9a4d9b8b342fad20147304402205121bbe7f241193a26c0dcfb82b70a3bd75673e333697230a478dda9921d6b4b022043eaa31d4f100d2d3070dcbb03189c3ee65d8ddf4778e372f512a099356eec900120aefd42d50dea2c02669802e0a460592b6437c1ba832c0bfb76183effdb60949e00766303cbf80cb16782012088a82041dfc564373f06b57e724a29efeb4d19e7cf9a1f0a04a308908074b0deb8c8e98821022bb4b050afd84f0a7eedd02d4ea6ebe426bbb02744dfcca0b789a643eff6e78cac68692103797dd653040d344fd048c1ad05d4cbcb2178b30c6a0c4276994795f3e833da41ac00000000';
 
 describe('buildReclaim', () => {
   test('locktime: sets lockTime + sequence + P2WSH input', () => {
@@ -174,6 +190,7 @@ describe('signing variants are interchangeable', () => {
     const rb = finalizeReclaim({ path: 'locktime', tx: b });
     expect(ra.txHex).toBe(rb.txHex);
     expect(ra.txid).toBe(rb.txid);
+    expect(ra.txHex).toBe(GOLDEN_LOCKTIME_TXHEX); // golden: exact witness bytes
 
     // witness: [ stakerSig, 0x01, witnessScript ]
     expect(a.getInput(0).finalScriptWitness).toHaveLength(3);
@@ -212,6 +229,7 @@ describe('signing variants are interchangeable', () => {
     const ra = finalizeReclaim({ path: 'early-exit', tx: a, stxAddress: STX_ADDRESS });
     const rb = finalizeReclaim({ path: 'early-exit', tx: b, stxAddress: STX_ADDRESS });
     expect(ra.txHex).toBe(rb.txHex);
+    expect(ra.txHex).toBe(GOLDEN_EARLYEXIT_TXHEX); // golden: exact witness bytes
 
     // witness: [ stakerSig, cosignerSig, preimage, <empty>, witnessScript ]
     expect(a.getInput(0).finalScriptWitness).toHaveLength(5);
