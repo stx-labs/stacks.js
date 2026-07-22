@@ -19,6 +19,7 @@ import {
   fetchEarned,
   Pox5ErrorCode,
 } from '../../../src';
+import { SIGNER_MANAGER } from '../constants';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
@@ -43,7 +44,6 @@ const FEE = 10_000n;
 
 // Daemon's deployed signer-manager — the principal the contract keys reward
 // legs by (get-earned takes a signer-manager arg). Reused for read-only probes.
-const SIGNER_MANAGER = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 
 // Bond indices account5 is allowlisted on (from prior setup-bond runs).
 // Used for both calculate-rewards and claim-rewards probes.

@@ -15,7 +15,6 @@
  *       --runInBand --collectCoverage=false --verbose
  */
 
-import { broadcastTransaction } from '@stacks/transactions';
 import {
   buildStake,
   buildStakeUpdate,
@@ -23,22 +22,21 @@ import {
   fetchStakerInfo,
   describePox5Error,
 } from '../../../src';
+import { SIGNER_MANAGER } from '../constants';
 import type { Account } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import { freshFundedStxAccount } from '../../helpers/fresh-account';
 import {
+  broadcastAndWaitForTransaction,
   ensureRewardPhase,
   getNextNonce,
   getPoxInfo,
-  getTransaction,
   parseErrCode,
   rewardCycleToBurnHeight,
-  waitForFulfilled,
 } from '../../helpers/wait';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
 
-const SIGNER_MANAGER = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 const FEE = 10_000n;
 // Stake 10_000 STX so it's well above any floor but won't saturate a shared signer.
 const STAKE_AMOUNT_USTX = 10_000_000_000n; // 10k STX
@@ -94,19 +92,7 @@ test(
     });
 
     const stakeTxRaw = signTransaction(unsignedStake, staker.key);
-    const stakeRes = await broadcastTransaction({ transaction: stakeTxRaw, network });
-    if ('error' in stakeRes) {
-      throw new Error(
-        `stake broadcast rejected: ${stakeRes.error} — ${'reason' in stakeRes ? stakeRes.reason : ''}`
-      );
-    }
-    console.log('stake txid:', stakeRes.txid);
-
-    const stakeTx = await waitForFulfilled(async () => {
-      const t = await getTransaction(stakeRes.txid);
-      if (!t || t.tx_status === 'pending') throw new Error('stake tx still pending');
-      return t;
-    });
+    const stakeTx = await broadcastAndWaitForTransaction(stakeTxRaw, network);
     console.log('stake result:', { tx_status: stakeTx.tx_status, repr: stakeTx.tx_result?.repr });
 
     if (stakeTx.tx_status !== 'success') {
@@ -158,19 +144,7 @@ test(
     });
 
     const extendTxRaw = signTransaction(unsignedExtend, staker.key);
-    const extendRes = await broadcastTransaction({ transaction: extendTxRaw, network });
-    if ('error' in extendRes) {
-      throw new Error(
-        `extend broadcast rejected: ${extendRes.error} — ${'reason' in extendRes ? extendRes.reason : ''}`
-      );
-    }
-    console.log('extend txid:', extendRes.txid);
-
-    const extendTx = await waitForFulfilled(async () => {
-      const t = await getTransaction(extendRes.txid);
-      if (!t || t.tx_status === 'pending') throw new Error('extend tx still pending');
-      return t;
-    });
+    const extendTx = await broadcastAndWaitForTransaction(extendTxRaw, network);
 
     if (extendTx.tx_status !== 'success') {
       const code = parseErrCode(extendTx.tx_result?.repr);
@@ -214,19 +188,7 @@ test(
     });
 
     const unstakeTxRaw = signTransaction(unsignedUnstake, staker.key);
-    const unstakeRes = await broadcastTransaction({ transaction: unstakeTxRaw, network });
-    if ('error' in unstakeRes) {
-      throw new Error(
-        `unstake broadcast rejected: ${unstakeRes.error} — ${'reason' in unstakeRes ? unstakeRes.reason : ''}`
-      );
-    }
-    console.log('unstake txid:', unstakeRes.txid);
-
-    const unstakeTx = await waitForFulfilled(async () => {
-      const t = await getTransaction(unstakeRes.txid);
-      if (!t || t.tx_status === 'pending') throw new Error('unstake tx still pending');
-      return t;
-    });
+    const unstakeTx = await broadcastAndWaitForTransaction(unstakeTxRaw, network);
 
     if (unstakeTx.tx_status !== 'success') {
       const code = parseErrCode(unstakeTx.tx_result?.repr);

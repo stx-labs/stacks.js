@@ -17,11 +17,11 @@
  *   NETWORK=testnet NETWORK_ID=256 STACKS_API=https://api.private-1.hiro.so \
  *     npx jest tests/privatenet/actions/stx-stake.test.ts --runInBand --collectCoverage=false --verbose
  */
-import { broadcastTransaction } from '@stacks/transactions';
+import { SIGNER_MANAGER } from '../constants';
 import { buildStake, Pox5ErrorCode } from '../../../src';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
-import { getNextNonce, getPoxInfo, getTransaction, waitForFulfilled } from '../../helpers/wait';
+import { broadcastAndWaitForTransaction, getNextNonce, getPoxInfo } from '../../helpers/wait';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
 
@@ -35,7 +35,7 @@ const AMOUNT_USTX = BigInt(process.env.AMOUNT_USTX ?? 1_000_000_000); // 1000 ST
 const NUM_CYCLES = Number(process.env.NUM_CYCLES ?? 1);
 
 // The daemon-registered signer-manager on the private testnet.
-const signerManager = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
+const signerManager = SIGNER_MANAGER;
 
 const staker = getAccount(REGTEST_KEYS[STAKER as keyof typeof REGTEST_KEYS]);
 
@@ -84,18 +84,7 @@ test('stake below API min is accepted on-chain (no contract amount floor)', asyn
   });
 
   const transaction = signTransaction(unsigned, staker.key);
-  const res = await broadcastTransaction({ transaction, network });
-  if ('error' in res) {
-    throw `broadcast rejected: ${res.error} — ${'reason' in res ? res.reason : ''}`;
-  }
-  console.log('stx-stake txid', res.txid);
-
-  // Wait until the tx leaves the mempool, then read the on-chain outcome.
-  const tx = await waitForFulfilled(async () => {
-    const t = await getTransaction(res.txid);
-    if (!t || t.tx_status === 'pending') throw 'tx still pending';
-    return t;
-  });
+  const tx = await broadcastAndWaitForTransaction(transaction, network);
 
   console.log('stx-stake on-chain result', {
     txid: tx.tx_id,

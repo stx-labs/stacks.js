@@ -19,6 +19,7 @@ import {
   fetchBondMembership,
   fetchHasAnnouncedL1EarlyExit,
 } from '../../../src';
+import { SIGNER_MANAGER } from '../constants';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import { broadcastAndWait, getNextNonce, getTransaction } from '../../helpers/wait';
@@ -30,8 +31,6 @@ jest.setTimeout(30 * 60_000);
 
 // Must equal oldSignerManager in the contract call; the daemon registers this
 // contract on the private testnet.
-const SIGNER_MANAGER =
-  process.env.SIGNER_MANAGER ?? 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 
 const FEE = 10_000n;
 

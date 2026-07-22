@@ -11,6 +11,7 @@
  *   NETWORK=testnet NETWORK_ID=256 STACKS_API=https://api.private-1.hiro.so RECORD=1 \
  *     npx jest tests/privatenet/actions/register-for-bond.test.ts --runInBand --collectCoverage=false
  */
+import { SIGNER_MANAGER } from '../constants';
 import { buildRegisterForBond, fetchBondMembership } from '../../../src';
 import { getNetwork, ENV } from '../../helpers/utils';
 import { broadcastAndWait, getNextNonce, getTransaction } from '../../helpers/wait';
@@ -24,8 +25,6 @@ import { useFixtures } from '../../helpers/mock';
 // arg just needs to be a deployed contract implementing the trait so tx analysis
 // passes — and lock-sbtc aborts (err u1) before signer validation anyway, so the
 // specific contract is irrelevant to this abort probe. Override with SIGNER_MANAGER.
-const SIGNER_MANAGER =
-  process.env.SIGNER_MANAGER ?? 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 
 jest.setTimeout(20 * 60_000);
 

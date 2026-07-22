@@ -14,6 +14,7 @@
  *     --runInBand --collectCoverage=false
  */
 
+import { SIGNER_MANAGER } from '../constants';
 import { buildStake, fetchStakerInfo } from '../../../src';
 import { resolveAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
@@ -25,8 +26,6 @@ const AMOUNT_USTX = BigInt(process.env.AMOUNT_USTX ?? 1_000_000_000); // 1000 ST
 const NUM_CYCLES = Number(process.env.NUM_CYCLES ?? 1);
 const FEE = BigInt(process.env.FEE_USTX ?? 10_000);
 
-const SIGNER_MANAGER =
-  process.env.SIGNER_MANAGER ?? 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 
 // Dedicated lane account (override via STAKER env). Default account4: funded, daemon-free, nonce-stable.
 const staker = resolveAccount('STAKER', 'account4');

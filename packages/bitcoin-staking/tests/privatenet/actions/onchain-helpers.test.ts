@@ -29,7 +29,7 @@ jest.setTimeout(30 * 60_000);
 
 const network = getNetwork();
 
-// Deterministic keys → a lockup param set (mirrors the reclaim/roundtrip tests).
+// Deterministic keys -> a lockup param set (mirrors the reclaim/roundtrip tests).
 const STAKER_PUB = secp256k1.getPublicKey(
   hexToBytes('cb3df38053d132895220b9ce471f6b676db5b9bf0b4adefb55f2118ece2478df'),
   true

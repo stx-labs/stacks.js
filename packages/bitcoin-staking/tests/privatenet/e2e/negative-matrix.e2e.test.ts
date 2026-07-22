@@ -25,6 +25,7 @@ import {
   fetchBondMembership,
   Pox5ErrorCode,
 } from '../../../src';
+import { SIGNER_MANAGER } from '../constants';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
@@ -41,8 +42,6 @@ import { pickBondIndex } from '../../helpers/bond';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
 
-const SIGNER_MANAGER =
-  process.env.SIGNER_MANAGER ?? 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 const FEE = 10_000n;
 
 beforeAll(async () => {}, 60_000);

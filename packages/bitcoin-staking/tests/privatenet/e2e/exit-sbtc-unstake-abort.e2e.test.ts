@@ -15,6 +15,7 @@
  */
 
 import { broadcastTransaction } from '@stacks/transactions';
+import { SIGNER_MANAGER } from '../constants';
 import { buildUnstakeSbtc, describePox5Error, Pox5ErrorCode } from '../../../src';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
@@ -24,7 +25,6 @@ import { useFixtures } from '../../helpers/mock';
 
 const network = getNetwork();
 const FEE = 10_000n;
-const SIGNER_MANAGER = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 
 const staker = getAccount(REGTEST_KEYS['account6']); // funded, no sBTC -> abort
 

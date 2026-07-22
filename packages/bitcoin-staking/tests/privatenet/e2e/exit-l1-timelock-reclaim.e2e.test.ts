@@ -64,7 +64,7 @@ interface LockArtifact {
 
 async function fetchTipHeight(): Promise<number> {
   const resp = await fetch(`${MEMPOOL_BASE}/blocks/tip/height`);
-  if (!resp.ok) throw new Error(`GET /blocks/tip/height → ${resp.status}`);
+  if (!resp.ok) throw new Error(`GET /blocks/tip/height -> ${resp.status}`);
   return Number((await resp.text()).trim());
 }
 
@@ -80,7 +80,7 @@ async function broadcastBtcTx(rawHex: string): Promise<string> {
       console.log(`BTC broadcast succeeded via POST ${MEMPOOL_BASE}${path}`);
       return body.trim();
     }
-    console.warn(`POST ${MEMPOOL_BASE}${path} → ${resp.status}: ${body}`);
+    console.warn(`POST ${MEMPOOL_BASE}${path} -> ${resp.status}: ${body}`);
   }
   throw new Error('BTC broadcast failed on both /tx and /v1/tx');
 }

@@ -13,16 +13,15 @@
  *       --runInBand --collectCoverage=false
  */
 
-import { broadcastTransaction } from '@stacks/transactions';
+import { SIGNER_MANAGER } from '../constants';
 import { buildStake, fetchSignerSharesStakedForCycle } from '../../../src';
 import type { Account } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
-import { getNextNonce, getPoxInfo, getTransaction, waitForFulfilled } from '../../helpers/wait';
+import { broadcastAndWaitForTransaction, getNextNonce, getPoxInfo } from '../../helpers/wait';
 import { freshFundedStxAccount } from '../../helpers/fresh-account';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
 
-const SIGNER_MANAGER = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 const AMOUNT_USTX = BigInt(process.env.AMOUNT_USTX ?? 1_000_000_000); // 1000 STX per staker
 const NUM_CYCLES = Number(process.env.NUM_CYCLES ?? 1);
 const FEE_USTX = BigInt(process.env.FEE_USTX ?? 10_000);
@@ -93,19 +92,7 @@ test(
       });
 
       const transaction = signTransaction(unsigned, staker.account.key);
-      const res = await broadcastTransaction({ transaction, network });
-      if ('error' in res) {
-        throw new Error(
-          `[${staker.name}] broadcast rejected: ${res.error} — ${'reason' in res ? res.reason : ''}`
-        );
-      }
-      console.log(`[${staker.name}] txid: ${res.txid}`);
-
-      const tx = await waitForFulfilled(async () => {
-        const t = await getTransaction(res.txid);
-        if (!t || t.tx_status === 'pending') throw new Error('tx still pending');
-        return t;
-      });
+      const tx = await broadcastAndWaitForTransaction(transaction, network);
 
       console.log(`[${staker.name}] tx_status: ${tx.tx_status}, result: ${tx.tx_result?.repr}`);
 

@@ -30,6 +30,7 @@ import {
   fetchUstxDelegatedForCycle,
   fetchBondOverlapsNewPosition,
 } from '../../../src';
+import { SIGNER_MANAGER } from '../constants';
 import type { PoxInfo } from '../../../src';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
@@ -38,7 +39,6 @@ import { useFixtures } from '../../helpers/mock';
 jest.setTimeout(30 * 60_000);
 
 const network = getNetwork();
-const SIGNER_MANAGER = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 const account5 = getAccount(REGTEST_KEYS.account5); // L1-enrolled on this chain
 
 // Shared spine, read once.
@@ -133,7 +133,7 @@ describe('staker reads', () => {
     });
     console.log('bondOverlapsNewPosition:', overlaps);
     expect(typeof overlaps).toBe('boolean');
-    // No membership → nothing can overlap.
+    // No membership -> nothing can overlap.
     if (!membership) expect(overlaps).toBe(false);
   });
 });
@@ -210,7 +210,7 @@ describe('signer-set traversal', () => {
     expect(typeof first).toBe('string');
     expect(typeof last).toBe('string');
 
-    // The head is a member → contains is true.
+    // The head is a member -> contains is true.
     const contains = await fetchSignerSetContainsForCycle({ signer: first, cycle, network });
     console.log('contains(first):', contains);
     expect(contains).toBe(true);

@@ -34,6 +34,7 @@ import {
   fetchBondMembership,
   minUstxForSatsAmount,
 } from '../../../src';
+import { SIGNER_MANAGER } from '../constants';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import { broadcastAndWait, getNextNonce, getTransaction } from '../../helpers/wait';
@@ -55,8 +56,6 @@ const AMOUNT_SATS = BigInt(process.env.AMOUNT_SATS ?? 30_000);
 const FEE_SATS = BigInt(process.env.FEE_SATS ?? 500);
 const FEE_USTX = BigInt(process.env.FEE_USTX ?? 10_000);
 
-const SIGNER_MANAGER =
-  process.env.SIGNER_MANAGER ?? 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 
 // account5: STB44HYPYAT2BB2QE513NSP81HTMYWBJP02HPGK6 — funded, allowlisted
 const STAKER_PRIV_HEX = 'cb3df38053d132895220b9ce471f6b676db5b9bf0b4adefb55f2118ece2478df';

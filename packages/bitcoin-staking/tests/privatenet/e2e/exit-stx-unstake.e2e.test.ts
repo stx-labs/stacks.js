@@ -22,10 +22,12 @@
  */
 
 import { broadcastTransaction } from '@stacks/transactions';
+import { SIGNER_MANAGER } from '../constants';
 import { buildStake, buildUnstake, fetchStakerInfo, describePox5Error } from '../../../src';
 import { resolveAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
+  broadcastAndWaitForTransaction,
   ensureRewardPhase,
   getNextNonce,
   getPoxInfo,
@@ -41,7 +43,6 @@ const network = getNetwork();
 const FEE = 10_000n;
 const AMOUNT_USTX = 1_000_000_000n; // 1000 STX
 const NUM_CYCLES = 1;
-const SIGNER_MANAGER = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 
 // Dedicated lane account (override via STAKER env). Default account4 (rich, uncontended).
 const staker = resolveAccount('STAKER', 'account4');
@@ -77,19 +78,7 @@ test('stake STX-only then early-exit (unstake) rewrites position to next cycle',
     });
 
     const stakeTx = signTransaction(unsignedStake, staker.key);
-    const stakeRes = await broadcastTransaction({ transaction: stakeTx, network });
-    if ('error' in stakeRes) {
-      throw new Error(
-        `stake broadcast rejected: ${stakeRes.error} — ${'reason' in stakeRes ? stakeRes.reason : ''}`
-      );
-    }
-    console.log('stake txid:', stakeRes.txid);
-
-    const stakeTxRecord = await waitForFulfilled(async () => {
-      const t = await getTransaction(stakeRes.txid);
-      if (!t || t.tx_status === 'pending') throw new Error('stake tx still pending');
-      return t;
-    });
+    const stakeTxRecord = await broadcastAndWaitForTransaction(stakeTx, network);
 
     if (stakeTxRecord.tx_status !== 'success') {
       const code = parseErrCode(stakeTxRecord.tx_result?.repr);

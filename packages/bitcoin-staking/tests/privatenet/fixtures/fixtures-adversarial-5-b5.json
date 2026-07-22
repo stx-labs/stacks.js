@@ -1,4 +1,4 @@
 {
-  "/v2/contracts/call-read/ST000000000000000000002AMW42H/pox-5/get-staker-info#ST1PQPFPFM3Z7A0YY891H6A9EZCCWQ6P6FP6S8CHB:[\"0x051a6d7b3ecfa0fe7503de424313292efb19cb9ac67d\"]": "{\"okay\":true,\"result\":\"0x09\"}",
-  "/v2/contracts/call-read/ST000000000000000000002AMW42H/pox-5/get-staker-info#ST9T5HNRFWG3JBRJSXZ3ZSKXMXMSRGVW6SCPANXK:[\"0x051a13a2c6b87f20392f12cf7e3fe67da7699c437c36\"]": "{\"okay\":true,\"result\":\"0x09\"}"
+  "/v2/contracts/call-read/ST000000000000000000002AMW42H/pox-5/get-staker-info#ST000000000000000000002AMW42H:[\"0x051a6d7b3ecfa0fe7503de424313292efb19cb9ac67d\"]": "{\"okay\":true,\"result\":\"0x09\"}",
+  "/v2/contracts/call-read/ST000000000000000000002AMW42H/pox-5/get-staker-info#ST000000000000000000002AMW42H:[\"0x051a13a2c6b87f20392f12cf7e3fe67da7699c437c36\"]": "{\"okay\":true,\"result\":\"0x09\"}"
 }

@@ -24,6 +24,7 @@ import {
   fetchProtocolBond,
   Pox5ErrorCode,
 } from '../../../src';
+import { SIGNER_MANAGER } from '../constants';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
@@ -41,8 +42,6 @@ jest.setTimeout(30 * 60_000);
 
 // Reuse the daemon's deployed signer-manager — same approach as
 // adversarial-2.test.ts and register-for-bond.test.ts.
-const SIGNER_MANAGER =
-  process.env.SIGNER_MANAGER ?? 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 
 const network = getNetwork();
 

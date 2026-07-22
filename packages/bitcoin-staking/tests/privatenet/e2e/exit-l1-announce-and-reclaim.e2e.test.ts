@@ -39,6 +39,7 @@ import {
   fetchBondMembership,
   minUstxForSatsAmount,
 } from '../../../src';
+import { SIGNER_MANAGER } from '../constants';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import { broadcastAndWait, getNextNonce, getTransaction } from '../../helpers/wait';
@@ -56,8 +57,6 @@ import {
   waitForConfirmed,
 } from '../../helpers/btc-wallet';
 
-const SIGNER_MANAGER =
-  process.env.SIGNER_MANAGER ?? 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 
 const MEMPOOL_BASE = 'https://mempool.bitcoin.private-1.hiro.so/api';
 

@@ -17,28 +17,28 @@
  *     POLL_INTERVAL=10000 RETRY_INTERVAL=10000 BITCOIN_TX_TIMEOUT=600000 \
  *     npx jest tests/privatenet/actions/rewards-claim-receive.test.ts --runInBand --collectCoverage=false --verbose
  */
-import { Cl, broadcastTransaction, fetchCallReadOnlyFunction } from '@stacks/transactions';
 import {
   buildCalculateRewards,
   buildClaimRewards,
   describePox5Error,
   fetchBondMembership,
-  fetchProtocolBond,
   fetchEarned,
   fetchEarnedStakerRewards,
   fetchRewards,
   fetchNewRewards,
   Pox5ErrorCode,
 } from '../../../src';
+import { SIGNER_MANAGER } from '../constants';
+import { sbtcBalance } from '../sbtc';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
+import { discoverActiveBonds } from '../../helpers/bond';
 import {
+  broadcastAndWaitForTransaction,
   getNextNonce,
   getPoxInfo,
   getStxBalance,
-  getTransaction,
   parseErrCode,
-  waitForFulfilled,
 } from '../../helpers/wait';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
@@ -50,33 +50,9 @@ const FEE = 10_000n;
 
 const account5 = getAccount(REGTEST_KEYS.account5); // enrolled in bond 65 (L1 lock)
 
-const SIGNER = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
-// Real privatenet sBTC token (the pot's actual FT). The SM3VDXK3… id is a
-// regtest/mainnet deployer — NoSuchContract here, which silently made the
-// balance read return -1. See e2e/reward-payout.e2e.test.ts for positive proof.
-const SBTC = 'SN3R84XZYA63QS28932XQF3G1J8R9PC3W76P9CSQS.sbtc-token';
+const SIGNER = SIGNER_MANAGER;
 // Candidate active-bond indices to scan (per rewards-sweep MAX_BOND_INDEX=70).
 const MAX_BOND_INDEX = Number(process.env.MAX_BOND_INDEX ?? 70);
-
-async function sbtcBalance(address: string): Promise<bigint> {
-  const [contractAddress, contractName] = SBTC.split('.');
-  try {
-    const r = await fetchCallReadOnlyFunction({
-      contractAddress,
-      contractName,
-      functionName: 'get-balance',
-      functionArgs: [Cl.address(address)],
-      senderAddress: address,
-      network,
-    });
-    // (ok uint)
-    const inner = (r as { value?: { value?: bigint } }).value;
-    return BigInt((inner as { value: bigint })?.value ?? (r as { value: bigint }).value);
-  } catch (e) {
-    console.warn('sbtc get-balance failed:', (e as Error).message);
-    return -1n;
-  }
-}
 
 beforeAll(async () => {}, 60 * 60_000);
 
@@ -119,18 +95,7 @@ test('rewards claim-and-receive for account5 / bond 65 — verifies receipt or e
   // BOND DISCOVERY
   // calculate-rewards requires the FULL active-bond set (u33 otherwise),
   // sorted descending by stx-value-ratio (u29 otherwise), capped at 6.
-  const bonds: { index: number; ratio: bigint }[] = [];
-  for (let i = 0; i < MAX_BOND_INDEX; i++) {
-    try {
-      const b = await fetchProtocolBond({ bondIndex: i, network });
-      if (b) bonds.push({ index: i, ratio: b.stxValueRatio });
-    } catch {
-      /* skip */
-    }
-  }
-  bonds.sort((a, b) => (b.ratio === a.ratio ? b.index - a.index : Number(b.ratio - a.ratio)));
-  const bondIndices = bonds.slice(0, 6).map(b => b.index);
-  console.log('bonds (desc stx-value-ratio):', bonds.map(b => `${b.index}:${b.ratio}`).join(', '));
+  const bondIndices = await discoverActiveBonds({ network, max: MAX_BOND_INDEX });
   console.log('calculate-rewards bondIndices (capped 6):', bondIndices.join(','));
 
   // CALCULATE REWARDS
@@ -147,15 +112,7 @@ test('rewards claim-and-receive for account5 / bond 65 — verifies receipt or e
     postConditionMode: 'allow',
   });
   const calcTx = signTransaction(calcUnsigned, account5.key);
-  const calcRes = await broadcastTransaction({ transaction: calcTx, network });
-  if ('error' in calcRes)
-    throw `calc broadcast rejected: ${calcRes.error} — ${'reason' in calcRes ? calcRes.reason : ''}`;
-  console.log('calculate-rewards txid', calcRes.txid);
-  const calcRecord = await waitForFulfilled(async () => {
-    const t = await getTransaction(calcRes.txid);
-    if (!t || t.tx_status === 'pending') throw 'pending';
-    return t;
-  });
+  const calcRecord = await broadcastAndWaitForTransaction(calcTx, network);
   const calcCode = parseErrCode(calcRecord.tx_result?.repr);
   console.log('calculate-rewards result', {
     tx_status: calcRecord.tx_status,
@@ -187,7 +144,7 @@ test('rewards claim-and-receive for account5 / bond 65 — verifies receipt or e
   useFixtures('rewards-claim-receive-claim');
   const claimCycle = Math.max(0, poxInfo.rewardCycleId - 1);
   const stxBefore = await getStxBalance(account5.address);
-  const sbtcBefore = await sbtcBalance(account5.address);
+  const sbtcBefore = await sbtcBalance(account5.address, network);
   console.log(
     'account5 balances BEFORE claim — STX:',
     stxBefore.toString(),
@@ -205,15 +162,7 @@ test('rewards claim-and-receive for account5 / bond 65 — verifies receipt or e
     postConditionMode: 'allow',
   });
   const claimTx = signTransaction(claimUnsigned, account5.key);
-  const claimRes = await broadcastTransaction({ transaction: claimTx, network });
-  if ('error' in claimRes)
-    throw `claim broadcast rejected: ${claimRes.error} — ${'reason' in claimRes ? claimRes.reason : ''}`;
-  console.log('claim-rewards txid', claimRes.txid);
-  const claimRecord = await waitForFulfilled(async () => {
-    const t = await getTransaction(claimRes.txid);
-    if (!t || t.tx_status === 'pending') throw 'pending';
-    return t;
-  });
+  const claimRecord = await broadcastAndWaitForTransaction(claimTx, network);
   const claimCode = parseErrCode(claimRecord.tx_result?.repr);
   console.log('claim-rewards result', {
     tx_status: claimRecord.tx_status,
@@ -223,7 +172,7 @@ test('rewards claim-and-receive for account5 / bond 65 — verifies receipt or e
   });
 
   const stxAfter = await getStxBalance(account5.address);
-  const sbtcAfter = await sbtcBalance(account5.address);
+  const sbtcAfter = await sbtcBalance(account5.address, network);
   console.log(
     'account5 balances AFTER  claim — STX:',
     stxAfter.toString(),

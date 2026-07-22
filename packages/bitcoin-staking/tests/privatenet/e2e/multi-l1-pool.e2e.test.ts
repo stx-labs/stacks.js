@@ -31,6 +31,7 @@ import {
   fetchTotalSbtcStakedForBond,
   minUstxForSatsAmount,
 } from '../../../src';
+import { SIGNER_MANAGER } from '../constants';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import { broadcastAndWait, getNextNonce, getTransaction } from '../../helpers/wait';
@@ -48,7 +49,6 @@ import {
   fetchBlockTxCount,
 } from '../../helpers/btc-wallet';
 
-const SIGNER_MANAGER = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 const AMOUNT_SATS = BigInt(process.env.AMOUNT_SATS ?? 30_000);
 const FEE_SATS = BigInt(process.env.FEE_SATS ?? 500);
 const FEE_USTX = BigInt(process.env.FEE_USTX ?? 10_000);
@@ -64,7 +64,6 @@ const REGTEST_NET: typeof btc.NETWORK = {
 const STAKER_RAW_KEYS: Record<string, string> = {
   account5: 'cb3df38053d132895220b9ce471f6b676db5b9bf0b4adefb55f2118ece2478df',
   account6: '5b8303150239eceaba43892af7cdd1fa7fc26eda5182ebaaa568e3341d54a4d0',
-  account7: '16226f674796712dfbd53bf402304579b8b6d04d4bed4d466bf84ce6db973d44',
 };
 
 interface StakerDef {

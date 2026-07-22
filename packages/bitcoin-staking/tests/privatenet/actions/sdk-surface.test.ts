@@ -35,6 +35,7 @@ import {
   isInPreparePhase,
   bondRegisterRanges,
 } from '../../../src/cycles';
+import { SIGNER_MANAGER } from '../constants';
 import { lockScriptToAddress, computeBondUnlockHeight } from '../../../src/script';
 import { parseUnlockScript } from '../../helpers/script';
 import * as btcAddress from '../../../src/btc-address';
@@ -53,7 +54,6 @@ import { useFixtures } from '../../helpers/mock';
 jest.setTimeout(120_000);
 
 const network = getNetwork();
-const SIGNER_MANAGER = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 const account5 = getAccount(REGTEST_KEYS.account5);
 const account6 = getAccount(REGTEST_KEYS.account6);
 

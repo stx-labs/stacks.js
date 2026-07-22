@@ -26,6 +26,7 @@ import {
   isInPreparePhase,
   Pox5ErrorCode,
 } from '../../../src';
+import { SIGNER_MANAGER } from '../constants';
 import { getNetwork } from '../../helpers/utils';
 import { getNextNonce, getPoxInfo, getTransaction, parseErrCode } from '../../helpers/wait';
 import { signTransaction } from '../../helpers/sign';
@@ -38,8 +39,6 @@ const network = getNetwork();
 const FEE = 10_000n;
 
 // The daemon-registered signer-manager on the private testnet.
-const SIGNER_MANAGER =
-  process.env.SIGNER_MANAGER ?? 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 
 // A syntactically-valid but UNREGISTERED signer-manager principal (bogus rotate target).
 const BOGUS_SIGNER_MANAGER = 'ST000000000000000000002AMW42H.not-a-signer-manager';

@@ -112,7 +112,7 @@ test('cosigner-initiated: prepare a cosigner-signed early-exit partial', async (
     console.log('(skipped — early exit not announced)');
     return;
   }
-  console.log('precondition: cosigner-enabled bond + L1-enrolled + announced ✓');
+  console.log('precondition: cosigner-enabled bond + L1-enrolled + announced OK');
 
   const earlyUnlockBytes = hexToBytes(bond.earlyUnlockBytes);
   const unlockHeight = Number(await fetchBondL1UnlockHeight({ bondIndex, network }));
@@ -175,7 +175,7 @@ test('cosigner-initiated: prepare a cosigner-signed early-exit partial', async (
     const sig = (secp256k1.Signature as any).fromDER(der);
     const ok = secp256k1.verify(sig, sighash, cosignerBtcPub);
     expect(ok).toBe(true);
-    console.log('cosigner sig verifies against account6 pubkey ✓');
+    console.log('cosigner sig verifies against account6 pubkey OK');
   } catch (e) {
     console.warn('cosigner sig local sanity-verify skipped:', String(e).slice(0, 80));
   }

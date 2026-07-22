@@ -15,6 +15,7 @@
  *     POLL_INTERVAL=10000 RETRY_INTERVAL=10000 \
  *     npx jest tests/privatenet/actions/rewards-sweep.test.ts --runInBand --collectCoverage=false
  */
+import { SIGNER_MANAGER } from '../constants';
 import { fetchPoxInfo, fetchProtocolBond, fetchEarned } from '../../../src';
 import { getNetwork } from '../../helpers/utils';
 import { useFixtures } from '../../helpers/mock';
@@ -22,8 +23,6 @@ import { useFixtures } from '../../helpers/mock';
 jest.setTimeout(30 * 60_000);
 
 const network = getNetwork();
-const SIGNER_MANAGER =
-  process.env.SIGNER_MANAGER ?? 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 const MAX_BOND_INDEX = Number(process.env.MAX_BOND_INDEX ?? 50);
 const CYCLE_LOOKBACK = Number(process.env.CYCLE_LOOKBACK ?? 12);
 

@@ -39,11 +39,11 @@
     "status": 200,
     "body": "{\"balance\":\"0x0000000000000000001f9c9c5309979a\",\"locked\":\"0x00000000000000000000000000000000\",\"unlock_height\":0,\"nonce\":3}"
   },
-  "/v2/contracts/call-read/ST000000000000000000002AMW42H/pox-5/get-bond-membership#ST11NJTTKGVT6D1HY4NJRVQWMQM7TVAR091EJ8P2Y:[\"0x051a43596b5386f466863e25658ddf94bd0fadab0048\"]": {
+  "/v2/contracts/call-read/ST000000000000000000002AMW42H/pox-5/get-bond-membership#ST000000000000000000002AMW42H:[\"0x051a43596b5386f466863e25658ddf94bd0fadab0048\"]": {
     "status": 200,
     "body": "{\"okay\":true,\"result\":\"0x09\"}"
   },
-  "/v2/contracts/call-read/ST000000000000000000002AMW42H/pox-5/get-bond-membership#ST1WGNQQYDTFJ9NA8HR077WJD7QZ1EH3DZQZPTWS0:[\"0x051a790adefe6e9f24d5488e0073f24d3dfe17446dfd\"]": {
+  "/v2/contracts/call-read/ST000000000000000000002AMW42H/pox-5/get-bond-membership#ST000000000000000000002AMW42H:[\"0x051a790adefe6e9f24d5488e0073f24d3dfe17446dfd\"]": {
     "status": 200,
     "body": "{\"okay\":true,\"result\":\"0x09\"}"
   },

@@ -97,6 +97,20 @@ to privatenet exactly as to regtest) make a live re-record largely unattended:
 8. **Chain hiccups are normal.** Blocks are ~2 min; the chain occasionally
    stalls and wipes ~daily. A failed record is usually environmental — check
    the tip age and retry.
+9. **Fixture routing follows the file shape.** A single-flow suite routes its
+   base phase in `beforeAll(() => useFixtures('<key>'))` and switches phases
+   in-test only where a read/broadcast changes state. A multi-scenario suite
+   (independent `test()`s, no shared setup) routes per-test instead — each test
+   calls its own `useFixtures`, and there is no base phase to hoist. Don't force
+   a `beforeAll` onto a multi-scenario file.
+10. **Confirmation helper — pick by what you assert.** For a tx you expect to
+   MINE (happy path or a runtime `abort_by_response` probe), use
+   `broadcastAndWaitForTransaction(tx, network)` — it broadcasts, waits out of the
+   prepare phase, polls `/extended`, and returns the `TxRecord` you branch on
+   (`tx_status` / `parseErrCode`). Don't hand-roll `broadcastTransaction` + a
+   `waitForFulfilled` poll. The exception is a probe asserting *broadcast-time*
+   rejection (`'error' in res`): the helper throws on that, so keep the raw
+   `broadcastTransaction` and assert on `res.error` / `res.reason` there.
 
 ## Accounts (state drifts per wipe — always verify live)
 
@@ -166,3 +180,15 @@ Deleted as superseded: `setup-bond-2` (pre-early-unlock zero-byte earlyUnlockByt
 `e2e/exit-l1-timelock-reclaim`). sBTC happy paths untestable (sbtc-deposit not
 deployed) — abort paths covered. `BOND_ADMIN_KEY` is required only for
 setup-bond RE-recording; env-only, never commit it.
+
+## Reward payout
+
+Same pox-5 mechanics the regtest reward suites encode (see
+`tests/regtest/README.md` § Reward payout): sBTC-only rewards, a measured (not
+pushed) pot, the calculate-rewards → signer-manager `claim-rewards` (settle) →
+staker-`earned` order over the FULL active-bond set, and the two-hop payout via
+the signer-manager. What privatenet adds over regtest: a **real signer set**, so
+the L1 sBTC-withdrawal path completes to an actual BTC sweep — the final leg
+regtest can only assert as a request+lock. Reward-arrival validation on the
+hosted net is tracked separately (see the reward-validation handoff); the
+`reward-payout.e2e` / `rewards-claim-receive` suites here exercise the routes.

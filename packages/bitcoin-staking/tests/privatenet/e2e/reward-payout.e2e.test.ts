@@ -40,6 +40,8 @@ import {
   firstPox5RewardCycle,
   isBondActiveAtHeight,
 } from '../../../src';
+import { SIGNER_MANAGER } from '../constants';
+import { sbtcBalance } from '../sbtc';
 import { REGTEST_KEYS, getAccount, resolveAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
@@ -60,8 +62,7 @@ const network = getNetwork();
 const FEE = 10_000n;
 
 // Correct privatenet ids (the pot's real sBTC token — NOT the regtest SM3VDXK3 id).
-const SM = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
-const SBTC = 'SN3R84XZYA63QS28932XQF3G1J8R9PC3W76P9CSQS.sbtc-token';
+const SM = SIGNER_MANAGER;
 const REGISTRY = 'SN3R84XZYA63QS28932XQF3G1J8R9PC3W76P9CSQS.sbtc-registry';
 
 // Permissionless operator for calculate-rewards / claim-rewards (settle). Clean
@@ -69,20 +70,6 @@ const REGISTRY = 'SN3R84XZYA63QS28932XQF3G1J8R9PC3W76P9CSQS.sbtc-registry';
 const operator = resolveAccount('OPERATOR', 'account4');
 const staker = getAccount(REGTEST_KEYS.account5); // plain sBTC lockup
 const poxStaker = getAccount(REGTEST_KEYS.account6); // pox-addr elected -> L1 payout
-
-async function sbtcBalance(address: string): Promise<bigint> {
-  const [contractAddress, contractName] = SBTC.split('.');
-  const r = await fetchCallReadOnlyFunction({
-    contractAddress,
-    contractName,
-    functionName: 'get-balance',
-    functionArgs: [Cl.address(address)],
-    senderAddress: address,
-    network,
-  });
-  const inner = (r as { value?: { value?: bigint } }).value; // (ok uint)
-  return BigInt((inner as { value: bigint })?.value ?? (r as { value: bigint }).value);
-}
 
 /** signer-manager.get-earned-staker-rewards -> { earned, fees }. */
 async function earnedStaker(address: string, rewardCycle: number, bondIndex: number): Promise<bigint> {
@@ -152,7 +139,7 @@ test('settle: calculate-rewards + claim-rewards populate positive staker rewards
   console.log('claim cycle:', cycle, ' active bond set (top-6 by ratio):', bondIndices);
   expect(bondIndices).toContain(BOND_INDEX);
 
-  const signerBefore = await sbtcBalance(SM);
+  const signerBefore = await sbtcBalance(SM, network);
   console.log('signer-manager sBTC before settle:', signerBefore.toString());
 
   // 1) calculate-rewards (pox-5, permissionless) — splits newly-arrived sBTC on paper.
@@ -194,7 +181,7 @@ test('settle: calculate-rewards + claim-rewards populate positive staker rewards
   console.log('claim-rewards (settle):', settleRec.tx_status, settleRec.tx_result?.repr?.slice(0, 120));
   expect(settleRec.tx_status).toBe('success');
 
-  const signerAfter = await sbtcBalance(SM);
+  const signerAfter = await sbtcBalance(SM, network);
   console.log('signer-manager sBTC after settle:', signerAfter.toString(), 'delta', (signerAfter - signerBefore).toString());
 
   // The per-signer map is now populated: the staker's earned amount is POSITIVE.
@@ -208,7 +195,7 @@ test('settle: calculate-rewards + claim-rewards populate positive staker rewards
 
 test('sBTC payout: claim-staker-rewards raises a plain staker sBTC balance', async () => {
   useFixtures('e2e-reward-payout-sbtc');
-  const before = await sbtcBalance(staker.address);
+  const before = await sbtcBalance(staker.address, network);
   console.log('account5 sBTC before claim:', before.toString());
 
   const [smAddr, smName] = SM.split('.');
@@ -228,7 +215,7 @@ test('sBTC payout: claim-staker-rewards raises a plain staker sBTC balance', asy
   console.log('claim-staker-rewards (account5):', rec.tx_status, rec.tx_result?.repr?.slice(0, 80));
   expect(rec.tx_status).toBe('success');
 
-  const after = await sbtcBalance(staker.address);
+  const after = await sbtcBalance(staker.address, network);
   console.log('account5 sBTC after claim:', after.toString(), 'delta', (after - before).toString());
   expect(after).toBeGreaterThan(before);
 });
@@ -236,7 +223,7 @@ test('sBTC payout: claim-staker-rewards raises a plain staker sBTC balance', asy
 test('L1 withdrawal: pox-addr staker claim opens an sBTC→BTC withdrawal request', async () => {
   useFixtures('e2e-reward-payout-l1');
   const idBefore = await lastWithdrawalId();
-  const sbtcBefore = await sbtcBalance(poxStaker.address);
+  const sbtcBefore = await sbtcBalance(poxStaker.address, network);
   console.log('last-withdrawal-request-id before:', idBefore.toString(), ' account6 sBTC before:', sbtcBefore.toString());
 
   const [smAddr, smName] = SM.split('.');
@@ -293,7 +280,7 @@ test('L1 withdrawal: pox-addr staker claim opens an sBTC→BTC withdrawal reques
   expect((cvToValue(requestStaker) as { value: string }).value).toBe(poxStaker.address);
 
   // sBTC balance is untouched — the reward left as a BTC withdrawal, not sBTC.
-  const sbtcAfter = await sbtcBalance(poxStaker.address);
+  const sbtcAfter = await sbtcBalance(poxStaker.address, network);
   console.log('account6 sBTC after:', sbtcAfter.toString());
   expect(sbtcAfter).toBe(sbtcBefore);
 });

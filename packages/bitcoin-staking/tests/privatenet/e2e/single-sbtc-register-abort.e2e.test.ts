@@ -16,6 +16,7 @@
  *     --runInBand --collectCoverage=false
  */
 
+import { SIGNER_MANAGER } from '../constants';
 import { buildRegisterForBond, fetchBondMembership } from '../../../src';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork, ENV } from '../../helpers/utils';
@@ -28,8 +29,6 @@ const FEE = BigInt(process.env.FEE_USTX ?? 10_000);
 const AMOUNT_USTX = 1_000_000n; // 1 STX
 const SBTC_SATS = 1_000n;
 
-const SIGNER_MANAGER =
-  process.env.SIGNER_MANAGER ?? 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 
 const staker = getAccount(REGTEST_KEYS.account6); // unenrolled, 0 sBTC -> abort
 

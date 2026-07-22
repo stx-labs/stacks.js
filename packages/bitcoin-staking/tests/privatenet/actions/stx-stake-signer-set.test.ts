@@ -16,7 +16,7 @@
  *     POLL_INTERVAL=10000 RETRY_INTERVAL=10000 \
  *     npx jest tests/privatenet/actions/stx-stake-signer-set.test.ts --runInBand --collectCoverage=false --verbose
  */
-import { Cl, ClarityType, broadcastTransaction, fetchCallReadOnlyFunction } from '@stacks/transactions';
+import { Cl, ClarityType, fetchCallReadOnlyFunction } from '@stacks/transactions';
 import {
   buildStake,
   fetchStakerInfo,
@@ -25,14 +25,14 @@ import {
   fetchTotalSharesStakedForCycle,
   Pox5ErrorCode,
 } from '../../../src';
+import { SIGNER_MANAGER } from '../constants';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
+  broadcastAndWaitForTransaction,
   ensureRewardPhase,
   getNextNonce,
-  getTransaction,
   parseErrCode,
-  waitForFulfilled,
 } from '../../helpers/wait';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
@@ -47,7 +47,7 @@ const STAKER = process.env.STAKER ?? 'account6';
 const AMOUNT_USTX = BigInt(process.env.AMOUNT_USTX ?? 50_000_000_000n);
 const NUM_CYCLES = Number(process.env.NUM_CYCLES ?? 1);
 
-const signerManager = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
+const signerManager = SIGNER_MANAGER;
 const SIGNER = signerManager; // contract-of(signer-manager)
 
 const staker = getAccount(REGTEST_KEYS[STAKER as keyof typeof REGTEST_KEYS]);
@@ -148,16 +148,7 @@ test('stake >= SIGNER_SET_MIN_USTX (50k STX) makes the signer count toward the s
       postConditionMode: 'allow',
     });
     const transaction = signTransaction(unsigned, staker.key);
-    const res = await broadcastTransaction({ transaction, network });
-    if ('error' in res)
-      throw `broadcast rejected: ${res.error} — ${'reason' in res ? res.reason : ''}`;
-    console.log('signer-set stake txid', res.txid);
-
-    const tx = await waitForFulfilled(async () => {
-      const t = await getTransaction(res.txid);
-      if (!t || t.tx_status === 'pending') throw 'tx still pending';
-      return t;
-    });
+    const tx = await broadcastAndWaitForTransaction(transaction, network);
     console.log('signer-set stake on-chain result', {
       txid: tx.tx_id,
       tx_status: tx.tx_status,
@@ -221,22 +212,22 @@ test('stake >= SIGNER_SET_MIN_USTX (50k STX) makes the signer count toward the s
 
   console.log('SIGNER_SET_MIN_USTX:', '50000000000 (50k STX)');
   console.log(
-    'delegated-to-signer  before→after:',
+    'delegated-to-signer  before->after:',
     before.delegated.toString(),
-    '→',
+    '->',
     after.delegated.toString()
   );
-  console.log('in-signer-set        before→after:', before.inSet, '→', after.inSet);
+  console.log('in-signer-set        before->after:', before.inSet, '->', after.inSet);
   console.log(
-    'signer STX-only shrs before→after:',
+    'signer STX-only shrs before->after:',
     before.signerShares.toString(),
-    '→',
+    '->',
     after.signerShares.toString()
   );
   console.log(
-    'total  STX-only shrs before→after:',
+    'total  STX-only shrs before->after:',
     before.totalShares.toString(),
-    '→',
+    '->',
     after.totalShares.toString()
   );
 
@@ -247,7 +238,7 @@ test('stake >= SIGNER_SET_MIN_USTX (50k STX) makes the signer count toward the s
     if (after.delegated >= 50_000_000_000n) {
       expect(after.inSet).toBe(true);
       console.log(
-        'CONFIRMED: signer delegated >= 50k STX floor → in signer set; stake COUNTS toward STX-only distribution'
+        'CONFIRMED: signer delegated >= 50k STX floor -> in signer set; stake COUNTS toward STX-only distribution'
       );
     }
     if (after.totalShares >= 0n && before.totalShares >= 0n) {

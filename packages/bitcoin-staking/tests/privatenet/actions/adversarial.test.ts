@@ -22,6 +22,7 @@ import {
   fetchBondMembership,
   Pox5ErrorCode,
 } from '../../../src';
+import { SIGNER_MANAGER } from '../constants';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork, ENV } from '../../helpers/utils';
 import {
@@ -40,8 +41,6 @@ import { findExistingBondIndex } from '../../helpers/bond';
 
 // Reuse the daemon's deployed signer-manager — deploying our own reliably times
 // out beforeAll under this net's rate limits (see register-for-bond.test.ts).
-const SIGNER_MANAGER =
-  process.env.SIGNER_MANAGER ?? 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 
 jest.setTimeout(30 * 60_000);
 

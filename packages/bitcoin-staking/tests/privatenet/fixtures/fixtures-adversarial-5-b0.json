@@ -1,9 +1,9 @@
 {
-  "/v2/contracts/call-read/ST000000000000000000002AMW42H/pox-5/get-staker-info#ST3D2J8JTR89G1HTPK9F1MG5P82SWAK3XHZMQ21EM:[\"0x051ada29225ac21300c7569a5e1a40b640b3c54c7d8f\"]": {
+  "/v2/contracts/call-read/ST000000000000000000002AMW42H/pox-5/get-staker-info#ST000000000000000000002AMW42H:[\"0x051ada29225ac21300c7569a5e1a40b640b3c54c7d8f\"]": {
     "status": 200,
     "body": "{\"okay\":true,\"result\":\"0x09\"}"
   },
-  "/v2/contracts/call-read/ST000000000000000000002AMW42H/pox-5/get-staker-info#ST3SQCNGP0G8499CXZ0W37MYKE9Q36RWYT19AMP6V:[\"0x051af3765616041044a59df83833d3d3726e33639ed0\"]": {
+  "/v2/contracts/call-read/ST000000000000000000002AMW42H/pox-5/get-staker-info#ST000000000000000000002AMW42H:[\"0x051af3765616041044a59df83833d3d3726e33639ed0\"]": {
     "status": 200,
     "body": "{\"okay\":true,\"result\":\"0x09\"}"
   },

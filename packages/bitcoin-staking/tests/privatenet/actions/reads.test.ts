@@ -2,9 +2,9 @@
  * Read-only smoke tests against the private testnet. Waits for pox-5 to be
  * active (no reset — it's a live chain). Only tests what this node CAN execute:
  *
- * - fetchAccountStatus  ✓  — plain /v2/accounts, no contract execution
- * - fetchStakerInfo     ✗  — pox-5 read-only: blocked until pox-5 activates
- * - fetchBondMembership ✗  — pox-5 read-only: blocked until pox-5 activates
+ * - fetchAccountStatus OK  — plain /v2/accounts, no contract execution
+ * - fetchStakerInfo     NO  — pox-5 read-only: blocked until pox-5 activates
+ * - fetchBondMembership NO  — pox-5 read-only: blocked until pox-5 activates
  *   (error once pox-5 IS active: CostBalanceExceeded — node read_length cap 100 KB)
  *
  * Run with the private testnet combo:

@@ -26,6 +26,7 @@ import {
   fetchEligibleUpdateBondRegistration,
   type EligibilityResult,
 } from '../../../src/eligibility';
+import { SIGNER_MANAGER } from '../constants';
 import { currentDistributionCycle } from '../../../src/cycles';
 import { fetchBondAdmin, fetchEarned, fetchRewardsPaused } from '../../../src/fetch';
 import { signSignerGrant } from '../../../src/signer';
@@ -40,7 +41,6 @@ import { waitForBondWithRunway } from '../../helpers/bond';
 jest.setTimeout(120_000);
 
 const network = getNetwork();
-const SIGNER_MANAGER = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 const BOGUS_SIGNER_MANAGER = 'ST000000000000000000002AMW42H.not-a-signer-manager';
 // must match what fetchEligibleGrantSignerKey derives from the network object
 const CHAIN_ID = networkFrom(network).chainId;

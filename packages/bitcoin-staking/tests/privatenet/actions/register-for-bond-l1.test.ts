@@ -29,6 +29,7 @@ import {
   fetchBondMembership,
   minUstxForSatsAmount,
 } from '../../../src';
+import { SIGNER_MANAGER } from '../constants';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import { broadcastAndWait, getNextNonce, getTransaction } from '../../helpers/wait';
@@ -40,8 +41,6 @@ jest.setTimeout(30 * 60_000);
 
 // BOND_INDEX unset -> taken from the btc-lock artifact (single source of truth).
 const BOND_INDEX_ENV = process.env.BOND_INDEX ? Number(process.env.BOND_INDEX) : undefined;
-const SIGNER_MANAGER =
-  process.env.SIGNER_MANAGER ?? 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 const FEE = BigInt(process.env.FEE_USTX ?? 10_000);
 
 const STAKER_NAME = process.env.STAKER ?? 'account5';

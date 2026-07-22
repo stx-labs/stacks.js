@@ -17,12 +17,7 @@
  *       --runInBand --collectCoverage=false --verbose
  */
 
-import {
-  Cl,
-  ClarityType,
-  broadcastTransaction,
-  fetchCallReadOnlyFunction,
-} from '@stacks/transactions';
+import { Cl, ClarityType, fetchCallReadOnlyFunction } from '@stacks/transactions';
 import {
   buildStake,
   fetchSignerInfo,
@@ -30,22 +25,21 @@ import {
   fetchStakerInfo,
   fetchTotalSharesStakedForCycle,
 } from '../../../src';
+import { SIGNER_MANAGER } from '../constants';
 import { resolveAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
+  broadcastAndWaitForTransaction,
   getNextNonce,
   getPoxInfo,
-  getTransaction,
   isInPreparePhase,
   parseErrCode,
   waitForBurnBlockHeight,
-  waitForFulfilled,
   waitForRewardPhase,
 } from '../../helpers/wait';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
 
-const SIGNER_MANAGER = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 const FEE = 10_000n;
 // Exactly the floor: 50k STX = 50_000_000_000 uSTX.
 const AMOUNT_USTX = BigInt(process.env.AMOUNT_USTX ?? 50_000_000_000n);
@@ -118,7 +112,7 @@ beforeAll(async () => {
 }, 60_000);
 
 test(
-  'account1: stake ≥50k STX → signer aggregate ≥ floor, signer counts toward signer set',
+  'account1: stake ≥50k STX -> signer aggregate ≥ floor, signer counts toward signer set',
   async () => {
     useFixtures('e2e-signer-set-50k');
 
@@ -184,19 +178,7 @@ test(
       postConditionMode: 'allow',
     });
     const transaction = signTransaction(unsigned, staker.key);
-    const res = await broadcastTransaction({ transaction, network });
-    if ('error' in res) {
-      throw new Error(
-        `stake broadcast rejected: ${res.error} — ${'reason' in res ? res.reason : ''}`
-      );
-    }
-    console.log('stake txid:', res.txid);
-
-    const tx = await waitForFulfilled(async () => {
-      const t = await getTransaction(res.txid);
-      if (!t || t.tx_status === 'pending') throw new Error('tx still pending');
-      return t;
-    });
+    const tx = await broadcastAndWaitForTransaction(transaction, network);
     console.log('stake on-chain result:', {
       tx_status: tx.tx_status,
       repr: tx.tx_result?.repr,
@@ -245,7 +227,7 @@ test(
 
     expect(signerInfo).toBeDefined();
 
-    console.log('stake txid:', res.txid, 'delegated BEFORE->AFTER:', before.delegated.toString(), '->', after.delegated.toString());
+    console.log('stake txid:', tx.tx_id, 'delegated BEFORE->AFTER:', before.delegated.toString(), '->', after.delegated.toString());
   },
   3 * 180_000
 );

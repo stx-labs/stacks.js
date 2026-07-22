@@ -16,11 +16,10 @@
  *       --runInBand --collectCoverage=false
  */
 
-import { broadcastTransaction } from '@stacks/transactions';
 import { buildClaimStakerRewardsForSigner } from '../../../src';
 import { REGTEST_KEYS, getAccount, resolveAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
-import { getNextNonce, getPoxInfo, getTransaction, waitForFulfilled } from '../../helpers/wait';
+import { broadcastAndWaitForTransaction, getNextNonce, getPoxInfo } from '../../helpers/wait';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
 
@@ -65,21 +64,7 @@ test('claim-staker-rewards-for-signer succeeds with (ok ...) from an EOA (STX-on
 
   // SIGN AND BROADCAST
   const tx = signTransaction(unsigned, caller.key);
-  const res = await broadcastTransaction({ transaction: tx, network });
-
-  if ('error' in res) {
-    throw new Error(
-      `claim-staker-rewards-for-signer broadcast rejected: ${res.error} — ${'reason' in res ? res.reason : ''}`
-    );
-  }
-  console.log('txid:', res.txid);
-
-  // WAIT
-  const txRecord = await waitForFulfilled(async () => {
-    const t = await getTransaction(res.txid);
-    if (!t || t.tx_status === 'pending') throw new Error('tx still pending');
-    return t;
-  });
+  const txRecord = await broadcastAndWaitForTransaction(tx, network);
 
   console.log('on-chain result:', {
     txid: txRecord.tx_id,
@@ -120,21 +105,7 @@ test('claim-staker-rewards-for-signer with bond index: also succeeds with (ok ..
 
   // SIGN AND BROADCAST
   const tx = signTransaction(unsigned, caller.key);
-  const res = await broadcastTransaction({ transaction: tx, network });
-
-  if ('error' in res) {
-    throw new Error(
-      `claim-staker-rewards-for-signer (bond leg) broadcast rejected: ${res.error} — ${'reason' in res ? res.reason : ''}`
-    );
-  }
-  console.log('txid:', res.txid);
-
-  // WAIT
-  const txRecord = await waitForFulfilled(async () => {
-    const t = await getTransaction(res.txid);
-    if (!t || t.tx_status === 'pending') throw new Error('tx still pending');
-    return t;
-  });
+  const txRecord = await broadcastAndWaitForTransaction(tx, network);
 
   console.log('on-chain result:', {
     txid: txRecord.tx_id,

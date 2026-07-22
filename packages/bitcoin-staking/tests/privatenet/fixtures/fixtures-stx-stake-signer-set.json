@@ -15,7 +15,7 @@
     "status": 200,
     "body": "{\"okay\":true,\"result\":\"0x010000000000000000000000174876e800\"}"
   },
-  "/v2/contracts/call-read/ST000000000000000000002AMW42H/pox-5/get-staker-info#STEH2J3C05BAHYS0RBAQBANJ1AXR6SR43VMZ0D49:[\"0x051a1d11486c0156a8fb20c2d575aab20abb8367041e\"]": {
+  "/v2/contracts/call-read/ST000000000000000000002AMW42H/pox-5/get-staker-info#ST000000000000000000002AMW42H:[\"0x051a1d11486c0156a8fb20c2d575aab20abb8367041e\"]": {
     "status": 200,
     "body": "{\"okay\":true,\"result\":\"0x09\"}"
   },

@@ -13,18 +13,16 @@
  *     POLL_INTERVAL=10000 RETRY_INTERVAL=10000 BITCOIN_TX_TIMEOUT=600000 \
  *     npx jest tests/privatenet/actions/stx-unstake.test.ts --runInBand --collectCoverage=false --verbose
  */
-import { broadcastTransaction } from '@stacks/transactions';
 import { buildUnstake, fetchStakerInfo, describePox5Error } from '../../../src';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
+  broadcastAndWaitForTransaction,
   ensureRewardPhase,
   getNextNonce,
   getStxBalance,
-  getTransaction,
   parseErrCode,
   rewardCycleToBurnHeight,
-  waitForFulfilled,
 } from '../../helpers/wait';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
@@ -83,16 +81,7 @@ test('unstake rewrites account6 STX-only position to unlock next cycle (STX stay
   });
 
   const transaction = signTransaction(unsigned, staker.key);
-  const res = await broadcastTransaction({ transaction, network });
-  if ('error' in res)
-    throw `broadcast rejected: ${res.error} — ${'reason' in res ? res.reason : ''}`;
-  console.log('unstake txid', res.txid);
-
-  const tx = await waitForFulfilled(async () => {
-    const t = await getTransaction(res.txid);
-    if (!t || t.tx_status === 'pending') throw 'tx still pending';
-    return t;
-  });
+  const tx = await broadcastAndWaitForTransaction(transaction, network);
   console.log('unstake on-chain result', {
     txid: tx.tx_id,
     tx_status: tx.tx_status,
@@ -116,7 +105,7 @@ test('unstake rewrites account6 STX-only position to unlock next cycle (STX stay
     console.log(
       'current cycle:',
       poxInfo.rewardCycleId,
-      '→ position now unlocks at cycle',
+      '-> position now unlocks at cycle',
       expectedUnlockCycle
     );
     console.log('unlock-burn-height (STX spendable only at/after this):', expectedUnlockBurnHt);
@@ -132,7 +121,7 @@ test('unstake rewrites account6 STX-only position to unlock next cycle (STX stay
       // amount unchanged; still locked
       expect(after.details.amountUstx).toBe(before.details.amountUstx);
       console.log(
-        `CONFIRMED: num-cycles ${before.details.numCycles} → ${after.details.numCycles} (early exit at next cycle), amount still locked`
+        `CONFIRMED: num-cycles ${before.details.numCycles} -> ${after.details.numCycles} (early exit at next cycle), amount still locked`
       );
     }
   } else {

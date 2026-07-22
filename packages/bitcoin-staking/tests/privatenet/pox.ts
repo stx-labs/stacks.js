@@ -41,7 +41,7 @@ export async function fetchFirstBondPeriodCycle(): Promise<number> {
     `${ENV.STACKS_API}/v2/data_var/${POX5_CONTRACT_ADDRESS}/${POX5_CONTRACT_NAME}/first-bond-period-cycle?proof=0`
   );
   if (!res.ok) {
-    throw new Error(`GET first-bond-period-cycle → ${res.status}`);
+    throw new Error(`GET first-bond-period-cycle -> ${res.status}`);
   }
   const { data } = (await res.json()) as { data: string };
   const cv = Cl.deserialize(data);

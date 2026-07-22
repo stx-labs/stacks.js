@@ -12,16 +12,15 @@
  *     POLL_INTERVAL=10000 RETRY_INTERVAL=10000 BITCOIN_TX_TIMEOUT=600000 \
  *     npx jest tests/privatenet/actions/stx-extend.test.ts --runInBand --collectCoverage=false --verbose
  */
-import { broadcastTransaction } from '@stacks/transactions';
+import { SIGNER_MANAGER } from '../constants';
 import { buildStakeUpdate, fetchStakerInfo, describePox5Error } from '../../../src';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
+  broadcastAndWaitForTransaction,
   ensureRewardPhase,
   getNextNonce,
-  getTransaction,
   parseErrCode,
-  waitForFulfilled,
 } from '../../helpers/wait';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
@@ -35,7 +34,7 @@ const STAKER = process.env.STAKER ?? 'account6';
 const CYCLES_TO_EXTEND = Number(process.env.CYCLES_TO_EXTEND ?? 1);
 const AMOUNT_INCREASE = BigInt(process.env.AMOUNT_INCREASE ?? 0n);
 
-const signerManager = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
+const signerManager = SIGNER_MANAGER;
 const staker = getAccount(REGTEST_KEYS[STAKER as keyof typeof REGTEST_KEYS]);
 
 beforeAll(async () => {
@@ -86,16 +85,7 @@ test('stake-update extends account6 STX-only stake by another cycle', async () =
   });
 
   const transaction = signTransaction(unsigned, staker.key);
-  const res = await broadcastTransaction({ transaction, network });
-  if ('error' in res)
-    throw `broadcast rejected: ${res.error} — ${'reason' in res ? res.reason : ''}`;
-  console.log('extend txid', res.txid);
-
-  const tx = await waitForFulfilled(async () => {
-    const t = await getTransaction(res.txid);
-    if (!t || t.tx_status === 'pending') throw 'tx still pending';
-    return t;
-  });
+  const tx = await broadcastAndWaitForTransaction(transaction, network);
   console.log('extend on-chain result', {
     txid: tx.tx_id,
     tx_status: tx.tx_status,

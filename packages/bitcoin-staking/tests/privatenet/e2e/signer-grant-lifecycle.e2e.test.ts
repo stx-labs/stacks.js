@@ -15,7 +15,6 @@
  *       --runInBand --collectCoverage=false
  */
 
-import { broadcastTransaction } from '@stacks/transactions';
 import {
   buildGrantSignerKey,
   buildRevokeSignerGrant,
@@ -27,7 +26,7 @@ import {
 import { parseErrCode } from '../../helpers/wait';
 import { resolveAccount } from '../../regtest/regtest';
 import { ENV, getNetwork } from '../../helpers/utils';
-import { getNextNonce, getTransaction, waitForFulfilled } from '../../helpers/wait';
+import { broadcastAndWaitForTransaction, getNextNonce } from '../../helpers/wait';
 import { signTransaction } from '../../helpers/sign';
 import { useFixtures } from '../../helpers/mock';
 
@@ -72,19 +71,7 @@ test('grant-signer-key (self-managed EOA): grant -> verify true -> revoke -> ver
   });
 
   const grantTx = signTransaction(unsignedGrant, signerAccount.key);
-  const grantRes = await broadcastTransaction({ transaction: grantTx, network });
-  if ('error' in grantRes) {
-    throw new Error(
-      `grant-signer-key broadcast rejected: ${grantRes.error} — ${'reason' in grantRes ? grantRes.reason : ''}`
-    );
-  }
-  console.log('grant-signer-key txid:', grantRes.txid);
-
-  const grantRecord = await waitForFulfilled(async () => {
-    const t = await getTransaction(grantRes.txid);
-    if (!t || t.tx_status === 'pending') throw new Error('grant tx still pending');
-    return t;
-  });
+  const grantRecord = await broadcastAndWaitForTransaction(grantTx, network);
 
   console.log('grant on-chain result:', {
     txid: grantRecord.tx_id,
@@ -120,19 +107,7 @@ test('grant-signer-key (self-managed EOA): grant -> verify true -> revoke -> ver
   });
 
   const revokeTx = signTransaction(unsignedRevoke, signerAccount.key);
-  const revokeRes = await broadcastTransaction({ transaction: revokeTx, network });
-  if ('error' in revokeRes) {
-    throw new Error(
-      `revoke-signer-grant broadcast rejected: ${revokeRes.error} — ${'reason' in revokeRes ? revokeRes.reason : ''}`
-    );
-  }
-  console.log('revoke-signer-grant txid:', revokeRes.txid);
-
-  const revokeRecord = await waitForFulfilled(async () => {
-    const t = await getTransaction(revokeRes.txid);
-    if (!t || t.tx_status === 'pending') throw new Error('revoke tx still pending');
-    return t;
-  });
+  const revokeRecord = await broadcastAndWaitForTransaction(revokeTx, network);
 
   console.log('revoke on-chain result:', {
     txid: revokeRecord.tx_id,

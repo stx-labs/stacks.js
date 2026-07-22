@@ -23,6 +23,7 @@ import {
   fetchBondMembership,
   Pox5ErrorCode,
 } from '../../../src';
+import { SIGNER_MANAGER } from '../constants';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
 import { getNetwork } from '../../helpers/utils';
 import {
@@ -37,8 +38,6 @@ import { useFixtures } from '../../helpers/mock';
 import { computeNextBondIndex } from '../../helpers/bond';
 
 // Reuse the daemon's deployed signer-manager — no deploy round-trips.
-const SIGNER_MANAGER =
-  process.env.SIGNER_MANAGER ?? 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager';
 
 // A real deployed contract that does NOT implement the signer-manager trait.
 // Using the pox-5 contract itself as a trait-mismatch stand-in.
