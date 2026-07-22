@@ -32,6 +32,7 @@ import type { StacksNetwork } from '@stacks/network';
 import type { IntegerType } from '@stacks/common';
 import { broadcastAndWait } from './wait';
 import { deployContract } from './deploy';
+import { ENV, withRetry } from './utils';
 
 /** Contract name of the mint shim deployed under the sBTC admin/deployer. */
 export const SBTC_DEPOSIT_CONTRACT_NAME = 'sbtc-deposit';
@@ -51,20 +52,28 @@ const SBTC_DEPOSIT_SOURCE = `(define-public (mint (amount uint) (recipient princ
 `;
 
 /**
- * Deploy the `sbtc-deposit` mint shim from the sBTC admin/deployer. Idempotent
- * at the caller's discretion — re-deploying a name that already exists rejects;
- * gate on existence if reusing a long-lived chain.
+ * Deploy the `sbtc-deposit` mint shim from the sBTC admin/deployer.
+ *
+ * The deployer is `sbtcDeployer`, which the keep-alive daemon stakes every cycle, so
+ * a single deploy tx transiently loses to the daemon's nonce (BadNonce) or lands but
+ * doesn't confirm in time. `deployContract` is idempotent (already-exists resolves),
+ * so we retry: a late-confirming prior attempt just resolves as already-exists on the
+ * next pass. Bounded; under replay the first attempt is served from fixtures (no loop).
  */
 export function deploySbtcMinter(args: {
   deployerKey: string;
   network: StacksNetwork;
 }): Promise<string> {
-  return deployContract({
-    contractName: SBTC_DEPOSIT_CONTRACT_NAME,
-    codeBody: SBTC_DEPOSIT_SOURCE,
-    senderKey: args.deployerKey,
-    network: args.network,
-  });
+  // Retry the deploy (each re-fetches a fresh nonce, clearing the race) under RECORD;
+  // single-shot under replay, where deployContract is served from fixtures.
+  return withRetry(ENV.RECORD ? 4 : 0, () =>
+    deployContract({
+      contractName: SBTC_DEPOSIT_CONTRACT_NAME,
+      codeBody: SBTC_DEPOSIT_SOURCE,
+      senderKey: args.deployerKey,
+      network: args.network,
+    })
+  )();
 }
 
 /**

@@ -2,9 +2,9 @@
  * Reusable BTC wallet helpers for live privatenet tests.
  * Uses the mempool/esplora HTTP API + BTC faucet — no regtest RPC required.
  *
- * All helpers read MEMPOOL_BASE and FAUCET_URL from environment defaults or the
- * constants exported here. They work with @scure/btc-signer (P2WPKH) and
- * @noble/curves for key operations.
+ * The mempool/esplora indexer base is overridable via MEMPOOL_API (default
+ * privatenet); the faucet always tracks STACKS_API. They work with
+ * @scure/btc-signer (P2WPKH) and @noble/curves for key operations.
  *
  * NOTE: these helpers bypass jest-fetch-mock — they call the real globalThis.fetch
  * directly so they don't accidentally trigger the mock in replay mode. In RECORD
@@ -18,8 +18,9 @@ import { secp256k1 } from '@noble/curves/secp256k1.js';
 import { bytesToHex, hexToBytes } from '@stacks/common';
 import { computeMerkleBranch } from '../../src';
 
-export const MEMPOOL_BASE = 'https://mempool.bitcoin.private-1.hiro.so/api';
-export const FAUCET_URL = 'https://api.private-1.hiro.so/extended/v1/faucets/btc';
+export const MEMPOOL_BASE =
+  process.env.MEMPOOL_API ?? 'https://mempool.bitcoin.private-1.hiro.so/api';
+export const FAUCET_URL = `${process.env.STACKS_API ?? 'https://api.private-1.hiro.so'}/extended/v1/faucets/btc`;
 
 /**
  * The private-testnet "regtest" BTC network params. Uses bech32 prefix 'bcrt'
@@ -103,7 +104,7 @@ export async function faucetFund(address: string): Promise<string> {
  */
 export async function getUtxos(address: string, scriptHex: string): Promise<Utxo[]> {
   const resp = await fetch(`${MEMPOOL_BASE}/address/${address}/txs`);
-  if (!resp.ok) throw new Error(`GET /address/${address}/txs → ${resp.status}`);
+  if (!resp.ok) throw new Error(`GET /address/${address}/txs -> ${resp.status}`);
   const txs = (await resp.json()) as Array<{
     txid: string;
     vin: Array<{ txid: string; vout: number }>;
@@ -151,7 +152,7 @@ export async function broadcastBtc(rawHex: string): Promise<string> {
       console.log(`[btc-wallet] broadcast ok via POST ${path}`);
       return body.trim();
     }
-    console.warn(`[btc-wallet] POST ${path} → ${resp.status}: ${body}`);
+    console.warn(`[btc-wallet] POST ${path} -> ${resp.status}: ${body}`);
   }
   throw new Error('broadcastBtc: failed on both /tx and /v1/tx');
 }
@@ -189,7 +190,7 @@ export async function waitForConfirmed(
  */
 export async function getBtcTipHeight(): Promise<number> {
   const resp = await fetch(`${MEMPOOL_BASE}/blocks/tip/height`);
-  if (!resp.ok) throw new Error(`GET /blocks/tip/height → ${resp.status}`);
+  if (!resp.ok) throw new Error(`GET /blocks/tip/height -> ${resp.status}`);
   return Number((await resp.text()).trim());
 }
 
@@ -199,7 +200,7 @@ export async function getBtcTipHeight(): Promise<number> {
  */
 export async function fetchBlockHeader(blockHash: string): Promise<string> {
   const resp = await fetch(`${MEMPOOL_BASE}/block/${blockHash}/header`);
-  if (!resp.ok) throw new Error(`GET /block/${blockHash}/header → ${resp.status}`);
+  if (!resp.ok) throw new Error(`GET /block/${blockHash}/header -> ${resp.status}`);
   return (await resp.text()).trim();
 }
 
@@ -221,7 +222,7 @@ export async function fetchMerkleProof(
   blockHeight: number
 ): Promise<{ block_height: number; merkle: string[]; pos: number }> {
   const resp = await fetch(`${MEMPOOL_BASE}/block/${blockHash}/txids`);
-  if (!resp.ok) throw new Error(`GET /block/${blockHash}/txids → ${resp.status}`);
+  if (!resp.ok) throw new Error(`GET /block/${blockHash}/txids -> ${resp.status}`);
   const txids = (await resp.json()) as string[];
   const pos = txids.indexOf(txid);
   if (pos === -1) throw new Error(`txid ${txid} not in block ${blockHash} txid list`);
@@ -238,7 +239,7 @@ export async function fetchRawTxHex(
   txid: string
 ): Promise<{ segwitHex: string; legacyHex: string }> {
   const resp = await fetch(`${MEMPOOL_BASE}/tx/${txid}/hex`);
-  if (!resp.ok) throw new Error(`GET /tx/${txid}/hex → ${resp.status}`);
+  if (!resp.ok) throw new Error(`GET /tx/${txid}/hex -> ${resp.status}`);
   const segwitHex = (await resp.text()).trim();
   // Strip witness so bytes hash to txid (not wtxid)
   const parsed = btc.Transaction.fromRaw(hexToBytes(segwitHex), {
@@ -252,7 +253,7 @@ export async function fetchRawTxHex(
 /** Fetch `tx_count` for a block (needed for the Esplora-proof `txCount` field). */
 export async function fetchBlockTxCount(blockHash: string): Promise<number> {
   const resp = await fetch(`${MEMPOOL_BASE}/block/${blockHash}`);
-  if (!resp.ok) throw new Error(`GET /block/${blockHash} → ${resp.status}`);
+  if (!resp.ok) throw new Error(`GET /block/${blockHash} -> ${resp.status}`);
   const data = (await resp.json()) as { tx_count: number };
   return data.tx_count;
 }

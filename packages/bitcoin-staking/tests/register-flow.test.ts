@@ -24,31 +24,12 @@ import {
   computeBondUnlockHeight,
   type EsploraMerkleProof,
 } from '../src';
-import type { PoxInfo } from '../src/types';
+import { POX_INFO } from './fixtures/pox-info';
 
 const TEST_PUBKEY_HEX = '0316e35d38b52d4886e40065e4952a49535ce914e02294be58e252d1998f129b19';
 const TEST_STX_ADDRESS = 'ST000000000000000000002AMW42H';
 // A pre-pushed, self-contained `<pubkey> OP_CHECKSIG` early-unlock subscript.
 const TEST_EARLY_UNLOCK = btc.Script.encode([new Uint8Array(33).fill(0x02), 'CHECKSIG']);
-
-const POX_INFO: PoxInfo = {
-  contractId: 'SP000000000000000000002Q6VF78.pox-5',
-  currentBurnchainBlockHeight: 700_000,
-  firstBurnchainBlockHeight: 666_050,
-  rewardCycleId: 10,
-  rewardCycleLength: 2100,
-  prepareCycleLength: 100,
-  rewardSlots: 4000,
-  currentCycle: { id: 10, stakedUstx: 0n, isPoxActive: true },
-  nextCycle: { id: 11, stakedUstx: 0n, isPoxActive: true },
-  contractVersions: [
-    {
-      contractId: 'SP000000000000000000002Q6VF78.pox-5',
-      activationBurnchainBlockHeight: 666_050,
-      firstRewardCycleId: 50,
-    },
-  ],
-};
 
 const BOND_INDEX = 0;
 const NETWORK = 'devnet' as const;

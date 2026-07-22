@@ -13,26 +13,13 @@
  * different keys (call `useFixtures('…-after')` at the transition). The `waitFor*`
  * loops short-circuit under replay (see `isMocking` in wait.ts), so the recorded
  * snapshots don't need to satisfy a polling condition.
- *
- * `setApiMocks` / `BASE_POX5` remain for the simpler path-keyed actions
- * (`reads`, `setup-bond`) that predate this.
  */
-import { setApiMocks } from '@stacks/internal';
 import fetchMock from 'jest-fetch-mock';
 import { fixtureKey, isMocking, loadFixtures, setFixtureFile, type Fixture } from './utils';
-import { FIXTURES } from '../regtest/fixtures';
 
-export { setApiMocks };
-
-/** Minimal pox-5-active `/v2/pox` snapshot (only the fields the raw reads use). */
+/** Minimal pox-5-active `/v2/pox` + `/v2/info` fallbacks (fields the raw reads use). */
 const POX5_FALLBACK = `{"contract_id":"ST000000000000000000002AMW42H.pox-5","current_burnchain_block_height":200,"reward_cycle_id":10,"current_cycle":{"id":10,"is_pox_active":true}}`;
 const INFO_FALLBACK = `{"burn_block_height":200}`;
-
-/** Base replay map for the legacy `setApiMocks` actions. */
-export const BASE_POX5: Record<string, string> = {
-  '/v2/pox': FIXTURES['/v2/pox'] ?? POX5_FALLBACK,
-  '/v2/info': FIXTURES['/v2/info'] ?? INFO_FALLBACK,
-};
 
 /**
  * Replay is a dumb switch: each useFixtures(key) installs a FRESH flat map —

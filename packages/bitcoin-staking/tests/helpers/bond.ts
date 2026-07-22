@@ -2,10 +2,32 @@
  * Bond-period selection for the regtest bond flow. Shared by the action tests so
  * the timing logic lives in one place.
  */
-import { BOND_GAP_CYCLES, bondPeriodToBurnHeight, fetchBond, type PoxInfo } from '../../src';
+import { BOND_GAP_CYCLES, bondPeriodToBurnHeight, fetchBond, fetchProtocolBond, type PoxInfo } from '../../src';
+import type { StacksNetwork } from '@stacks/network';
 import { getNetwork } from './utils';
 import { getPoxInfo, waitForBurnBlockHeight } from './wait';
 import { fetchFirstBondPeriodCycle } from '../privatenet/pox';
+
+/**
+ * Discover the active protocol bonds and return the top-`top` indices sorted by
+ * stx-value-ratio (desc; ties broken by higher index) — the FULL active-bond set
+ * that `calculate-rewards` / `claim-rewards` require (passing only your own bond
+ * aborts). Scans `[0, max)`, skipping indices with no protocol bond. Read-only.
+ */
+export async function discoverActiveBonds(opts: {
+  network: StacksNetwork;
+  max?: number;
+  top?: number;
+}): Promise<number[]> {
+  const { network, max = 64, top = 6 } = opts;
+  const bonds: { index: number; ratio: bigint }[] = [];
+  for (let i = 0; i < max; i++) {
+    const b = await fetchProtocolBond({ bondIndex: i, network }).catch(() => undefined);
+    if (b) bonds.push({ index: i, ratio: b.stxValueRatio });
+  }
+  bonds.sort((a, b) => (b.ratio === a.ratio ? b.index - a.index : Number(b.ratio - a.ratio)));
+  return bonds.slice(0, top).map(b => b.index);
+}
 
 /**
  * Pick the bond period with the MOST runway before its start. setup-bond is only

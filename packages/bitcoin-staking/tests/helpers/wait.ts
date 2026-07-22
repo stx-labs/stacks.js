@@ -118,7 +118,7 @@ export async function getTransaction(txid: string): Promise<TxRecord | null> {
 /** STX balance (microSTX) straight from the node via `/v2/accounts`. */
 export async function getStxBalance(address: string): Promise<bigint> {
   const res = await nodeFetch(`${ENV.STACKS_API}/v2/accounts/${address}?proof=0`);
-  if (!res.ok) throw new Error(`GET /v2/accounts/${address} → ${res.status}`);
+  if (!res.ok) throw new Error(`GET /v2/accounts/${address} -> ${res.status}`);
   const data = (await res.json()) as { balance: string };
   return BigInt(data.balance); // hex "0x..."
 }
@@ -161,12 +161,12 @@ interface RawPoxInfo {
  * Raw `/v2/pox` via the global `fetch`, used by the readiness waits. Under
  * `RECORD=1` the global `fetch` is wrapped (see `utils.ts`) so these polls are
  * captured into `fixtures.json` too — deduped to a single latest-wins entry, so
- * the long boot-polling doesn't bloat the store. That recorded `/v2/pox`
- * snapshot is what `BASE_POX5` replays so this wait resolves offline.
+ * the long boot-polling doesn't bloat the store. The recorded
+ * /v2/pox snapshot (or the POX5_FALLBACK in mock.ts) replays so this wait resolves offline.
  */
 async function getPoxInfoRaw(): Promise<RawPoxInfo> {
   const res = await nodeFetch(`${ENV.STACKS_API}/v2/pox`);
-  if (!res.ok) throw new Error(`/v2/pox → ${res.status}`);
+  if (!res.ok) throw new Error(`/v2/pox -> ${res.status}`);
   return (await res.json()) as RawPoxInfo;
 }
 
@@ -470,12 +470,14 @@ export async function waitForContract(
   name: string,
   interval: number = ENV.POLL_INTERVAL
 ): Promise<void> {
-  // A healthy deploy confirms within 1-2 stacks blocks (seconds). 30s means the
-  // tx aborted (e.g. failed Clarity analysis) — fail loudly, don't sit out the
-  // jest timeout.
-  await waitFor(() => contractExists(address, name), interval, 30_000).catch(() => {
+  // A healthy deploy usually confirms in 1-2 stacks blocks, but the FIRST tx after a
+  // fresh boot can take longer while the Nakamoto miner warms up — so 30s was too
+  // tight (a deploy-in-beforeAll would spuriously "abort"). 90s still fails loudly on a
+  // real analysis abort without losing to a cold miner. No-op under replay.
+  const timeoutMs = 90_000;
+  await waitFor(() => contractExists(address, name), interval, timeoutMs).catch(() => {
     throw new Error(
-      `waitForContract: ${address}.${name} not on-chain after 30s — deploy tx likely aborted`
+      `waitForContract: ${address}.${name} not on-chain after ${timeoutMs / 1000}s — deploy tx likely aborted`
     );
   });
 }

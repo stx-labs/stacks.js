@@ -82,7 +82,7 @@ export const ENV = {
   STACKS_TX_TIMEOUT: Number(process.env.STACKS_TX_TIMEOUT ?? 30_000),
   // Burn-height stall guard — deliberately short so stalls abort fast instead of
   // grinding for minutes. With the flooder running, burn advances ~2s, so 15s is
-  // ample; if the chain freezes (node quiet → 30s miner fallback) we fail fast
+  // ample; if the chain freezes (node quiet -> 30s miner fallback) we fail fast
   // and retry rather than wait it out. Override up for slow live nets.
   BITCOIN_TX_TIMEOUT: Number(process.env.BITCOIN_TX_TIMEOUT ?? 15_000),
   // Boot/activation budget — a DIFFERENT regime from the stall guards above: a
@@ -99,15 +99,16 @@ export const ENV = {
    * of truth for offline replay; tests read it via `fixtures.ts` (`FIXTURES`).
    *
    * Defaults by network when `FIXTURES_JSON` is not explicitly set:
-   * - `devnet` (or unset) -> `tests/regtest/fixtures.json`
+   * - `devnet` (or unset) -> `tests/regtest/fixtures/fixtures.json`
    * - `testnet`           -> `tests/privatenet/fixtures/fixtures.json`
-   *   so privatenet recordings never touch the committed regtest fixtures.
+   *   Each net keeps its fixtures in its own `fixtures/` dir, so recordings for
+   *   one never touch the other's committed store.
    */
   FIXTURES_JSON:
     process.env.FIXTURES_JSON ??
     ((process.env.NETWORK ?? 'devnet') === 'testnet'
       ? 'tests/privatenet/fixtures/fixtures.json'
-      : 'tests/regtest/fixtures.json'),
+      : 'tests/regtest/fixtures/fixtures.json'),
   /**
    * Capture mode. When `RECORD=1`, hit the live node (jest-fetch-mock disabled)
    * and record every observed request/response into FIXTURES_JSON. Unset ->

@@ -19,7 +19,7 @@
  *
  * Standalone by design: jest `globalSetup` runs in a plain Node context WITHOUT
  * jest globals, so this file must not import `./utils` (which pulls in
- * jest-fetch-mock → references `jest` → crashes). It reads `.env` + `process.env`
+ * jest-fetch-mock -> references `jest` -> crashes). It reads `.env` + `process.env`
  * itself and execs the reset command directly.
  */
 import { exec } from 'node:child_process';
@@ -110,7 +110,7 @@ export default async function recordPreflight(): Promise<void> {
  */
 async function privatenetPreflight(): Promise<void> {
   const api = process.env.STACKS_API ?? 'https://api.private-1.hiro.so';
-  const indexerUrl = process.env.BTC_INDEXER_URL ?? 'https://mempool.bitcoin.private-1.hiro.so/api';
+  const indexerUrl = process.env.MEMPOOL_API ?? 'https://mempool.bitcoin.private-1.hiro.so/api';
 
   const pox = await nodePox(api);
   if (pox === null) {

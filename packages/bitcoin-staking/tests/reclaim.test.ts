@@ -61,7 +61,7 @@ const GOLDEN_EARLYEXIT_TXHEX =
   '02000000000101aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0000000000ffffffff014871000000000000160014164247d6f2b425ac5771423ae6c80c754f7172b005483045022100bb5a00c9674e1119b49ed6c2540d0aabbe7da52665fa048c19bac17f97fbf8ec02207ef6bb17677467692d17e343b876802f5dea45635b7f4d15b9a4d9b8b342fad20147304402205121bbe7f241193a26c0dcfb82b70a3bd75673e333697230a478dda9921d6b4b022043eaa31d4f100d2d3070dcbb03189c3ee65d8ddf4778e372f512a099356eec900120aefd42d50dea2c02669802e0a460592b6437c1ba832c0bfb76183effdb60949e00766303cbf80cb16782012088a82041dfc564373f06b57e724a29efeb4d19e7cf9a1f0a04a308908074b0deb8c8e98821022bb4b050afd84f0a7eedd02d4ea6ebe426bbb02744dfcca0b789a643eff6e78cac68692103797dd653040d344fd048c1ad05d4cbcb2178b30c6a0c4276994795f3e833da41ac00000000';
 
 describe('buildReclaim', () => {
-  test('locktime: sets lockTime + sequence + P2WSH input', () => {
+  it('locktime: sets lockTime + sequence + P2WSH input', () => {
     const tx = buildReclaim({
       path: 'locktime',
       utxo: UTXO,
@@ -74,7 +74,7 @@ describe('buildReclaim', () => {
     expect(bytesToHex(tx.getInput(0).witnessScript!)).toBe(bytesToHex(LOCK_SCRIPT));
   });
 
-  test('documented rebuild snippet yields the same witnessScript as the stored lockScript', () => {
+  it('documented rebuild snippet yields the same witnessScript as the stored lockScript', () => {
     const rebuilt = buildLockScript({
       stxAddress: STX_ADDRESS,
       unlockHeight: UNLOCK_HEIGHT,
@@ -91,7 +91,7 @@ describe('buildReclaim', () => {
     expect(bytesToHex(tx.getInput(0).witnessScript!)).toBe(bytesToHex(LOCK_SCRIPT));
   });
 
-  test('builds the sweep output from opts.output', () => {
+  it('builds the sweep output from opts.output', () => {
     const tx = buildReclaim({
       path: 'early-exit',
       utxo: UTXO,
@@ -106,7 +106,7 @@ describe('buildReclaim', () => {
     );
   });
 
-  test('rejects a sweep below the dust limit', () => {
+  it('rejects a sweep below the dust limit', () => {
     expect(() =>
       buildReclaim({
         path: 'early-exit',
@@ -118,7 +118,7 @@ describe('buildReclaim', () => {
     ).toThrow(/dust/);
   });
 
-  test('rejects a fee >= the utxo value', () => {
+  it('rejects a fee >= the utxo value', () => {
     expect(() =>
       buildReclaim({
         path: 'early-exit',
@@ -130,7 +130,7 @@ describe('buildReclaim', () => {
     ).toThrow(/fee/);
   });
 
-  test('locktime: throws when the lockScript encodes no CLTV height', () => {
+  it('locktime: throws when the lockScript encodes no CLTV height', () => {
     const noCltv = btc.Script.encode([COSIGNER_PUB, STAKER_PUB, 'CHECKMULTISIG']);
     expect(() =>
       buildReclaim({
@@ -145,7 +145,7 @@ describe('buildReclaim', () => {
 });
 
 describe('computeReclaimSighash', () => {
-  test('matches preimageWitnessV0 over the lockScript + amount', () => {
+  it('matches preimageWitnessV0 over the lockScript + amount', () => {
     const tx = buildReclaim({
       path: 'early-exit',
       utxo: UTXO,
@@ -163,7 +163,7 @@ describe('signing variants are interchangeable', () => {
   // Variant A: our helper (detached sig) attached as a partialSig.
   // Variant B: native btc-signer signIdx. Matched low-R (both default false).
 
-  test('locktime: helper-signed and native-signed finalize byte-identically', () => {
+  it('locktime: helper-signed and native-signed finalize byte-identically', () => {
     const a = buildReclaim({
       path: 'locktime',
       utxo: UTXO,
@@ -197,7 +197,7 @@ describe('signing variants are interchangeable', () => {
     expect(a.isFinal).toBe(true);
   });
 
-  test('early-exit: helper-signed and native-signed finalize byte-identically', () => {
+  it('early-exit: helper-signed and native-signed finalize byte-identically', () => {
     const a = buildReclaim({
       path: 'early-exit',
       utxo: UTXO,
@@ -236,7 +236,7 @@ describe('signing variants are interchangeable', () => {
     expect(a.isFinal).toBe(true);
   });
 
-  test('early-exit interoperates: staker via helper, cosigner via signIdx (mixed)', () => {
+  it('early-exit interoperates: staker via helper, cosigner via signIdx (mixed)', () => {
     const tx = buildReclaim({
       path: 'early-exit',
       utxo: UTXO,
@@ -257,7 +257,7 @@ describe('signing variants are interchangeable', () => {
 });
 
 describe('finalizeReclaim guards', () => {
-  test('early-exit fails without the cosigner signature', () => {
+  it('early-exit fails without the cosigner signature', () => {
     const tx = buildReclaim({
       path: 'early-exit',
       utxo: UTXO,
@@ -271,7 +271,7 @@ describe('finalizeReclaim guards', () => {
     );
   });
 
-  test('fails without any signature', () => {
+  it('fails without any signature', () => {
     const tx = buildReclaim({
       path: 'locktime',
       utxo: UTXO,
@@ -284,7 +284,7 @@ describe('finalizeReclaim guards', () => {
 });
 
 describe('PSBT hand-off round-trip', () => {
-  test('staker sig survives toPSBT/fromPSBT; cosigner completes it', () => {
+  it('staker sig survives toPSBT/fromPSBT; cosigner completes it', () => {
     const staker = buildReclaim({
       path: 'early-exit',
       utxo: UTXO,

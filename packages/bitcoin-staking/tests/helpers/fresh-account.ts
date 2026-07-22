@@ -40,7 +40,7 @@ const FRESH_SEED = process.env.FRESH_ACCOUNT_SEED ?? 'privatenet-fresh-v1';
  * each account a distinct label (e.g. the loop index) to avoid collisions.
  */
 export function deriveFreshAccount(label: string | number = 0): Account {
-  const raw = sha256(utf8ToBytes(`${FRESH_SEED}:${label}`)); // 32 bytes → valid secp256k1 scalar
+  const raw = sha256(utf8ToBytes(`${FRESH_SEED}:${label}`)); // 32 bytes -> valid secp256k1 scalar
   // Stacks private keys carry a trailing `01` compression marker.
   const key = bytesToHex(raw) + '01';
   return getAccount(key);
@@ -79,7 +79,7 @@ export async function freshFundedStxAccount(opts: {
       fee: opts.fee,
       network: opts.network,
     });
-    console.log(`[fresh-account] funded ${account.address} ✓`);
+    console.log(`[fresh-account] funded ${account.address} OK`);
   }
 
   return account;
