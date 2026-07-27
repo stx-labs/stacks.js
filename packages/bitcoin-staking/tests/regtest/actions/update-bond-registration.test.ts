@@ -100,7 +100,7 @@ test('update-bond-registration: rotate the membership signer-manager', async () 
     bondIndex,
     staker: staker.address,
     amountUstx,
-    satsTotal: MAX_SATS,
+    lockup: { kind: 'sbtc', sbtcSats: MAX_SATS },
     signerManager: SIGNER_MANAGER,
     poxInfo: poxBeforeRegister,
     network,

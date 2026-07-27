@@ -126,7 +126,7 @@ test('protocol rewards arrive in a contract staker’s sBTC balance', async () =
 
   const amountUstx = minUstxForSatsAmount({ sats: MAX_SATS, stxValueRatio: STX_VALUE_RATIO, minUstxRatioBps: MIN_USTX_RATIO_BPS });
   // Preflight the register (surfaces the exact abort reason + gates before the broadcast).
-  const eligible = await fetchEligibleRegisterForBond({ bondIndex, staker: vault, amountUstx, satsTotal: MAX_SATS, signerManager, poxInfo: await getPoxInfo(), network });
+  const eligible = await fetchEligibleRegisterForBond({ bondIndex, staker: vault, amountUstx, lockup: { kind: 'sbtc', sbtcSats: MAX_SATS }, signerManager, poxInfo: await getPoxInfo(), network });
   if (!eligible.ok) console.log('vault register preflight reasons', eligible.reasons);
   expect(eligible.ok).toBe(true);
 

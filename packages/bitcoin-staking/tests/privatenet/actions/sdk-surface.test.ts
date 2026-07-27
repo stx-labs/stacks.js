@@ -77,7 +77,7 @@ test('admin + reward globals read', async () => {
   const poxInfo = await fetchPoxInfo({ network });
   const delegated = await fetchAmountDelegatedForSigner({
     signerManager: SIGNER_MANAGER,
-    cycle: poxInfo.rewardCycleId + 1,
+    rewardCycle: poxInfo.rewardCycleId + 1,
     network,
   });
   expect(delegated).toBeGreaterThanOrEqual(0n);

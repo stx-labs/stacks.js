@@ -126,7 +126,7 @@ test('a vault staker accrues shares and its rewards are readable', async () => {
     bondIndex,
     staker: vault,
     amountUstx,
-    satsTotal: MAX_SATS,
+    lockup: { kind: 'sbtc', sbtcSats: MAX_SATS },
     signerManager,
     poxInfo: poxBeforeRegister,
     network,

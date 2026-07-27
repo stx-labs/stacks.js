@@ -159,7 +159,7 @@ test('a delegated keeper registers the funded vault for a bond (sBTC)', async ()
     bondIndex,
     staker: vault,
     amountUstx,
-    satsTotal: MAX_SATS,
+    lockup: { kind: 'sbtc', sbtcSats: MAX_SATS },
     signerManager,
     poxInfo: poxBeforeRegister,
     network,

@@ -272,7 +272,7 @@ test('register-for-bond: enrolled staker and non-allowlisted stranger are both r
   const base = {
     bondIndex,
     amountUstx: 1_000_000n,
-    satsTotal: 10_000n,
+    lockup: { kind: 'sbtc', sbtcSats: 10_000n },
     signerManager: SIGNER_MANAGER,
     poxInfo,
     network,

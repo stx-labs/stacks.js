@@ -129,7 +129,7 @@ test('sbtc register-for-bond happy path: setup-bond → mint → register → en
     bondIndex,
     staker: staker.address,
     amountUstx,
-    satsTotal: MAX_SATS,
+    lockup: { kind: 'sbtc', sbtcSats: MAX_SATS },
     signerManager,
     poxInfo: poxBeforeRegister,
     network,

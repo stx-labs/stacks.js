@@ -130,17 +130,73 @@ describe('buildReclaim', () => {
     ).toThrow(/fee/);
   });
 
-  it('locktime: throws when the lockScript encodes no CLTV height', () => {
-    const noCltv = btc.Script.encode([COSIGNER_PUB, STAKER_PUB, 'CHECKMULTISIG']);
+  it('rejects a lockScript that is not a pox-5 lockup script', () => {
+    const notALockup = btc.Script.encode([COSIGNER_PUB, STAKER_PUB, 'CHECKMULTISIG']);
     expect(() =>
       buildReclaim({
         path: 'locktime',
         utxo: UTXO,
-        lockScript: noCltv,
+        lockScript: notALockup,
+        network: NETWORK,
+        output: OUTPUT,
+      })
+    ).toThrow(/not a pox-5 lockup script/);
+  });
+
+  it('locktime: throws when the scaffold encodes no CLTV height', () => {
+    // Scaffold-shaped, but the height slot holds an opcode instead of a number.
+    const noHeight = btc.Script.encode([
+      'IF',
+      'NOP',
+      'CHECKLOCKTIMEVERIFY',
+      'ELSE',
+      'SIZE',
+      32,
+      'EQUALVERIFY',
+      'SHA256',
+      new Uint8Array(32).fill(0xaa),
+      'EQUALVERIFY',
+      COSIGNER_PUB,
+      'CHECKSIG',
+      'ENDIF',
+      'VERIFY',
+      STAKER_PUB,
+      'CHECKSIG',
+    ]);
+    expect(() =>
+      buildReclaim({
+        path: 'locktime',
+        utxo: UTXO,
+        lockScript: noHeight,
         network: NETWORK,
         output: OUTPUT,
       })
     ).toThrow(/CLTV/);
+  });
+
+  it('names a multi-key subscript instead of misassigning the keys', () => {
+    // Two keys in the early-unlock part: the old positional decode would have
+    // silently treated the second as the staker's.
+    const multiKeyEarly = buildLockScript({
+      stxAddress: STX_ADDRESS,
+      unlockHeight: UNLOCK_HEIGHT,
+      unlockBytes: btc.Script.encode([STAKER_PUB, 'CHECKSIG']),
+      earlyUnlockBytes: btc.Script.encode([COSIGNER_PUB, COSIGNER_PUB, 'CHECKSIG']),
+      validateEarlyUnlockBytes: false,
+    });
+    const tx = buildReclaim({
+      path: 'early-exit',
+      utxo: UTXO,
+      lockScript: multiKeyEarly,
+      network: NETWORK,
+      output: OUTPUT,
+    });
+    tx.updateInput(0, {
+      partialSig: [[STAKER_PUB, signReclaim(computeReclaimSighash(tx), STAKER_PRIV)]],
+    });
+    expect(() => finalizeReclaim({ path: 'early-exit', tx, stxAddress: STX_ADDRESS })).toThrow(
+      /multi-key subscripts are not supported/
+    );
   });
 });
 

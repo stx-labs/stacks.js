@@ -156,7 +156,7 @@ describe('script encoders match the reference (hand-rolled) implementations', ()
   );
 });
 
-describe('computeWshOutputScript', () => {
+describe('scriptToWshOutput', () => {
   // Previous hand-rolled impl, kept as a reference oracle now that script.ts
   // delegates to @scure/btc-signer's OutScript.
   function refComputeP2wshOutputScript(script: Uint8Array): number[] {

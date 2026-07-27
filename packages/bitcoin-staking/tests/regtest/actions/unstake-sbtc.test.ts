@@ -102,7 +102,7 @@ test('sbtc unstake: register → unstake-sbtc → sBTC returned, total falls bac
     bondIndex,
     staker: staker.address,
     amountUstx,
-    satsTotal: MAX_SATS,
+    lockup: { kind: 'sbtc', sbtcSats: MAX_SATS },
     signerManager,
     poxInfo: poxBeforeRegister,
     network,

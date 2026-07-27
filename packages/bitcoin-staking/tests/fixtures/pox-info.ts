@@ -26,7 +26,7 @@ export const POX_INFO: PoxInfo = {
   prepareCycleLength: 100,
   rewardSlots: 4000,
   currentCycle: { id: 10, stakedUstx: 0n, isPoxActive: true },
-  nextCycle: { id: 11, stakedUstx: 0n, isPoxActive: true },
+  nextCycle: { id: 11, stakedUstx: 0n },
   contractVersions: [
     {
       contractId: 'SP000000000000000000002Q6VF78.pox-5',

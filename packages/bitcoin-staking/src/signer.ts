@@ -1,6 +1,5 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, hexToBytes, type PrivateKey } from '@stacks/common';
-import { verifyMessageSignatureRsv } from '@stacks/encryption';
 import {
   type BufferCV,
   Cl,
@@ -8,6 +7,7 @@ import {
   type ClarityValue,
   deserializeCV,
   encodeStructuredDataBytes,
+  publicKeyFromSignatureRsv,
   serializeCVBytes,
   signStructuredData,
   type TupleCV,
@@ -78,6 +78,11 @@ export function signSignerGrant(opts: SignerKeyGrantOptions & { privateKey: Priv
  * the RSV signature against the SIP-018 message hash and compares it to the
  * supplied `publicKey`.
  *
+ * This mirrors `grant-signer-key`, which recovers from the full 65-byte
+ * signature (`secp256k1-recover?`) and compares the result to `signer-key` — so
+ * a signature whose recovery byte points at a different key fails here as it
+ * would on-chain (`ERR_INVALID_SIGNATURE_RECOVER` / `ERR_INVALID_SIGNATURE_PUBKEY`).
+ *
  * Returns `false` for malformed signatures (e.g. not 65 bytes) — an
  * unparseable signature is not a valid one.
  */
@@ -87,12 +92,14 @@ export function verifySignerGrant(
     signature: string | Uint8Array;
   }
 ): boolean {
+  const expected =
+    typeof opts.publicKey === 'string' ? opts.publicKey : bytesToHex(opts.publicKey);
   try {
-    return verifyMessageSignatureRsv({
-      message: computeSignerGrantHash(opts),
-      publicKey: typeof opts.publicKey === 'string' ? opts.publicKey : bytesToHex(opts.publicKey),
-      signature: typeof opts.signature === 'string' ? opts.signature : bytesToHex(opts.signature),
-    });
+    const recovered = publicKeyFromSignatureRsv(
+      bytesToHex(computeSignerGrantHash(opts)),
+      typeof opts.signature === 'string' ? opts.signature : bytesToHex(opts.signature)
+    );
+    return recovered.toLowerCase() === expected.toLowerCase();
   } catch {
     return false; // malformed signature or public key
   }
@@ -117,9 +124,8 @@ export function verifySignerGrant(
  * Mirrors the `signer-manager.validate-stake!` calldata tuple.
  */
 export function buildSignerCalldata(opts: SignerCalldataL1Payout): Uint8Array {
-  // A repr passed in directly gets the same check `parseSignerCalldata` applies on
-  // the way out — the blob is opaque to pox-5, and the signer-manager reads
-  // `pox-addr` as the BTC payout destination.
+  // pox-5 treats the blob as opaque; the signer-manager reads `pox-addr` as the
+  // BTC payout destination, so a bad repr silently misdirects rewards.
   const { version, data } =
     typeof opts.poxAddress === 'string'
       ? parseBtcAddress(opts.poxAddress, opts.network)

@@ -139,7 +139,7 @@ test('a contract principal registers for a bond via sBTC it holds', async () => 
     bondIndex,
     staker: wrapper,
     amountUstx,
-    satsTotal: MAX_SATS,
+    lockup: { kind: 'sbtc', sbtcSats: MAX_SATS },
     signerManager,
     poxInfo: poxBeforeRegister,
     network,

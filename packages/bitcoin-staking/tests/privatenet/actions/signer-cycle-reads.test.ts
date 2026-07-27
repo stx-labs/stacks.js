@@ -167,12 +167,12 @@ describe('signer reads', () => {
   test('signer pending staked uSTX', async () => {
     expectNonNegBigint(
       'signerPending',
-      await fetchSignerPendingStakedUstx({ signerManager: SIGNER_MANAGER, cycle, network })
+      await fetchSignerPendingStakedUstx({ signerManager: SIGNER_MANAGER, rewardCycle: cycle, network })
     );
   });
 
   test('signer cycle membership is undefined or well-shaped', async () => {
-    const m = await fetchSignerCycleMembership({ staker: account5.address, cycle, network });
+    const m = await fetchSignerCycleMembership({ staker: account5.address, rewardCycle: cycle, network });
     console.log('signerCycleMembership:', JSON.stringify(m, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)));
     if (m !== undefined) {
       expect(typeof m.amountUstx === 'bigint').toBe(true);
@@ -197,8 +197,8 @@ describe('signer reads', () => {
 
 describe('signer-set traversal', () => {
   test('first/last/contains/item/next/prev agree', async () => {
-    const first = await fetchSignerSetFirstItem({ cycle, network });
-    const last = await fetchSignerSetLastItem({ cycle, network });
+    const first = await fetchSignerSetFirstItem({ rewardCycle: cycle, network });
+    const last = await fetchSignerSetLastItem({ rewardCycle: cycle, network });
     console.log('signerSet first/last:', first, last);
 
     if (first === undefined) {
@@ -211,19 +211,19 @@ describe('signer-set traversal', () => {
     expect(typeof last).toBe('string');
 
     // The head is a member -> contains is true.
-    const contains = await fetchSignerSetContainsForCycle({ signer: first, cycle, network });
+    const contains = await fetchSignerSetContainsForCycle({ signer: first, rewardCycle: cycle, network });
     console.log('contains(first):', contains);
     expect(contains).toBe(true);
 
     // Its node exists; head has no prev.
-    const item = await fetchSignerSetItem({ signer: first, cycle, network });
+    const item = await fetchSignerSetItem({ signer: first, rewardCycle: cycle, network });
     console.log('item(first):', JSON.stringify(item));
     expect(item).not.toBeUndefined();
     expect(item!.prev).toBeUndefined();
 
     // prev/next accessors agree with the node.
-    const prev = await fetchSignerSetPrevItem({ signer: first, cycle, network });
-    const next = await fetchSignerSetNextItem({ signer: first, cycle, network });
+    const prev = await fetchSignerSetPrevItem({ signer: first, rewardCycle: cycle, network });
+    const next = await fetchSignerSetNextItem({ signer: first, rewardCycle: cycle, network });
     console.log('prev/next(first):', prev, next);
     expect(prev).toBeUndefined();
     expect(next).toBe(item!.next);

@@ -70,7 +70,7 @@ export interface PoxInfo {
   /** Current reward cycle summary. */
   currentCycle: CycleInfo;
   /** Next reward cycle summary. */
-  nextCycle: CycleInfo;
+  nextCycle: NextCycleInfo;
   /** One entry per deployed pox contract version (pox-1, …, pox-5). */
   contractVersions: PoxContractVersion[];
 }
@@ -87,6 +87,19 @@ export interface CycleInfo {
   stakedUstx: bigint;
   /** Whether PoX is active for the cycle. */
   isPoxActive: boolean;
+}
+
+/**
+ * Summary of the next reward cycle.
+ *
+ * Mirrors the node's `/v2/pox` `next_cycle`, which — unlike `current_cycle` —
+ * carries no `is_pox_active`.
+ */
+export interface NextCycleInfo {
+  /** Reward cycle id. */
+  id: number;
+  /** Total micro-STX stacked for the cycle. */
+  stakedUstx: bigint;
 }
 
 /**

@@ -1,4 +1,4 @@
-import { type IntegerType, bytesToHex } from '@stacks/common';
+import { type IntegerType, bytesToHex, intToBigInt } from '@stacks/common';
 import type { NetworkClientParam } from '@stacks/network';
 import { networkFrom } from '@stacks/network';
 import { getAddressFromPublicKey } from '@stacks/transactions';
@@ -38,19 +38,22 @@ import {
 import { computeBitcoinTxid, serializeBitcoinTx } from './proof';
 import { BITCOIN_LOCKTIME_THRESHOLD } from './script';
 import { verifySignerGrant } from './signer';
-import type { BondL1LockupOutput, PoxInfo } from './types';
+import type { BondLockup, PoxInfo } from './types';
 
 /**
  * Result of an eligibility preflight (`fetchEligible*`).
  *
  * On `ok: false`, `reasons` lists every check that would fail, as the
- * contract's own error codes ({@link Pox5ErrorCode}), in the order the
- * contract evaluates them — `reasons[0]` is the error the transaction would
- * actually abort with.
+ * contract's own error codes ({@link Pox5ErrorCode}).
+ *
+ * Treat `reasons` as a set, not a sequence: the contract folds the L1 outputs one
+ * at a time while these checks run one gate across all outputs, so with more than
+ * one failing output the first entry need not be the code the tx aborts with.
  */
 export type EligibilityResult =
   | { ok: true }
   | { ok: false; reasons: [Pox5ErrorCode, ...Pox5ErrorCode[]] };
+
 
 /**
  * Dry-run the checks of `register-for-bond` via read-only fetches, without
@@ -80,21 +83,26 @@ export async function fetchEligibleRegisterForBond(
     /** The staker registering (the future `tx-sender`). */
     staker: string;
     /** uSTX the staker would commit. */
-    amountUstx: bigint;
-    /** Sats being staked: the sBTC amount, or the summed L1 lockup outputs. */
-    satsTotal: bigint;
+    amountUstx: IntegerType;
+    /**
+     * The same lockup the builder takes. The staked sats are derived from it
+     * (summed output amounts for `kind: 'btc'`, the sBTC amount otherwise), so
+     * the two halves cannot disagree.
+     */
+    lockup: BondLockup;
     /** The signer-manager contract the staker would register with. */
     signerManager: string;
-    /**
-     * L1 lockup outputs, when registering with a `kind: 'btc'` lockup. Enables
-     * the header (u40) and duplicate-outpoint (u46) SPV checks; omit for sBTC.
-     */
-    outputs?: BondL1LockupOutput[];
     poxInfo?: PoxInfo;
   } & NetworkClientParam
 ): Promise<EligibilityResult> {
   const networkClient = { network: opts.network, client: opts.client };
   const staker = { address: opts.staker };
+
+  const outputs = opts.lockup.kind === 'btc' ? opts.lockup.outputs : undefined;
+  const satsTotal =
+    opts.lockup.kind === 'btc'
+      ? opts.lockup.outputs.reduce((sum, o) => sum + intToBigInt(o.amount), 0n)
+      : intToBigInt(opts.lockup.sbtcSats);
 
   const [poxInfo, bond, allowance, stakerInfo, account, membership, signerInfo] = await Promise.all(
     [
@@ -130,17 +138,17 @@ export async function fetchEligibleRegisterForBond(
     membership
       ? fetchBondL1UnlockHeight({ bondIndex: membership.bondIndex, ...networkClient })
       : undefined,
-    opts.outputs?.length
+    outputs?.length
       ? fetchBondL1UnlockHeight({ bondIndex: opts.bondIndex, ...networkClient })
       : undefined,
   ]);
 
-  const headerValidity = opts.outputs?.length
+  const headerValidity = outputs?.length
     ? await Promise.all(
-        opts.outputs.map(o =>
+        outputs.map(o =>
           fetchVerifyBlockHeader({
             header: o.header,
-            expectedBlockHeight: o.height,
+            burnHeight: o.height,
             ...networkClient,
           })
         )
@@ -149,13 +157,15 @@ export async function fetchEligibleRegisterForBond(
 
   const reasons: Pox5ErrorCode[] = [];
 
-  if (opts.outputs?.length) {
+  if (!bond) reasons.push(Pox5ErrorCode.BondNotFound);
+
+  if (outputs?.length) {
     // `validate-l1-lockup` folds each output through these asserts in order:
     // unlock-height (u52) -> duplicate outpoint (u46) -> header (u40). The
     // unlock-height gate has both a lower bound (the bond's minimum unlock
     // height) and an upper bound (`BITCOIN_LOCKTIME_THRESHOLD`, 500,000,000).
     if (
-      opts.outputs.some(
+      outputs.some(
         o =>
           (registrationL1UnlockHeight !== undefined &&
             o.unlockBurnHeight < Number(registrationL1UnlockHeight)) ||
@@ -164,7 +174,7 @@ export async function fetchEligibleRegisterForBond(
     ) {
       reasons.push(Pox5ErrorCode.InvalidUnlockHeight);
     }
-    const outpoints = opts.outputs.map(
+    const outpoints = outputs.map(
       o => `${bytesToHex(computeBitcoinTxid(serializeBitcoinTx(o.tx)))}:${o.outputIndex}`
     );
     if (new Set(outpoints).size !== outpoints.length) {
@@ -173,7 +183,6 @@ export async function fetchEligibleRegisterForBond(
     if (headerValidity.includes(false)) reasons.push(Pox5ErrorCode.InvalidBtcHeader);
   }
 
-  if (!bond) reasons.push(Pox5ErrorCode.BondNotFound);
   // Missing entry vs explicit 0 allowance: the contract aborts with
   // ERR_NOT_ALLOWLISTED for the former and ERR_TOO_MUCH_SATS for the latter.
   if (allowance === undefined) reasons.push(Pox5ErrorCode.NotAllowlisted);
@@ -184,9 +193,9 @@ export async function fetchEligibleRegisterForBond(
 
   if (
     bond &&
-    opts.amountUstx <
+    intToBigInt(opts.amountUstx) <
       minUstxForSatsAmount({
-        sats: opts.satsTotal,
+        sats: satsTotal,
         stxValueRatio: bond.stxValueRatio,
         minUstxRatioBps: bond.minUstxRatioBps,
       })
@@ -203,11 +212,11 @@ export async function fetchEligibleRegisterForBond(
     reasons.push(Pox5ErrorCode.AlreadyStaked);
   }
 
-  if (allowance !== undefined && opts.satsTotal > allowance) {
+  if (allowance !== undefined && satsTotal > allowance) {
     reasons.push(Pox5ErrorCode.TooMuchSats);
   }
 
-  if (account.balance + account.locked < opts.amountUstx) {
+  if (account.balance + account.locked < intToBigInt(opts.amountUstx)) {
     if (!reasons.includes(Pox5ErrorCode.InsufficientStx)) {
       reasons.push(Pox5ErrorCode.InsufficientStx);
     }
@@ -320,7 +329,7 @@ export async function fetchEligibleSetupBond(
  */
 export async function fetchEligibleUpdateBondRegistration(
   opts: {
-    /** The staker whose membership is being updated (the future `tx-sender`). */
+    /** The staker (the future `tx-sender`). */
     staker: string;
     /** New signer-manager to bind. */
     signerManager: string;
@@ -386,7 +395,7 @@ export async function fetchEligibleUpdateBondRegistration(
  */
 export async function fetchEligibleAnnounceL1EarlyExit(
   opts: {
-    /** Staker whose L1 early-exit is announced. */
+    /** The staker (the future `tx-sender`). */
     staker: string;
     /** Signer-manager currently bound to the staker. */
     oldSignerManager: string;
@@ -448,12 +457,12 @@ export async function fetchEligibleAnnounceL1EarlyExit(
  */
 export async function fetchEligibleUnstakeSbtc(
   opts: {
-    /** Staker withdrawing (the future `tx-sender`). */
+    /** The staker (the future `tx-sender`). */
     staker: string;
     /** Signer-manager currently bound to the staker. */
     signerManager: string;
     /** sBTC sats to withdraw. */
-    amountToWithdrawSats: bigint;
+    amountToWithdrawSats: IntegerType;
     poxInfo?: PoxInfo;
   } & NetworkClientParam
 ): Promise<EligibilityResult> {
@@ -468,7 +477,7 @@ export async function fetchEligibleUnstakeSbtc(
 
   if (!membership) reasons.push(Pox5ErrorCode.NotBondParticipant);
 
-  if (membership && opts.amountToWithdrawSats > membership.amountSats) {
+  if (membership && intToBigInt(opts.amountToWithdrawSats) > membership.amountSats) {
     reasons.push(Pox5ErrorCode.InvalidUnstakeSbtcAmount);
   }
 
@@ -508,7 +517,7 @@ export async function fetchEligibleUnstakeSbtc(
  */
 export async function fetchEligibleStakeUpdate(
   opts: {
-    /** Staker updating their stake (the future `tx-sender`). */
+    /** The staker (the future `tx-sender`). */
     staker: string;
     /** New signer-manager to bind. */
     signerManager: string;
@@ -517,7 +526,7 @@ export async function fetchEligibleStakeUpdate(
     /** Cycles to extend the lock by (default 0). */
     cyclesToExtend?: number;
     /** Additional uSTX to lock (default 0n). */
-    amountIncrease?: bigint;
+    amountIncrease?: IntegerType;
     poxInfo?: PoxInfo;
   } & NetworkClientParam
 ): Promise<EligibilityResult> {
@@ -566,7 +575,7 @@ export async function fetchEligibleStakeUpdate(
     }
   }
 
-  if (account.balance < (opts.amountIncrease ?? 0n)) {
+  if (account.balance < intToBigInt(opts.amountIncrease ?? 0n)) {
     reasons.push(Pox5ErrorCode.InsufficientStx);
   }
 
@@ -588,7 +597,7 @@ export async function fetchEligibleStakeUpdate(
  */
 export async function fetchEligibleUnstake(
   opts: {
-    /** Staker unstaking (the future `tx-sender`). */
+    /** The staker (the future `tx-sender`). */
     staker: string;
     /** Signer-manager currently bound to the staker. */
     oldSignerManager: string;
@@ -767,12 +776,12 @@ export async function fetchEligibleClaimRewards(
  */
 export async function fetchEligibleStake(
   opts: {
-    /** Staker entering the stake (the future `tx-sender`). */
+    /** The staker (the future `tx-sender`). */
     staker: string;
     /** Signer-manager to bind. */
     signerManager: string;
     /** uSTX to lock. */
-    amountUstx: bigint;
+    amountUstx: IntegerType;
     /** Lock duration in cycles. */
     numCycles: number;
     /** Burn-block height anchoring the start cycle. */
@@ -840,7 +849,7 @@ export async function fetchEligibleStake(
     reasons.push(Pox5ErrorCode.RolloverTooEarly);
   }
 
-  if (account.balance + account.locked < opts.amountUstx) {
+  if (account.balance + account.locked < intToBigInt(opts.amountUstx)) {
     reasons.push(Pox5ErrorCode.InsufficientStx);
   }
 

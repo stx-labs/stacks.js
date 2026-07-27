@@ -168,7 +168,7 @@ test('a delegated keeper drives L1: register-l1 → announce-early-exit', async 
     bondIndex,
     staker: vault,
     amountUstx,
-    satsTotal: MAX_SATS,
+    lockup: { kind: 'sbtc', sbtcSats: MAX_SATS },
     signerManager,
     poxInfo: await getPoxInfo(),
     network,

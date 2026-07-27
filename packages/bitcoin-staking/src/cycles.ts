@@ -4,7 +4,7 @@ import type { PoxInfo } from './types';
 /**
  * Phase label for a bond's lifecycle.
  *
- * - `open` — registration window: from {@link BOND_GAP_CYCLES} reward cycles
+ * - `open` — registration window: from two reward cycles
  *   before the bond starts up to `prepareCycleLength` blocks before its start
  *   height. It ends early because the PoX prepare phase (the trailing
  *   `prepareCycleLength` blocks of the cycle before the bond starts) blocks
@@ -236,7 +236,7 @@ export function isBondActiveAtHeight(opts: {
  *   blocked there (`ERR_STAKE_IN_PREPARE_PHASE`) — so this range's
  *   `endBurnHeight` is the practical registration cutoff, not the start height.
  *   (Earlier prepare phases inside the window also block registration; for the
- *   exact registrable sub-windows use {@link bondRegisterRanges}.) Whether the
+ *   exact registrable sub-windows are narrower.) Whether the
  *   bond is configured yet requires an on-chain read (`get-protocol-bond`),
  *   which this pure helper deliberately doesn't do.
  * - `locked` — the final pre-start prepare phase plus the bond term:
@@ -296,7 +296,7 @@ export interface BurnHeightRange {
  * The burn-height windows in which `register-for-bond` is actually possible for
  * a bond: the reward-phase portions of the open window, with each cycle's
  * trailing prepare phase ({@link isInPreparePhase}) removed. One window per
- * pre-start reward cycle (up to {@link BOND_GAP_CYCLES}, earliest first),
+ * pre-start reward cycle (earliest first),
  * clamped at `firstBurnchainBlockHeight` — so one or two in practice. The last
  * window's `endBurnHeight` is the practical lock point.
  *
@@ -323,10 +323,9 @@ export function bondRegisterRanges(opts: {
 /**
  * Point-in-time status of a bond, without assuming it exists on-chain.
  *
- * For a set-up bond (`setup-bond` has been called) these are the
- * {@link BondPhaseName} phases. For a bond that hasn't been set up:
+ * For a set-up bond (`setup-bond` has been called) these are the {@link BondPhaseName} phases. For a bond that hasn't been set up:
  * - `too-early` — before the bond's setup window; `setup-bond` would revert.
- * - `eligible` — within the setup window ({@link BOND_GAP_CYCLES} reward
+ * - `eligible` — within the setup window (two reward
  *   cycles before the bond's start height); the admin can `setup-bond` now.
  * - `missed` — the start height passed without `setup-bond`; this bond
  *   period can never run.

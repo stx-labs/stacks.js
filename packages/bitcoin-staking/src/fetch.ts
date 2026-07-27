@@ -59,7 +59,6 @@ export async function fetchPoxInfo(opts: NetworkClientParam = {}): Promise<PoxIn
     nextCycle: {
       id: data.next_cycle.id,
       stakedUstx: BigInt(data.next_cycle.stacked_ustx),
-      isPoxActive: data.next_cycle.is_pox_active,
     },
     contractVersions: (
       (data.contract_versions ?? []) as Array<{
@@ -654,8 +653,8 @@ async function fetchResponseBufferRead(
 /**
  * Wraps the contract's `push-script-bytes` read-only.
  *
- * Returns `bytes` prefixed with its Bitcoin-Script push opcode(s). Mirrors the
- * local, pure {@link pushScriptBytes} — fetch to cross-check.
+ * Returns `bytes` prefixed with its Bitcoin-Script push opcode(s). The same
+ * encoding is applied locally when building a lockup script; fetch to cross-check.
  */
 export async function fetchPushScriptBytes(
   opts: { bytes: Uint8Array | string } & NetworkClientParam
@@ -667,7 +666,7 @@ export async function fetchPushScriptBytes(
  * Wraps the contract's `serialize-c-script-num` read-only.
  *
  * Returns the minimal little-endian CScriptNum encoding of `n` (1–5 bytes).
- * Mirrors the local, pure {@link serializeCScriptNum} — fetch to cross-check.
+ * The same encoding is applied locally; fetch to cross-check.
  * Throws `ERR_INVALID_UNLOCK_HEIGHT` for `n >= 2^39`, which a 5-byte
  * minimally-encoded CScriptNum cannot represent.
  */
@@ -681,8 +680,8 @@ export async function fetchSerializeCScriptNum(
  * Wraps the contract's `push-c-script-num` read-only.
  *
  * Returns the script-push encoding of the number `n` (OP_0 / OP_1..OP_16 small
- * forms, else a pushed CScriptNum). Mirrors the local, pure
- * {@link pushCScriptNum} — fetch to cross-check. Throws
+ * forms, else a pushed CScriptNum). The same encoding is applied locally;
+ * fetch to cross-check. Throws
  * `ERR_INVALID_UNLOCK_HEIGHT` for `n >= 2^39`.
  */
 export async function fetchPushCScriptNum(
@@ -718,8 +717,8 @@ export async function fetchReverseBuff32(
  * Wraps the contract's `get-reversed-txid` read-only.
  *
  * Returns the little-endian (internal byte order) txid `sha256(sha256(tx))` of
- * a raw transaction — the reverse of the explorer-displayed txid. Mirrors the
- * local, pure {@link computeBitcoinTxid} — fetch to cross-check.
+ * a raw transaction — the reverse of the explorer-displayed txid. The same hash
+ * is computed locally; fetch to cross-check.
  */
 export async function fetchReversedTxid(
   opts: { tx: Uint8Array | string } & NetworkClientParam
@@ -776,18 +775,18 @@ export async function fetchParseBlockHeader(
  * Wraps the contract's `verify-block-header` read-only.
  *
  * Returns `true` if the 80-byte header double-SHA256s to the burnchain header
- * hash the node records at `expectedBlockHeight`. `false` if it does not, or if
+ * hash the node records at `burnHeight`. `false` if it does not, or if
  * the node has no header at that height.
  */
 export async function fetchVerifyBlockHeader(
-  opts: { header: Uint8Array | string; expectedBlockHeight: number } & NetworkClientParam
+  opts: { header: Uint8Array | string; burnHeight: number } & NetworkClientParam
 ): Promise<boolean> {
   const network = networkFrom(opts.network ?? 'mainnet');
   const result = await fetchCallReadOnlyFunction({
     contractAddress: network.bootAddress,
     contractName: POX5_CONTRACT_NAME,
     functionName: 'verify-block-header',
-    functionArgs: [bufferArg(opts.header), Cl.uint(opts.expectedBlockHeight)],
+    functionArgs: [bufferArg(opts.header), Cl.uint(opts.burnHeight)],
     senderAddress: network.bootAddress,
     network: opts.network,
     client: opts.client,
@@ -1311,14 +1310,14 @@ export async function fetchRewardsPerTokenForCycle(
  * stake (pending delegation). `0` when there is nothing pending.
  */
 export async function fetchSignerPendingStakedUstx(
-  opts: { signerManager: string; cycle: number } & NetworkClientParam
+  opts: { signerManager: string; rewardCycle: number } & NetworkClientParam
 ): Promise<bigint> {
   const network = networkFrom(opts.network ?? 'mainnet');
   const result = await fetchCallReadOnlyFunction({
     contractAddress: network.bootAddress,
     contractName: POX5_CONTRACT_NAME,
     functionName: 'get-signer-pending-staked-ustx-per-cycle',
-    functionArgs: [Cl.address(opts.signerManager), Cl.uint(opts.cycle)],
+    functionArgs: [Cl.address(opts.signerManager), Cl.uint(opts.rewardCycle)],
     senderAddress: network.bootAddress,
     network: opts.network,
     client: opts.client,
@@ -1333,14 +1332,14 @@ export async function fetchSignerPendingStakedUstx(
  * STX-only staking). `0` when none.
  */
 export async function fetchAmountDelegatedForSigner(
-  opts: { signerManager: string; cycle: number } & NetworkClientParam
+  opts: { signerManager: string; rewardCycle: number } & NetworkClientParam
 ): Promise<bigint> {
   const network = networkFrom(opts.network ?? 'mainnet');
   const result = await fetchCallReadOnlyFunction({
     contractAddress: network.bootAddress,
     contractName: POX5_CONTRACT_NAME,
     functionName: 'get-amount-delegated-for-signer',
-    functionArgs: [Cl.address(opts.signerManager), Cl.uint(opts.cycle)],
+    functionArgs: [Cl.address(opts.signerManager), Cl.uint(opts.rewardCycle)],
     senderAddress: network.bootAddress,
     network: opts.network,
     client: opts.client,
@@ -1382,14 +1381,14 @@ export async function fetchUstxDelegatedForCycle(
  * The staker's signer assignment for `cycle`, or `undefined` if they have none.
  */
 export async function fetchSignerCycleMembership(
-  opts: { staker: string; cycle: number } & NetworkClientParam
+  opts: { staker: string; rewardCycle: number } & NetworkClientParam
 ): Promise<{ amountUstx: bigint; signer: string } | undefined> {
   const network = networkFrom(opts.network ?? 'mainnet');
   const result = await fetchCallReadOnlyFunction({
     contractAddress: network.bootAddress,
     contractName: POX5_CONTRACT_NAME,
     functionName: 'get-signer-cycle-membership',
-    functionArgs: [Cl.address(opts.staker), Cl.uint(opts.cycle)],
+    functionArgs: [Cl.address(opts.staker), Cl.uint(opts.rewardCycle)],
     senderAddress: network.bootAddress,
     network: opts.network,
     client: opts.client,
@@ -1408,14 +1407,14 @@ export async function fetchSignerCycleMembership(
  * `true` if the signer is in the signer set for `cycle`.
  */
 export async function fetchSignerSetContainsForCycle(
-  opts: { signer: string; cycle: number } & NetworkClientParam
+  opts: { signer: string; rewardCycle: number } & NetworkClientParam
 ): Promise<boolean> {
   const network = networkFrom(opts.network ?? 'mainnet');
   const result = await fetchCallReadOnlyFunction({
     contractAddress: network.bootAddress,
     contractName: POX5_CONTRACT_NAME,
     functionName: 'signer-set-contains-for-cycle',
-    functionArgs: [Cl.address(opts.signer), Cl.uint(opts.cycle)],
+    functionArgs: [Cl.address(opts.signer), Cl.uint(opts.rewardCycle)],
     senderAddress: network.bootAddress,
     network: opts.network,
     client: opts.client,
@@ -1451,11 +1450,11 @@ async function fetchSignerSetPrincipal(
  * empty. Start a full walk here.
  */
 export async function fetchSignerSetFirstItem(
-  opts: { cycle: number } & NetworkClientParam
+  opts: { rewardCycle: number } & NetworkClientParam
 ): Promise<string | undefined> {
   return fetchSignerSetPrincipal(
     'get-signer-set-first-item-for-cycle',
-    [Cl.uint(opts.cycle)],
+    [Cl.uint(opts.rewardCycle)],
     opts
   );
 }
@@ -1467,9 +1466,9 @@ export async function fetchSignerSetFirstItem(
  * empty.
  */
 export async function fetchSignerSetLastItem(
-  opts: { cycle: number } & NetworkClientParam
+  opts: { rewardCycle: number } & NetworkClientParam
 ): Promise<string | undefined> {
-  return fetchSignerSetPrincipal('get-signer-set-last-item-for-cycle', [Cl.uint(opts.cycle)], opts);
+  return fetchSignerSetPrincipal('get-signer-set-last-item-for-cycle', [Cl.uint(opts.rewardCycle)], opts);
 }
 
 /**
@@ -1479,11 +1478,11 @@ export async function fetchSignerSetLastItem(
  * tail (or if `signer` is not a member).
  */
 export async function fetchSignerSetNextItem(
-  opts: { signer: string; cycle: number } & NetworkClientParam
+  opts: { signer: string; rewardCycle: number } & NetworkClientParam
 ): Promise<string | undefined> {
   return fetchSignerSetPrincipal(
     'get-signer-set-next-item-for-cycle',
-    [Cl.address(opts.signer), Cl.uint(opts.cycle)],
+    [Cl.address(opts.signer), Cl.uint(opts.rewardCycle)],
     opts
   );
 }
@@ -1495,11 +1494,11 @@ export async function fetchSignerSetNextItem(
  * head (or if `signer` is not a member).
  */
 export async function fetchSignerSetPrevItem(
-  opts: { signer: string; cycle: number } & NetworkClientParam
+  opts: { signer: string; rewardCycle: number } & NetworkClientParam
 ): Promise<string | undefined> {
   return fetchSignerSetPrincipal(
     'get-signer-set-prev-item-for-cycle',
-    [Cl.address(opts.signer), Cl.uint(opts.cycle)],
+    [Cl.address(opts.signer), Cl.uint(opts.rewardCycle)],
     opts
   );
 }
@@ -1511,14 +1510,14 @@ export async function fetchSignerSetPrevItem(
  * if not a member. Either neighbour is `undefined` at the list ends.
  */
 export async function fetchSignerSetItem(
-  opts: { signer: string; cycle: number } & NetworkClientParam
+  opts: { signer: string; rewardCycle: number } & NetworkClientParam
 ): Promise<{ prev: string | undefined; next: string | undefined } | undefined> {
   const network = networkFrom(opts.network ?? 'mainnet');
   const result = await fetchCallReadOnlyFunction({
     contractAddress: network.bootAddress,
     contractName: POX5_CONTRACT_NAME,
     functionName: 'get-signer-set-item-for-cycle',
-    functionArgs: [Cl.address(opts.signer), Cl.uint(opts.cycle)],
+    functionArgs: [Cl.address(opts.signer), Cl.uint(opts.rewardCycle)],
     senderAddress: network.bootAddress,
     network: opts.network,
     client: opts.client,

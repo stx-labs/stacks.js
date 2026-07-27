@@ -76,7 +76,7 @@ export interface EsploraMerkleProof {
 /**
  * How to locate the lockup output: by the P2WSH `scriptPubKey` directly
  * (`outputScript`, 34 bytes) or by the witness `lockScript` it commits to
- * (converted internally via {@link scriptToWshOutput}). Provide exactly
+ * (converted internally to its P2WSH form). Provide exactly
  * one. `lockScript` is what {@link buildRegisterMetadata} returns, so the
  * common path is `{ ...proof, lockScript: meta.lockScript }`.
  */
@@ -251,6 +251,14 @@ export function buildLockProof(
      * minimum unlock height.
      */
     unlockHeight: number | bigint;
+    /**
+     * Which output to prove, when the funding tx pays the lockup script more
+     * than once. Omit for the common single-output case; a tx with several
+     * matching outputs is rejected rather than proving the first, since the
+     * contract dedupes on the whole `{txid, output-index}` outpoint and each
+     * output needs its own tuple.
+     */
+    outputIndex?: number;
   } & ExpectedScriptInput
 ): BondL1LockupOutput {
   const tx = btc.Transaction.fromRaw(hexToBytes(input.txHex), {
@@ -261,13 +269,24 @@ export function buildLockProof(
   const legacy = tx.toBytes(true, false);
 
   const expectedScript = resolveExpectedScript(input);
-
-  const outputIndex = range(tx.outputsLength).findIndex(i => {
+  const matching = range(tx.outputsLength).filter(i => {
     const out = tx.getOutput(i);
     return out.script && equals(out.script, expectedScript);
   });
-  if (outputIndex === -1) {
+
+  const outputIndex = input.outputIndex ?? matching[0];
+  if (matching.length === 0) {
     throw new Error('buildLockProof: no output matches the expected lockup script');
+  }
+  if (input.outputIndex === undefined && matching.length > 1) {
+    throw new Error(
+      `buildLockProof: outputs ${matching.join(', ')} all pay the lockup script — pass \`outputIndex\` to pick one (each needs its own proof tuple)`
+    );
+  }
+  if (!matching.includes(outputIndex)) {
+    throw new Error(
+      `buildLockProof: output ${outputIndex} does not pay the lockup script (matching: ${matching.join(', ') || 'none'})`
+    );
   }
 
   const header = serializeBitcoinHeader(input.header);
@@ -338,7 +357,7 @@ function merkleSiblings(level: Uint8Array[], index: number): Uint8Array[] {
  * {@link buildLockProof} for callers WITHOUT an Esplora `/merkle-proof`
  * endpoint — e.g. driving bitcoind directly. Given the block's ordered txid
  * list (`getblock` verbosity 1 -> `tx`), it derives the tx's position, rebuilds
- * the merkle branch ({@link computeMerkleBranch}), and reads `txCount` from the
+ * the merkle branch, and reads `txCount` from the
  * list, then delegates to {@link buildLockProof} (so witness-stripping,
  * output matching, and endianness are all the same single implementation).
  *
@@ -385,6 +404,8 @@ export function buildLockProofFromBlock(
      * {@link buildLockProof} and recorded in the output tuple.
      */
     unlockHeight: number | bigint;
+    /** Which output to prove — see {@link buildLockProof}. */
+    outputIndex?: number;
   } & ExpectedScriptInput
 ): BondL1LockupOutput {
   const tx = btc.Transaction.fromRaw(hexToBytes(input.txHex), {
@@ -402,6 +423,7 @@ export function buildLockProofFromBlock(
     header: input.header,
     txCount: input.txids.length,
     unlockHeight: input.unlockHeight,
+    outputIndex: input.outputIndex,
     // Resolve here so the lockScript/outputScript overload is handled once.
     outputScript: resolveExpectedScript(input),
     merkleProof: {

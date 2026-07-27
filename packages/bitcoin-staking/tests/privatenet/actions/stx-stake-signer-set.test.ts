@@ -107,7 +107,7 @@ test('stake >= SIGNER_SET_MIN_USTX (50k STX) makes the signer count toward the s
 
   // BEFORE
   const [beforeDelegated, beforeInSet, beforeSignerShares, beforeTotalShares] = await Promise.all([
-    fetchAmountDelegatedForSigner({ signerManager: SIGNER, cycle: firstRewardCycle, network }).catch(
+    fetchAmountDelegatedForSigner({ signerManager: SIGNER, rewardCycle: firstRewardCycle, network }).catch(
       () => -1n
     ),
     signerSetContainsForCycle(SIGNER, firstRewardCycle).catch(() => false),
@@ -179,7 +179,7 @@ test('stake >= SIGNER_SET_MIN_USTX (50k STX) makes the signer count toward the s
 
   // AFTER
   const [afterDelegated, afterInSet, afterSignerShares, afterTotalShares] = await Promise.all([
-    fetchAmountDelegatedForSigner({ signerManager: SIGNER, cycle: firstRewardCycle, network }).catch(
+    fetchAmountDelegatedForSigner({ signerManager: SIGNER, rewardCycle: firstRewardCycle, network }).catch(
       () => -1n
     ),
     signerSetContainsForCycle(SIGNER, firstRewardCycle).catch(() => false),

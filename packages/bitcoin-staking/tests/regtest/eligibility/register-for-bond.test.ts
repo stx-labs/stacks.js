@@ -77,13 +77,16 @@ beforeAll(async () => {
   await broadcastAndWait(signTransaction(setupUnsigned, admin.key), admin.address, network);
 }, 5 * 60_000);
 
+// The preflight never inspects `unlockBytes`; the lockup shape just needs it.
+const UNLOCK_BYTES = new Uint8Array([0x51]);
+
 test('BondNotFound — bondIndex 200 has no setup bond', async () => {
   const pox = await getPoxInfo();
   const r = await fetchEligibleRegisterForBond({
     bondIndex: 200,
     staker: clean,
     amountUstx: 1_000_000n,
-    satsTotal: 100n,
+    lockup: { kind: 'sbtc', sbtcSats: 100n },
     signerManager: SIGNER_MANAGER,
     poxInfo: pox,
     network,
@@ -99,7 +102,7 @@ test('NotAllowlisted — clean account has no allowance on any bond', async () =
     bondIndex,
     staker: clean,
     amountUstx: 1_000_000n,
-    satsTotal: 0n,
+    lockup: { kind: 'sbtc', sbtcSats: 0n },
     signerManager: SIGNER_MANAGER,
     poxInfo: pox,
     network,
@@ -118,7 +121,7 @@ test('StakeInPreparePhase — poxInfo override puts burnHeight in prepare window
     bondIndex,
     staker,
     amountUstx: 1_000_000n,
-    satsTotal: 1n,
+    lockup: { kind: 'sbtc', sbtcSats: 1n },
     signerManager: SIGNER_MANAGER,
     poxInfo: prepPox,
     network,
@@ -138,7 +141,7 @@ test('BondAlreadyStarted — poxInfo override pushes burnHeight past bond start'
     bondIndex,
     staker,
     amountUstx: 1_000_000n,
-    satsTotal: 1n,
+    lockup: { kind: 'sbtc', sbtcSats: 1n },
     signerManager: SIGNER_MANAGER,
     poxInfo: farFuture,
     network,
@@ -153,7 +156,7 @@ test('SignerNotFound — unknown signer-manager contract', async () => {
     bondIndex,
     staker,
     amountUstx: 1_000_000n,
-    satsTotal: 1n,
+    lockup: { kind: 'sbtc', sbtcSats: 1n },
     signerManager: unknownSigner,
     poxInfo: pox,
     network,
@@ -169,7 +172,7 @@ test('InsufficientStx — amountUstx vastly exceeds any real balance', async () 
     bondIndex,
     staker: insufficientStxStaker,
     amountUstx: 10_000_000_000_000_000n,
-    satsTotal: 1n,
+    lockup: { kind: 'sbtc', sbtcSats: 1n },
     signerManager: SIGNER_MANAGER,
     poxInfo: pox,
     network,
@@ -185,7 +188,7 @@ test('TooMuchSats — satsTotal exceeds the per-staker allowance', async () => {
     bondIndex,
     staker,
     amountUstx: 1_000_000n,
-    satsTotal: 999_999_999_999n, // implausibly large; exceeds any real allowance
+    lockup: { kind: 'sbtc', sbtcSats: 999_999_999_999n }, // implausibly large; exceeds any real allowance
     signerManager: SIGNER_MANAGER,
     poxInfo: pox,
     network,
@@ -227,9 +230,8 @@ test('DuplicateLockupOutpoint — same tx+outputIndex appears twice in outputs',
     bondIndex,
     staker,
     amountUstx: 1_000_000n,
-    satsTotal: 200n,
+    lockup: { kind: 'btc', outputs: [fakeOutput, fakeOutput], unlockBytes: UNLOCK_BYTES }, // duplicate outpoint
     signerManager: SIGNER_MANAGER,
-    outputs: [fakeOutput, fakeOutput], // duplicate outpoint
     poxInfo: pox,
     network,
   });
@@ -255,9 +257,8 @@ test('InvalidBtcHeader — zeroed 80-byte header fails verify-block-header', asy
     bondIndex,
     staker,
     amountUstx: 1_000_000n,
-    satsTotal: 100n,
+    lockup: { kind: 'btc', outputs: [fakeOutput], unlockBytes: UNLOCK_BYTES },
     signerManager: SIGNER_MANAGER,
-    outputs: [fakeOutput],
     poxInfo: pox,
     network,
   });
@@ -283,9 +284,8 @@ test('InvalidUnlockHeight — unlock-burn-height at/above BITCOIN_LOCKTIME_THRES
       bondIndex,
       staker,
       amountUstx: 1_000_000n,
-      satsTotal: 100n,
+      lockup: { kind: 'btc', outputs: [{ ...baseOutput, unlockBurnHeight }], unlockBytes: UNLOCK_BYTES },
       signerManager: SIGNER_MANAGER,
-      outputs: [{ ...baseOutput, unlockBurnHeight }],
       poxInfo: pox,
       network,
     });

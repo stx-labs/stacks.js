@@ -1,4 +1,5 @@
 import * as btc from '@scure/btc-signer';
+import { secp256k1 } from '@noble/curves/secp256k1.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { concatBytes, hexToBytes } from '@stacks/common';
 import type { StacksNetwork, StacksNetworkName } from '@stacks/network';
@@ -49,6 +50,13 @@ export function buildUnlockScript(publicKey: Uint8Array | string): Uint8Array {
     throw new Error(
       `Expected a compressed public key starting with 0x02/0x03, got 0x${pubBytes[0].toString(16)}`
     );
+  }
+  // Roughly half of all 32-byte x-coordinates are off-curve, and such a key still
+  // derives a fundable address whose trailing OP_CHECKSIG can never be satisfied.
+  try {
+    secp256k1.Point.fromBytes(pubBytes);
+  } catch (error) {
+    throw new Error(`Public key is not a valid secp256k1 point: ${error}`);
   }
 
   return btc.Script.encode([pubBytes, 'CHECKSIG']);
@@ -292,8 +300,6 @@ export function buildLockScript(opts: {
    */
   validateEarlyUnlockBytes?: boolean;
 }): Uint8Array {
-  // Both subscripts are always decoded; only `earlyUnlockBytes` carries the
-  // optional single-key shape heuristic.
   const { bytes: unlockBytes } = decodeSubscript(opts.unlockBytes, 'unlockBytes');
   const earlyUnlockBytes = validateEarlyUnlockBytes(opts.earlyUnlockBytes, {
     shape: opts.validateEarlyUnlockBytes ?? true,
@@ -433,7 +439,7 @@ export function buildLockAddress(opts: {
 /**
  * @internal Derive the P2WSH Bitcoin address that commits to the given locking script.
  *
- * Pure: no I/O. Useful when the caller already holds the script bytes (e.g. from
+ * Useful when the caller already holds the script bytes (e.g. from
  * {@link buildLockScript}) and wants to fund the address out-of-band.
  */
 export function scriptToAddress(
@@ -491,7 +497,7 @@ export interface RegisterMetadata {
   /**
    * The P2WSH `scriptPubKey` (34 bytes) the funding output must carry — the
    * `outputScript` the contract asserts. Equals
-   * `computeWshOutputScript(lockScript)`; exposed since it is derived along
+   * the P2WSH form of `lockScript`; exposed since it is derived along
    * the way.
    */
   outputScript: Uint8Array;
@@ -508,9 +514,9 @@ export interface RegisterMetadata {
 /**
  * Derive every pre-funding artifact for a paired-BTC `register-for-bond`.
  *
- * Combines {@link buildLockAddress}, {@link buildUnlockScript},
- * {@link buildLockScript} so the registration flow is a single call instead
- * of multiple hand-wired steps.
+ * Combines {@link computeBondUnlockHeight}, {@link buildUnlockScript} and
+ * {@link buildLockScript} so the registration flow is a single call instead of
+ * several hand-wired steps.
  *
  * @example
  * ```ts

@@ -134,7 +134,7 @@ test('bond lifecycle: setup → register → bond starts → rewards settle → 
     bondIndex,
     staker: staker.address,
     amountUstx,
-    satsTotal: MAX_SATS,
+    lockup: { kind: 'sbtc', sbtcSats: MAX_SATS },
     signerManager,
     poxInfo: poxBeforeRegister,
     network,

@@ -153,7 +153,7 @@ test('a contract principal registers an L1 (BTC) lockup, then announces early ex
     bondIndex,
     staker: wrapper,
     amountUstx,
-    satsTotal: MAX_SATS,
+    lockup: { kind: 'sbtc', sbtcSats: MAX_SATS },
     signerManager,
     poxInfo: await getPoxInfo(),
     network,

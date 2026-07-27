@@ -37,28 +37,59 @@ function toBytes(value: Uint8Array | string): Uint8Array {
   return typeof value === 'string' ? hexToBytes(value) : value;
 }
 
+/** Ops in the fixed `buildLockScript` scaffold before the early-unlock subscript. */
+const SCAFFOLD_PREFIX_LEN = 10;
+
 /**
- * @internal Decode a lockup `witnessScript` back into the values a reclaim needs:
- * the staker / cosigner public keys (the script's two 33-byte pushes, in
- * `[cosigner, staker]` order — cosigner from the `OP_ELSE` subscript, staker from
- * the trailing `OP_CHECKSIG` tail) and the CLTV `unlockHeight`.
+ * @internal Decode a lockup `witnessScript` by its scaffold rather than by
+ * scanning for pushes, so each subscript's keys are attributed to the right party.
+ *
+ * Splits on the fixed `buildLockScript` layout: a 10-op prefix
+ * (`OP_IF <height> OP_CLTV OP_ELSE OP_SIZE <32> OP_EQUALVERIFY OP_SHA256 <H>
+ * OP_EQUALVERIFY`), then the early-unlock subscript, then `OP_ENDIF OP_VERIFY`,
+ * then the staker's unlock subscript. Keys are read *within* each subscript —
+ * cosigner keys from the early-unlock part, staker keys from the tail — so a
+ * multi-key subscript is reported as such instead of shifting the assignment.
+ *
+ * Returns every key found per role; callers decide how many they support.
+ *
+ * @throws if the script is not a pox-5 lockup script.
  */
 function decodeLockScript(script: Uint8Array): {
-  stakerPub: Uint8Array;
-  cosignerPub: Uint8Array;
+  stakerPubs: Uint8Array[];
+  cosignerPubs: Uint8Array[];
   unlockHeight?: number;
 } {
-  const decoded = btc.Script.decode(script);
-  const pushes33 = decoded.filter(
-    (op): op is Uint8Array => op instanceof Uint8Array && op.length === 33
+  const ops = btc.Script.decode(script);
+
+  // Locate the scaffold's `OP_ENDIF OP_VERIFY` from the END: a subscript spliced
+  // in with the shape heuristic disabled may contain conditionals of its own.
+  const endifIdx = ops.reduce<number>(
+    (found, op, i) => (op === 'ENDIF' && ops[i + 1] === 'VERIFY' ? i : found),
+    -1
   );
-  if (pushes33.length < 2) {
+
+  const shapeOk =
+    endifIdx >= SCAFFOLD_PREFIX_LEN &&
+    ops[0] === 'IF' &&
+    ops[2] === 'CHECKLOCKTIMEVERIFY' &&
+    ops[3] === 'ELSE' &&
+    ops[4] === 'SIZE' &&
+    ops[6] === 'EQUALVERIFY' &&
+    ops[7] === 'SHA256' &&
+    ops[8] instanceof Uint8Array &&
+    (ops[8] as Uint8Array).length === 32 &&
+    ops[9] === 'EQUALVERIFY';
+  if (!shapeOk) {
     throw new Error(
-      'reclaim: lockScript does not contain the expected staker + cosigner public keys'
+      'reclaim: lockScript is not a pox-5 lockup script (expected the OP_IF/OP_ELSE … OP_ENDIF OP_VERIFY scaffold)'
     );
   }
-  const cltvIdx = decoded.indexOf('CHECKLOCKTIMEVERIFY');
-  const heightOp = cltvIdx > 0 ? decoded[cltvIdx - 1] : undefined;
+
+  const keysIn = (slice: btc.ScriptType) =>
+    slice.filter((op): op is Uint8Array => op instanceof Uint8Array && op.length === 33);
+
+  const heightOp = ops[1];
   const unlockHeight =
     typeof heightOp === 'number'
       ? heightOp
@@ -67,8 +98,8 @@ function decodeLockScript(script: Uint8Array): {
         : undefined;
 
   return {
-    cosignerPub: pushes33[0],
-    stakerPub: pushes33[pushes33.length - 1],
+    cosignerPubs: keysIn(ops.slice(SCAFFOLD_PREFIX_LEN, endifIdx)),
+    stakerPubs: keysIn(ops.slice(endifIdx + 2)),
     unlockHeight,
   };
 }
@@ -116,8 +147,8 @@ export interface BuildReclaimOpts {
  *   `lockTime = unlockHeight` (decoded from the `lockScript`).
  *
  * Sign with btc-signer (`tx.signIdx(privateKey, 0)`), or attach a detached
- * signature ({@link signReclaim} / a hardware wallet) via
- * `tx.updateInput(0, { partialSig })`, then {@link finalizeReclaim}.
+ * signature from an external signer via `tx.updateInput(0, { partialSig })`,
+ * then {@link finalizeReclaim}.
  */
 export function buildReclaim(opts: BuildReclaimOpts): btc.Transaction {
   const network = btcNetworkFrom(opts.network);
@@ -250,17 +281,30 @@ export function finalizeReclaim(opts: FinalizeReclaimOpts): { txHex: string; txi
  */
 function reclaimWitness(opts: FinalizeReclaimOpts, witnessScript: Uint8Array): Uint8Array[] {
   const sigs = opts.tx.getInput(0).partialSig ?? [];
-  const { stakerPub, cosignerPub } = decodeLockScript(witnessScript);
+  const { stakerPubs, cosignerPubs } = decodeLockScript(witnessScript);
+
+  // Multi-key subscripts are legal bond templates (pox-5 treats these bytes as
+  // opaque) that this witness assembly does not cover.
+  if (stakerPubs.length !== 1) {
+    throw new Error(
+      `finalizeReclaim: expected exactly one staker public key in the lockup script, found ${stakerPubs.length} — multi-key subscripts are not supported`
+    );
+  }
   const sigFor = (pub: Uint8Array) => sigs.find(([p]) => equals(p, pub))?.[1];
 
-  const stakerSig = sigFor(stakerPub);
+  const stakerSig = sigFor(stakerPubs[0]);
   if (!stakerSig) throw new Error('finalizeReclaim: missing staker signature (partialSig)');
 
   // CLTV branch: [ stakerSig, 0x01 (-> OP_IF), witnessScript ]
   if (opts.path === 'locktime') return [stakerSig, IF_SELECTOR, witnessScript];
 
   // Early-exit branch: [ stakerSig, cosignerSig, preimage, <empty> (-> OP_ELSE), witnessScript ]
-  const cosignerSig = sigFor(cosignerPub);
+  if (cosignerPubs.length !== 1) {
+    throw new Error(
+      `finalizeReclaim: expected exactly one cosigner public key in the lockup script, found ${cosignerPubs.length} — multi-key subscripts are not supported`
+    );
+  }
+  const cosignerSig = sigFor(cosignerPubs[0]);
   if (!cosignerSig) throw new Error('finalizeReclaim: missing cosigner signature (partialSig)');
   const preimage = computeRegisterPreimage(opts.stxAddress);
   return [stakerSig, cosignerSig, preimage, ELSE_SELECTOR, witnessScript];

@@ -540,7 +540,7 @@ test('B2: stake-update extend 0 / topup 0 / same signer — invariant watch', as
   const before = await logStakerInfo('B2-pre', f0.address);
   const delBefore = await fetchAmountDelegatedForSigner({
     signerManager: SIGNER_MANAGER,
-    cycle: poxInfo.rewardCycleId + 1,
+    rewardCycle: poxInfo.rewardCycleId + 1,
     network,
   }).catch(() => -1n);
   console.log('B2 delegated(next cycle) before:', delBefore.toString());
@@ -568,7 +568,7 @@ test('B2: stake-update extend 0 / topup 0 / same signer — invariant watch', as
   const after = await logStakerInfo('B2-post', f0.address);
   const delAfter = await fetchAmountDelegatedForSigner({
     signerManager: SIGNER_MANAGER,
-    cycle: poxInfo.rewardCycleId + 1,
+    rewardCycle: poxInfo.rewardCycleId + 1,
     network,
   }).catch(() => -1n);
   console.log('B2 delegated(next cycle) after:', delAfter.toString());
@@ -860,7 +860,7 @@ test('E1: post-attack invariants — delegated >= 0, no f0 bond membership, unlo
   useFixtures('adversarial-5-e1');
   const poxInfo = await getPoxInfo();
   for (const c of [poxInfo.rewardCycleId, poxInfo.rewardCycleId + 1]) {
-    const d = await fetchAmountDelegatedForSigner({ signerManager: SIGNER_MANAGER, cycle: c, network }).catch(() => -1n);
+    const d = await fetchAmountDelegatedForSigner({ signerManager: SIGNER_MANAGER, rewardCycle: c, network }).catch(() => -1n);
     console.log(`E1 delegated-for-signer[cycle ${c}]:`, d.toString());
     if (d < 0n) console.warn(`E1 BUG?: delegated-for-signer NEGATIVE at cycle ${c}: ${d}`);
     expect(d >= 0n).toBe(true);

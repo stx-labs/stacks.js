@@ -166,7 +166,7 @@ test('a delegated keeper drives sBTC: register → unstake-sbtc → rotate signe
     bondIndex,
     staker: vault,
     amountUstx,
-    satsTotal: MAX_SATS,
+    lockup: { kind: 'sbtc', sbtcSats: MAX_SATS },
     signerManager,
     poxInfo: await getPoxInfo(),
     network,

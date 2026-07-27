@@ -125,7 +125,7 @@ test('protocol rewards arrive in a standard EOA staker’s sBTC balance', async 
   // Preflight (gate + surface the abort reason) — the register otherwise aborts silently
   // via broadcastAndWait (nonce advances on an abort_by_response) and the membership read
   // then throws a bare "register-for-bond aborted".
-  const eligible = await fetchEligibleRegisterForBond({ bondIndex, staker: staker.address, amountUstx, satsTotal: MAX_SATS, signerManager, poxInfo: await getPoxInfo(), network });
+  const eligible = await fetchEligibleRegisterForBond({ bondIndex, staker: staker.address, amountUstx, lockup: { kind: 'sbtc', sbtcSats: MAX_SATS }, signerManager, poxInfo: await getPoxInfo(), network });
   if (!eligible.ok) console.log('register preflight reasons', eligible.reasons);
   expect(eligible.ok).toBe(true);
 

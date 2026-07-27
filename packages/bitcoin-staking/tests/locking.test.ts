@@ -17,6 +17,8 @@ import { parseUnlockScript } from './helpers/script';
 // A known compressed public key (33 bytes)
 const TEST_PUBKEY_HEX = '0316e35d38b52d4886e40065e4952a49535ce914e02294be58e252d1998f129b19';
 const TEST_PUBKEY = hexToBytes(TEST_PUBKEY_HEX);
+/** A second real key (privkey 0x22..22) — buildUnlockScript rejects off-curve bytes. */
+const OTHER_PUBKEY = hexToBytes('02466d7fcae563e5cb09a0d1870bb580344804617879a14949cf22285f1bae3f27');
 
 // A known Stacks testnet address (standard principal)
 const TEST_STX_ADDRESS = 'ST000000000000000000002AMW42H';
@@ -311,6 +313,12 @@ describe('buildLockScript', () => {
     ).not.toThrow();
   });
 
+  it('rejects a well-formed but off-curve public key', () => {
+    // 0x02-prefixed, 33 bytes, x in field range — but x=5 has no y on secp256k1.
+    const offCurve = hexToBytes('02' + '5'.padStart(64, '0'));
+    expect(() => buildUnlockScript(offCurve)).toThrow('not a valid secp256k1 point');
+  });
+
   it('rejects unlockHeight 0 (OP_0 leaves an empty value the shared OP_VERIFY reads as false)', () => {
     expect(() =>
       buildLockScript({
@@ -451,7 +459,7 @@ describe('buildLockAddress', () => {
   });
 
   it('changes with different scripts', () => {
-    const otherUnlock = buildUnlockScript(new Uint8Array(33).fill(0x03));
+    const otherUnlock = buildUnlockScript(OTHER_PUBKEY);
     const otherOpts = { ...baseOpts, unlockBytes: otherUnlock };
     expect(buildLockAddress({ ...baseOpts, network: 'mainnet' })).not.toBe(
       buildLockAddress({ ...otherOpts, network: 'mainnet' })
@@ -459,7 +467,7 @@ describe('buildLockAddress', () => {
   });
 
   it('changes when earlyUnlockBytes changes', () => {
-    const altEarlyUnlock = btc.Script.encode([new Uint8Array(33).fill(0x03), 'CHECKSIG']);
+    const altEarlyUnlock = btc.Script.encode([OTHER_PUBKEY, 'CHECKSIG']);
     const altOpts = { ...baseOpts, earlyUnlockBytes: altEarlyUnlock };
     expect(buildLockAddress({ ...baseOpts, network: 'mainnet' })).not.toBe(
       buildLockAddress({ ...altOpts, network: 'mainnet' })

@@ -125,6 +125,34 @@ describe('lockScript / outputScript overload', () => {
     expect(viaLockScript.amount).toBe(100_000n);
   });
 
+  it('rejects a tx with two outputs paying the lockup script unless outputIndex picks one', () => {
+    const two = new btc.Transaction({ allowUnknownOutputs: true, disableScriptCheck: true });
+    two.addInput({ txid: new Uint8Array(32), index: 0 });
+    two.addOutput({ script: meta.outputScript, amount: 100_000n });
+    two.addOutput({ script: meta.outputScript, amount: 70_000n });
+    const twoHeader = new Uint8Array(80);
+    twoHeader.set(sha256(sha256(two.toBytes(true, false))), 36);
+    const base = {
+      txHex: two.hex,
+      header: twoHeader,
+      txids: [bytesToHex(computeBitcoinTxid(two.toBytes(true, false)))],
+      blockHeight: 800_000,
+      unlockHeight: meta.unlockHeight,
+      lockScript: meta.lockScript,
+    };
+
+    expect(() => buildLockProofFromBlock(base)).toThrow(/outputs 0, 1 all pay the lockup script/);
+
+    // Each output gets its own tuple, with its own amount.
+    expect(buildLockProofFromBlock({ ...base, outputIndex: 0 }).amount).toBe(100_000n);
+    expect(buildLockProofFromBlock({ ...base, outputIndex: 1 }).amount).toBe(70_000n);
+    expect(buildLockProofFromBlock({ ...base, outputIndex: 1 }).outputIndex).toBe(1);
+
+    expect(() => buildLockProofFromBlock({ ...base, outputIndex: 5 })).toThrow(
+      /output 5 does not pay the lockup script/
+    );
+  });
+
   it('buildLockProof: lockScript and outputScript yield identical output', () => {
     const base = {
       txHex,

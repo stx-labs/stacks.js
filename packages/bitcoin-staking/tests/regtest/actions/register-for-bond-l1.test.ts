@@ -144,7 +144,7 @@ test('l1 register-for-bond happy path: setup-bond → fund BTC → prove → reg
     bondIndex,
     staker: staker.address,
     amountUstx,
-    satsTotal: MAX_SATS,
+    lockup: { kind: 'btc', outputs: [output], unlockBytes },
     signerManager,
     poxInfo: poxBeforeRegister,
     network,

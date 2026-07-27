@@ -216,3 +216,24 @@ describe('package exports', () => {
     expect((pkg as Record<string, unknown>).verifySignerGrant).toBe(verifySignerGrant);
   });
 });
+
+describe('verifySignerGrant recovery byte', () => {
+  const opts = { signerManager: SIGNER_MANAGER, authId: 1, chainId: CHAIN_ID };
+  const publicKey = privateKeyToPublic(PRIVATE_KEY);
+
+  it('rejects a signature whose recovery byte does not recover the signer key', () => {
+    const sig = signSignerGrant({ ...opts, privateKey: PRIVATE_KEY });
+    const v = sig.slice(128);
+    // The contract recovers the pubkey from the full 65-byte RSV signature, so a
+    // wrong V byte aborts on-chain with ERR_INVALID_SIGNATURE_RECOVER.
+    for (const alt of ['00', '01', '02', '03'].filter(x => x !== v)) {
+      const tampered = sig.slice(0, 128) + alt;
+      expect(verifySignerGrant({ ...opts, publicKey, signature: tampered })).toBe(false);
+    }
+  });
+
+  it('accepts the untampered signature', () => {
+    const sig = signSignerGrant({ ...opts, privateKey: PRIVATE_KEY });
+    expect(verifySignerGrant({ ...opts, publicKey, signature: sig })).toBe(true);
+  });
+});

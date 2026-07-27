@@ -142,7 +142,7 @@ test('admin registers the vault via an L1 lockup, then announces early exit', as
     bondIndex,
     staker: vault,
     amountUstx,
-    satsTotal: MAX_SATS,
+    lockup: { kind: 'sbtc', sbtcSats: MAX_SATS },
     signerManager,
     poxInfo: await getPoxInfo(),
     network,

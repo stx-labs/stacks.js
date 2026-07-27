@@ -182,32 +182,32 @@ test('every SDK read wrapper resolves against live state', async () => {
     ],
     [
       'fetchSignerPendingStakedUstx',
-      () => fetchSignerPendingStakedUstx({ signerManager, cycle, network }),
+      () => fetchSignerPendingStakedUstx({ signerManager, rewardCycle: cycle, network }),
     ],
     [
       'fetchAmountDelegatedForSigner',
-      () => fetchAmountDelegatedForSigner({ signerManager, cycle, network }),
+      () => fetchAmountDelegatedForSigner({ signerManager, rewardCycle: cycle, network }),
     ],
     [
       'fetchUstxDelegatedForCycle',
       () => fetchUstxDelegatedForCycle({ rewardCycle: cycle, network }),
     ],
-    ['fetchSignerCycleMembership', () => fetchSignerCycleMembership({ staker, cycle, network })],
+    ['fetchSignerCycleMembership', () => fetchSignerCycleMembership({ staker, rewardCycle: cycle, network })],
     [
       'fetchSignerSetContainsForCycle',
-      () => fetchSignerSetContainsForCycle({ signer: signerManager, cycle, network }),
+      () => fetchSignerSetContainsForCycle({ signer: signerManager, rewardCycle: cycle, network }),
     ],
-    ['fetchSignerSetFirstItem', () => fetchSignerSetFirstItem({ cycle, network })],
-    ['fetchSignerSetLastItem', () => fetchSignerSetLastItem({ cycle, network })],
+    ['fetchSignerSetFirstItem', () => fetchSignerSetFirstItem({ rewardCycle: cycle, network })],
+    ['fetchSignerSetLastItem', () => fetchSignerSetLastItem({ rewardCycle: cycle, network })],
     [
       'fetchSignerSetNextItem',
-      () => fetchSignerSetNextItem({ signer: signerManager, cycle, network }),
+      () => fetchSignerSetNextItem({ signer: signerManager, rewardCycle: cycle, network }),
     ],
     [
       'fetchSignerSetPrevItem',
-      () => fetchSignerSetPrevItem({ signer: signerManager, cycle, network }),
+      () => fetchSignerSetPrevItem({ signer: signerManager, rewardCycle: cycle, network }),
     ],
-    ['fetchSignerSetItem', () => fetchSignerSetItem({ signer: signerManager, cycle, network })],
+    ['fetchSignerSetItem', () => fetchSignerSetItem({ signer: signerManager, rewardCycle: cycle, network })],
     ['fetchStakerCustodiedSbtc', () => fetchStakerCustodiedSbtc({ staker, network })],
     [
       'fetchBondOverlapsNewPosition',
@@ -243,7 +243,7 @@ test('every SDK read wrapper resolves against live state', async () => {
           bondIndex,
           staker,
           amountUstx: 1_000_000n,
-          satsTotal: 1_000n,
+          lockup: { kind: 'sbtc', sbtcSats: 1_000n },
           signerManager,
           poxInfo: pox,
           network,
@@ -278,7 +278,7 @@ test('read wrappers: none/false paths', async () => {
   expect(
     await fetchVerifyBlockHeader({
       header: '00'.repeat(80),
-      expectedBlockHeight: pox.currentBurnchainBlockHeight - 5,
+      burnHeight: pox.currentBurnchainBlockHeight - 5,
       network,
     })
   ).toBe(false);
@@ -289,23 +289,23 @@ test('read wrappers: none/false paths', async () => {
     })
   ).toBeUndefined();
   expect(
-    await fetchSignerSetNextItem({ signer: unknown, cycle: pox.rewardCycleId, network })
+    await fetchSignerSetNextItem({ signer: unknown, rewardCycle: pox.rewardCycleId, network })
   ).toBeUndefined();
   expect(
-    await fetchSignerSetPrevItem({ signer: unknown, cycle: pox.rewardCycleId, network })
+    await fetchSignerSetPrevItem({ signer: unknown, rewardCycle: pox.rewardCycleId, network })
   ).toBeUndefined();
   expect(
-    await fetchSignerSetItem({ signer: unknown, cycle: pox.rewardCycleId, network })
+    await fetchSignerSetItem({ signer: unknown, rewardCycle: pox.rewardCycleId, network })
   ).toBeUndefined();
   expect(
-    await fetchSignerCycleMembership({ staker: unknown, cycle: pox.rewardCycleId, network })
+    await fetchSignerCycleMembership({ staker: unknown, rewardCycle: pox.rewardCycleId, network })
   ).toBeUndefined();
 
   const eligibility = await fetchEligibleRegisterForBond({
     bondIndex: pickBondIndex(pox).bondIndex,
     staker: unknown,
     amountUstx: 1_000_000n,
-    satsTotal: 1_000n,
+    lockup: { kind: 'sbtc', sbtcSats: 1_000n },
     signerManager,
     poxInfo: pox,
     network,
