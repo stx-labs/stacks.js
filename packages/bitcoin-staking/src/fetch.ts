@@ -1,4 +1,4 @@
-import { hexToBigInt, hexToBytes } from '@stacks/common';
+import { hexToBytes } from '@stacks/common';
 import type { NetworkClientParam } from '@stacks/network';
 import { clientFromNetwork, networkFrom } from '@stacks/network';
 import {
@@ -8,7 +8,6 @@ import {
   type BufferCV,
   type OptionalCV,
   type PrincipalCV,
-  type ResponseErrorCV,
   type TupleCV,
   type UIntCV,
   cvToValue,
@@ -17,7 +16,7 @@ import {
 } from '@stacks/transactions';
 import { POX5_CONTRACT_NAME } from './constants';
 import { type BondStatusName, bondStatus } from './cycles';
-import { Pox5ErrorCode, describePox5Error } from './errors';
+import { Pox5ErrorCode, describePox5Error, parsePox5Error } from './errors';
 import type {
   AccountStatus,
   Bond,
@@ -132,8 +131,8 @@ export async function fetchAccountStatus(
   // missing nonce is not nonce 0. The node always sets these on a 200 response
   // (stacks-core `AccountEntryResponse` has no optional fields here).
   return {
-    balance: hexToBigInt(data.balance),
-    locked: hexToBigInt(data.locked),
+    balance: BigInt(data.balance),
+    locked: BigInt(data.locked),
     nonce: BigInt(data.nonce),
     unlockHeight: Number(data.unlock_height),
   };
@@ -531,8 +530,8 @@ function unwrapResponseBuffer(
   functionName: string
 ): Uint8Array {
   if (result.type === ClarityType.ResponseErr) {
-    const code = Number((result.value as UIntCV).value);
-    const info = describePox5Error(code);
+    const code = parsePox5Error(result);
+    const info = code !== undefined ? describePox5Error(code) : undefined;
     throw new Error(
       `${functionName} returned (err u${code})` +
         (info ? ` — ${info.name}: ${info.description}` : '')
@@ -1675,9 +1674,9 @@ export async function fetchVerifySignerKeyGrant(
   // Response is `(ok bool)` on success, `(err u17)` on missing grant — the
   // read-only's only error branch.
   if (result.type === ClarityType.ResponseOk) return true;
-  const code = Number(((result as ResponseErrorCV).value as UIntCV).value);
+  const code = parsePox5Error(result);
   if (code === Pox5ErrorCode.SignerKeyGrantNotFound) return false;
-  const info = describePox5Error(code);
+  const info = code !== undefined ? describePox5Error(code) : undefined;
   throw new Error(
     `verify-signer-key-grant returned (err u${code})` +
       (info ? ` — ${info.name}: ${info.description}` : '')

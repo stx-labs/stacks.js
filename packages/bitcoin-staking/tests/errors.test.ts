@@ -3,7 +3,9 @@ import {
   POX5_ERROR_NAMES,
   Pox5ErrorCode,
   describePox5Error,
+  parsePox5Error,
 } from '../src/errors';
+import { Cl } from '@stacks/transactions';
 
 describe('describePox5Error', () => {
   it('describes ERR_BOND_ALREADY_STARTED (43)', () => {
@@ -121,5 +123,29 @@ describe('Pox5ErrorCode enum', () => {
       expect(POX5_ERROR_NAMES[code as Pox5ErrorCode].length).toBeGreaterThan(0);
       expect(POX5_ERROR_DESCRIPTIONS[code as Pox5ErrorCode].length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('parsePox5Error', () => {
+  it('reads the code from an `(err uN)` repr', () => {
+    expect(parsePox5Error('(err u7)')).toBe(Pox5ErrorCode.BondNotFound);
+    expect(parsePox5Error('  (err u52)  ')).toBe(Pox5ErrorCode.InvalidUnlockHeight);
+  });
+
+  it('reads the code from a ResponseErr clarity value', () => {
+    expect(parsePox5Error(Cl.error(Cl.uint(40)))).toBe(Pox5ErrorCode.InvalidBtcHeader);
+  });
+
+  it('returns undefined for ok results and unrecognized shapes', () => {
+    expect(parsePox5Error(Cl.ok(Cl.bool(true)))).toBeUndefined();
+    expect(parsePox5Error(Cl.error(Cl.bool(false)))).toBeUndefined();
+    expect(parsePox5Error('(ok true)')).toBeUndefined();
+    expect(parsePox5Error('not a repr')).toBeUndefined();
+    expect(parsePox5Error(undefined)).toBeUndefined();
+  });
+
+  it('composes with describePox5Error', () => {
+    const code = parsePox5Error('(err u24)');
+    expect(describePox5Error(code!)!.name).toBe('ERR_INVALID_START_BURN_HEIGHT');
   });
 });

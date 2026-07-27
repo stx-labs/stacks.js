@@ -7,8 +7,7 @@ import {
   buildLockAddress,
   buildLockScript,
   computeRegisterPreimage,
-  computeUnlockHeight,
-  lockScriptToAddress,
+  scriptToAddress,
   serializeCScriptNum,
   toConsensusBuff,
   validateEarlyUnlockBytes,
@@ -297,7 +296,7 @@ describe('buildLockScript', () => {
     );
   });
 
-  it('rejects non-CHECKSIG-shaped earlyUnlockBytes unless validation is disabled', () => {
+  it('rejects non-CHECKSIG-shaped earlyUnlockBytes unless the shape check is disabled', () => {
     const base = {
       stxAddress: TEST_STX_ADDRESS,
       unlockHeight: 850_000,
@@ -310,6 +309,31 @@ describe('buildLockScript', () => {
     expect(() =>
       buildLockScript({ ...base, earlyUnlockBytes: verifyTail, validateEarlyUnlockBytes: false })
     ).not.toThrow();
+  });
+
+  it('rejects unlockHeight 0 (OP_0 leaves an empty value the shared OP_VERIFY reads as false)', () => {
+    expect(() =>
+      buildLockScript({
+        stxAddress: TEST_STX_ADDRESS,
+        unlockHeight: 0,
+        unlockBytes,
+        earlyUnlockBytes: TEST_EARLY_UNLOCK,
+      })
+    ).toThrow('unlockHeight 0');
+  });
+
+  it('rejects an empty or undecodable unlockBytes tail', () => {
+    const base = {
+      stxAddress: TEST_STX_ADDRESS,
+      unlockHeight: 850_000,
+      earlyUnlockBytes: TEST_EARLY_UNLOCK,
+    };
+    expect(() => buildLockScript({ ...base, unlockBytes: new Uint8Array(0) })).toThrow(
+      'unlockBytes: empty subscript'
+    );
+    expect(() => buildLockScript({ ...base, unlockBytes: '02ff' })).toThrow(
+      'unlockBytes: not decodable'
+    );
   });
 });
 
@@ -347,6 +371,17 @@ describe('validateEarlyUnlockBytes', () => {
     expect(() => validateEarlyUnlockBytes(conditional)).toThrow('conditional opcodes');
     // ...but all of these pass with the shape heuristic disabled.
     expect(() => validateEarlyUnlockBytes(conditional, { shape: false })).not.toThrow();
+    expect(() =>
+      validateEarlyUnlockBytes(btc.Script.encode(['CHECKSIG']), { shape: false })
+    ).not.toThrow();
+  });
+
+  it('always decodes, even with the shape heuristic disabled', () => {
+    // 0x21 announces a 33-byte push but only 2 bytes follow.
+    expect(() =>
+      validateEarlyUnlockBytes(new Uint8Array([0x21, 0x02, 0x03]), { shape: false })
+    ).toThrow('not decodable');
+    expect(() => validateEarlyUnlockBytes(new Uint8Array(0), { shape: false })).toThrow('empty');
   });
 
   it('returns the decoded bytes (hex input included)', () => {
@@ -390,7 +425,7 @@ describe('buildLockAddress', () => {
   it('matches the address derived from the raw locking script', () => {
     // Compute the expected address fresh from the new script — no hardcoding.
     const script = buildLockScript(baseOpts);
-    const expectedMainnet = lockScriptToAddress(script, 'mainnet');
+    const expectedMainnet = scriptToAddress(script, 'mainnet');
     expect(buildLockAddress({ ...baseOpts, network: 'mainnet' })).toBe(expectedMainnet);
   });
 
@@ -444,33 +479,3 @@ describe('buildLockAddress', () => {
   });
 });
 
-describe('computeUnlockHeight', () => {
-  const baseOpts = {
-    poxInfo: {
-      firstBurnchainBlockHeight: 666_050,
-      rewardCycleLength: 2100,
-    } as Parameters<typeof computeUnlockHeight>[0]['poxInfo'],
-    firstRewardCycle: 50,
-    numCycles: 1,
-  };
-
-  it('returns the start of the unlock cycle for 1 cycle', () => {
-    const height = computeUnlockHeight(baseOpts);
-    // lastCycleStart = 666050 + (50 + 1 - 1) * 2100 = 666050 + 105000 = 771050
-    expect(height).toBe(771_050);
-  });
-
-  it('returns the start of the unlock cycle for 24 cycles', () => {
-    const height = computeUnlockHeight({ ...baseOpts, numCycles: 24 });
-    // lastCycleStart = 666050 + (50 + 24 - 1) * 2100 = 666050 + 73 * 2100 = 666050 + 153300 = 819350
-    expect(height).toBe(819_350);
-  });
-
-  it('increases with more cycles', () => {
-    const h1 = computeUnlockHeight({ ...baseOpts, numCycles: 1 });
-    const h12 = computeUnlockHeight({ ...baseOpts, numCycles: 12 });
-    const h24 = computeUnlockHeight({ ...baseOpts, numCycles: 24 });
-    expect(h1).toBeLessThan(h12);
-    expect(h12).toBeLessThan(h24);
-  });
-});

@@ -4,7 +4,7 @@ import { signECDSA } from '@scure/btc-signer/utils.js';
 import { concatBytes, equals, hexToBytes, privateKeyToBytes } from '@stacks/common';
 import type { PrivateKey } from '@stacks/common';
 import type { StacksNetwork, StacksNetworkName } from '@stacks/network';
-import { btcNetworkFrom, computeRegisterPreimage, computeWshOutputScript } from './script';
+import { btcNetworkFrom, computeRegisterPreimage, scriptToWshOutput } from './script';
 import type { Utxo } from './types';
 
 /**
@@ -126,6 +126,11 @@ export function buildReclaim(opts: BuildReclaimOpts): btc.Transaction {
 
   const amount = opts.utxo.value;
   const { address, feeSats } = opts.output;
+
+  if (feeSats < 0n) {
+    throw new Error(`buildReclaim: feeSats (${feeSats}) must be non-negative`);
+  }
+
   const sweepSats = amount - feeSats;
   if (sweepSats <= 0n) {
     throw new Error(`buildReclaim: fee (${feeSats}) >= utxo value (${amount})`);
@@ -137,22 +142,19 @@ export function buildReclaim(opts: BuildReclaimOpts): btc.Transaction {
   }
 
   const earlyExit = opts.path === 'early-exit';
-  let lockTime = 0;
-  if (!earlyExit) {
-    if (scriptHeight == null) {
-      throw new Error(
-        'buildReclaim: the locktime path needs a lockScript that encodes a CLTV unlock height'
-      );
-    }
-    lockTime = scriptHeight;
+  if (!earlyExit && scriptHeight == null) {
+    throw new Error(
+      'buildReclaim: the locktime path needs a lockScript that encodes a CLTV unlock height'
+    );
   }
+  const lockTime = earlyExit ? 0 : scriptHeight;
 
   const tx = new btc.Transaction({ ...TX_OPTS, lockTime });
   tx.addInput({
     txid: opts.utxo.txid,
     index: opts.utxo.vout,
     sequence: earlyExit ? 0xffffffff : 0xfffffffe,
-    witnessUtxo: { script: computeWshOutputScript(lockScript), amount },
+    witnessUtxo: { script: scriptToWshOutput(lockScript), amount },
     witnessScript: lockScript,
   });
   tx.addOutputAddress(address, sweepSats, network);
@@ -160,8 +162,13 @@ export function buildReclaim(opts: BuildReclaimOpts): btc.Transaction {
 }
 
 /**
- * Compute the input-0 BIP-143 sighash for a reclaim tx — the digest any signer
- * (a hardware wallet, another library, {@link signReclaim}) signs.
+ * Compute the input-0 BIP-143 sighash for a reclaim tx.
+ *
+ * For an in-process key, prefer `tx.signIdx(privateKey, 0)` — btc-signer derives
+ * this digest itself. This helper is for signers that sign a bare digest (an HSM
+ * or KMS cosigner, an MPC service) and for passing the early-exit sighash between
+ * the two parties out-of-band. Hardware and browser wallets do NOT sign a bare
+ * digest: give them `tx.toPSBT()`, which {@link buildReclaim} makes complete.
  *
  * Reads the `witnessScript` + input amount off the tx (set by {@link buildReclaim}
  * and preserved through PSBT round-trips); pass `opts` to re-supply them for a tx
@@ -185,31 +192,20 @@ export function computeReclaimSighash(
 }
 
 /**
+ * @internal
  * Sign a reclaim sighash with a software key: DER signature + trailing
- * `SIGHASH_ALL` byte, ready to drop into a witness or a PSBT `partialSig`.
+ * `SIGHASH_ALL` byte, for a PSBT `partialSig`.
  *
- * Optional. This helper does NOT touch the transaction — it only turns a digest
- * into signature bytes. How a signature actually gets onto the reclaim tx (both
- * leave a `partialSig` that rides inside `tx.toPSBT()`, then {@link finalizeReclaim}
- * reads it back off input 0):
- *
- * - Software key, in process — sign with btc-signer directly (most callers):
- *     `tx.signIdx(privateKey, 0)`
- * - Hardware / detached signer — this helper is the software stand-in:
- *     `const sig = signReclaim(computeReclaimSighash(tx), privateKey);`
- *     `tx.updateInput(0, { partialSig: [[publicKey, sig]] })`
- *
- * `lowR` defaults to `false` to match btc-signer's `signIdx` (whose default
- * `tx.opts.lowR` is also off), so a default `signReclaim` and a default `signIdx`
- * produce byte-identical signatures. Mirrors `signSignerGrant`'s detached shape.
+ * Not needed in application code — `tx.signIdx(privateKey, 0)` does the same job
+ * and produces byte-identical bytes (`lowR` defaults to `false` here to match
+ * btc-signer's own default). Kept as the software stand-in for a detached signer
+ * in tests.
  */
 export function signReclaim(
   sighash: Uint8Array,
   privateKey: PrivateKey,
   opts?: { lowR?: boolean }
 ): Uint8Array {
-  // `privateKeyToBytes` accepts the Stacks `PrivateKey` shapes; `.slice(0, 32)` drops the
-  // trailing compression-flag byte a 33-byte key carries, leaving the raw scalar signECDSA wants.
   const priv = privateKeyToBytes(privateKey).slice(0, 32);
   return concatBytes(signECDSA(sighash, priv, opts?.lowR ?? false), new Uint8Array([SIGHASH_ALL]));
 }

@@ -32,7 +32,7 @@ import {
   fetchConstructLockupScript,
   fetchReversedTxid,
   fetchSignerGrantMessageHash,
-  lockScriptToAddress,
+  scriptToAddress,
 } from '../../../src';
 import { CHAIN_ID, SIGNER_MANAGER } from '../constants';
 import { getNetwork } from '../../helpers/utils';
@@ -78,7 +78,7 @@ describe('lockup script bytes (script.ts buildLockScript)', () => {
   test('matches the frozen golden script + output + address', () => {
     expect(bytesToHex(buildLockScript(LOCKUP))).toBe(GOLDEN_LOCK_SCRIPT);
     expect(bytesToHex(buildLockOutputScript(LOCKUP))).toBe(GOLDEN_LOCK_OUTPUT);
-    expect(lockScriptToAddress(buildLockScript(LOCKUP), 'testnet')).toBe(GOLDEN_LOCK_ADDR_TESTNET);
+    expect(scriptToAddress(buildLockScript(LOCKUP), 'testnet')).toBe(GOLDEN_LOCK_ADDR_TESTNET);
   });
 
   test('byte layout matches the canonical pox-5.clar construct-lockup-script assembly', () => {
@@ -203,9 +203,8 @@ describe('merkle proof fold bit-order (proof.ts)', () => {
 
   test('LIVE: a real privatenet block folds computeMerkleBranch back to its header root', async () => {
     // Walk back from the tip for the first block with > 1 tx (so the fold runs).
-    const { getBtcTipHeight, fetchBlockHeader, fetchBlockTxCount, fetchMerkleProof } = await import(
-      '../../helpers/btc-wallet'
-    );
+    const { getBtcTipHeight, fetchBlockHeader, fetchBlockTxCount, fetchMerkleProof } =
+      await import('../../helpers/btc-wallet');
     const tip = await getBtcTipHeight();
     let chosen: { hash: string; height: number; txids: string[] } | undefined;
     for (let h = tip; h > tip - 30 && !chosen; h--) {
@@ -227,7 +226,14 @@ describe('merkle proof fold bit-order (proof.ts)', () => {
     const leaf = hexToBytes(txid).reverse(); // display -> internal
     const siblings = merkle.map(h => hexToBytes(h).reverse());
     const root = fold(leaf, siblings, pos);
-    console.log('block', chosen.height, 'txCount', chosen.txids.length, 'folded root', bytesToHex(root));
+    console.log(
+      'block',
+      chosen.height,
+      'txCount',
+      chosen.txids.length,
+      'folded root',
+      bytesToHex(root)
+    );
     expect(bytesToHex(root)).toBe(bytesToHex(hexToBytes(headerHex).slice(36, 68)));
   });
 });

@@ -36,7 +36,7 @@ import {
   bondRegisterRanges,
 } from '../../../src/cycles';
 import { SIGNER_MANAGER } from '../constants';
-import { lockScriptToAddress, computeBondUnlockHeight } from '../../../src/script';
+import { scriptToAddress, computeBondUnlockHeight } from '../../../src/script';
 import { parseUnlockScript } from '../../helpers/script';
 import * as btcAddress from '../../../src/btc-address';
 import { buildSignerCalldata, parseSignerCalldata } from '../../../src/signer';
@@ -137,7 +137,7 @@ test('local lockup script/address matches the contract read-onlys byte-for-byte'
 
   expect(bytesToHex(chainScript)).toBe(bytesToHex(localScript));
   expect(bytesToHex(chainOutput)).toBe(bytesToHex(localOutput));
-  expect(lockScriptToAddress(localScript, network)).toBe(localAddress);
+  expect(scriptToAddress(localScript, network)).toBe(localAddress);
   console.log('lockup parity ok', localAddress);
 
   // parseUnlockScript inverts buildUnlockScript

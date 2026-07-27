@@ -154,21 +154,48 @@ export function computeRegisterPreimage(stxAddress: string): Uint8Array {
 const CONDITIONAL_OPS = ['IF', 'NOTIF', 'ELSE', 'ENDIF'];
 
 /**
- * Validate a bond's `early-unlock-bytes` subscript before it is spliced raw
- * into a lockup script. The contract stores and splices the bytes without
- * inspection, so a malformed value (e.g. a truncated data push) corrupts the
+ * @internal
+ * Structural validation shared by both lockup subscripts. The contract splices
+ * them raw, so a malformed value (e.g. a truncated data push) corrupts the
  * assembled script — {@link buildLockScript} still derives a fundable P2WSH
- * address from it, but the sats would be unspendable in both branches.
+ * address from it, but the sats would be unspendable in both branches. An empty
+ * subscript is worse than malformed: the branch it guards carries no spend
+ * condition at all.
  *
- * Structural checks (always): the bytes are non-empty and decode as Bitcoin
- * script (a truncated push fails to decode).
+ * @throws if `subscript` is empty or does not decode as Bitcoin script.
+ */
+function decodeSubscript(
+  subscript: Uint8Array | string,
+  label: string
+): { bytes: Uint8Array; ops: btc.ScriptType } {
+  const bytes = typeof subscript === 'string' ? hexToBytes(subscript) : subscript;
+
+  if (bytes.length === 0) {
+    throw new Error(`${label}: empty subscript — its branch would be spendable without a signature`);
+  }
+
+  try {
+    return { bytes, ops: btc.Script.decode(bytes) };
+  } catch (error) {
+    throw new Error(
+      `${label}: not decodable as Bitcoin script (a truncated push corrupts the lockup script): ${error}`
+    );
+  }
+}
+
+/**
+ * Validate a bond's `early-unlock-bytes` subscript before it is spliced raw
+ * into a lockup script.
+ *
+ * Structural: the bytes are non-empty and decode as Bitcoin script.
  *
  * Shape heuristic (`shape: true`, the default): the fragment contains exactly
  * one 33-byte public-key push (the early-unlock part of the script carries a
  * single key), ends in `OP_CHECKSIG` (it must leave a boolean for the shared
- * `OP_VERIFY`), and contains no `OP_IF`/`OP_NOTIF`/`OP_ELSE`/`OP_ENDIF`
- * (which would unbalance the outer `OP_IF … OP_ENDIF` scaffold). Disable for
- * bond templates that are intentionally exotic but chain-valid.
+ * `OP_VERIFY`), and contains no `OP_IF`/`OP_NOTIF`/`OP_ELSE`/`OP_ENDIF` (which
+ * would unbalance the outer `OP_IF … OP_ENDIF` scaffold). Disable for bond
+ * templates that are intentionally exotic but chain-valid — the contract treats
+ * these bytes as opaque, so an M-of-N template is legal.
  *
  * Returns the decoded bytes.
  *
@@ -178,42 +205,24 @@ export function validateEarlyUnlockBytes(
   earlyUnlockBytes: Uint8Array | string,
   opts: { shape?: boolean } = {}
 ): Uint8Array {
-  const bytes =
-    typeof earlyUnlockBytes === 'string' ? hexToBytes(earlyUnlockBytes) : earlyUnlockBytes;
+  const { bytes, ops } = decodeSubscript(earlyUnlockBytes, 'earlyUnlockBytes');
+  if (!(opts.shape ?? true)) return bytes;
 
-  if (bytes.length === 0) {
+  const keyPushes = ops.filter(op => op instanceof Uint8Array && op.length === 33).length;
+  if (keyPushes !== 1) {
     throw new Error(
-      'earlyUnlockBytes: empty subscript — the early-exit branch would not require a cosigner'
+      `earlyUnlockBytes: expected exactly one 33-byte public-key push, found ${keyPushes}`
     );
   }
-
-  let decoded: btc.ScriptType;
-  try {
-    decoded = btc.Script.decode(bytes);
-  } catch (error) {
+  if (ops[ops.length - 1] !== 'CHECKSIG') {
     throw new Error(
-      `earlyUnlockBytes: not decodable as Bitcoin script (a truncated push corrupts the lockup script): ${error}`
+      'earlyUnlockBytes: subscript must end in OP_CHECKSIG (its result feeds the shared OP_VERIFY)'
     );
   }
-
-  if (opts.shape ?? true) {
-    const keyPushes = decoded.filter(op => op instanceof Uint8Array && op.length === 33).length;
-    if (keyPushes !== 1) {
-      throw new Error(
-        `earlyUnlockBytes: expected exactly one 33-byte public-key push, found ${keyPushes}`
-      );
-    }
-    const tail = decoded[decoded.length - 1];
-    if (tail !== 'CHECKSIG') {
-      throw new Error(
-        'earlyUnlockBytes: subscript must end in OP_CHECKSIG (its result feeds the shared OP_VERIFY)'
-      );
-    }
-    if (decoded.some(op => typeof op === 'string' && CONDITIONAL_OPS.includes(op))) {
-      throw new Error(
-        'earlyUnlockBytes: conditional opcodes (OP_IF/OP_NOTIF/OP_ELSE/OP_ENDIF) would unbalance the lockup script scaffold'
-      );
-    }
+  if (ops.some(op => typeof op === 'string' && CONDITIONAL_OPS.includes(op))) {
+    throw new Error(
+      'earlyUnlockBytes: conditional opcodes (OP_IF/OP_NOTIF/OP_ELSE/OP_ENDIF) would unbalance the lockup script scaffold'
+    );
   }
 
   return bytes;
@@ -283,21 +292,34 @@ export function buildLockScript(opts: {
    */
   validateEarlyUnlockBytes?: boolean;
 }): Uint8Array {
-  const unlockBytes =
-    typeof opts.unlockBytes === 'string' ? hexToBytes(opts.unlockBytes) : opts.unlockBytes;
+  // Both subscripts are always decoded; only `earlyUnlockBytes` carries the
+  // optional single-key shape heuristic.
+  const { bytes: unlockBytes } = decodeSubscript(opts.unlockBytes, 'unlockBytes');
   const earlyUnlockBytes = validateEarlyUnlockBytes(opts.earlyUnlockBytes, {
     shape: opts.validateEarlyUnlockBytes ?? true,
   });
 
-  // Validate the height before pushing: below the BIP-65 threshold (the
+  // Validate the height before pushing: nonzero, below the BIP-65 threshold (the
   // contract's `unlock-burn-height < BITCOIN_LOCKTIME_THRESHOLD` assert) and
   // within the 5-byte ScriptNum cap.
+  //
+  // Height 0 encodes as OP_0, which pushes an EMPTY value. OP_CLTV passes
+  // (0 <= any nLockTime) but does not pop it, so the shared OP_VERIFY reads that
+  // empty value as false and the timelocked branch can never validate.
+  if (BigInt(opts.unlockHeight) === 0n) {
+    throw new Error(
+      'buildLockScript: unlockHeight 0 encodes as OP_0, leaving an empty value the shared OP_VERIFY reads as false — the timelocked branch would never be spendable'
+    );
+  }
   if (BigInt(opts.unlockHeight) >= BITCOIN_LOCKTIME_THRESHOLD) {
     throw new Error(
       'buildLockScript: unlockHeight >= 500,000,000 is rejected by the contract (ERR_INVALID_UNLOCK_HEIGHT) — Bitcoin would interpret the CLTV value as a timestamp (BIP-65)'
     );
   }
+
+  // Used for validation mirroring .clar only, unlockHeight is encoded directly below.
   serializeCScriptNum(opts.unlockHeight);
+
   // The committed staker hash <H> = sha256(sha256(consensus-buff(staker))).
   const stakerHash = sha256(computeRegisterPreimage(opts.stxAddress));
 
@@ -331,7 +353,7 @@ export function buildLockScript(opts: {
  * (34 bytes), via `@scure/btc-signer`'s `OutScript`. Mirrors
  * `pox-5.construct-lockup-output-script`.
  */
-export function computeWshOutputScript(script: Uint8Array): Uint8Array {
+export function scriptToWshOutput(script: Uint8Array): Uint8Array {
   return btc.OutScript.encode({ type: 'wsh', hash: sha256(script) });
 }
 
@@ -339,8 +361,6 @@ export function computeWshOutputScript(script: Uint8Array): Uint8Array {
  * Build the P2WSH `scriptPubKey` (34 bytes) for a full L1 lockup. This is the
  * `expected-script-hash` the contract derives in `register-for-bond` and
  * asserts equal to each declared output's `scriptPubKey`.
- *
- * Equivalent to {@link computeWshOutputScript}({@link buildLockScript}(...)).
  */
 export function buildLockOutputScript(opts: {
   stxAddress: string;
@@ -348,7 +368,7 @@ export function buildLockOutputScript(opts: {
   unlockBytes: Uint8Array | string;
   earlyUnlockBytes: Uint8Array | string;
 }): Uint8Array {
-  return computeWshOutputScript(buildLockScript(opts));
+  return scriptToWshOutput(buildLockScript(opts));
 }
 
 /**
@@ -407,7 +427,7 @@ export function buildLockAddress(opts: {
     earlyUnlockBytes: opts.earlyUnlockBytes,
     validateEarlyUnlockBytes: opts.validateEarlyUnlockBytes,
   });
-  return lockScriptToAddress(script, networkNameFrom(opts.network));
+  return scriptToAddress(script, networkNameFrom(opts.network));
 }
 
 /**
@@ -416,7 +436,7 @@ export function buildLockAddress(opts: {
  * Pure: no I/O. Useful when the caller already holds the script bytes (e.g. from
  * {@link buildLockScript}) and wants to fund the address out-of-band.
  */
-export function lockScriptToAddress(
+export function scriptToAddress(
   script: Uint8Array,
   network: StacksNetworkName | StacksNetwork
 ): string {
@@ -424,24 +444,6 @@ export function lockScriptToAddress(
   const result = btc.p2wsh({ type: 'wsh', script }, btcNetwork);
   if (!result.address) throw new Error('Failed to derive P2WSH address');
   return result.address;
-}
-
-/**
- * Compute the deterministic L1 unlock height for a STAKER lock.
- *
- * Set to the start of the staker's unlock cycle (i.e.
- * {@link rewardCycleToBurnHeight} of `firstRewardCycle + numCycles - 1`),
- * giving time to roll over into a new lock without missing a cycle.
- */
-export function computeUnlockHeight(opts: {
-  firstRewardCycle: number;
-  numCycles: number;
-  poxInfo: PoxInfo;
-}): number {
-  return rewardCycleToBurnHeight({
-    cycle: opts.firstRewardCycle + opts.numCycles - 1,
-    poxInfo: opts.poxInfo,
-  });
 }
 
 /**
@@ -506,10 +508,9 @@ export interface RegisterMetadata {
 /**
  * Derive every pre-funding artifact for a paired-BTC `register-for-bond`.
  *
- * Combines {@link computeBondUnlockHeight}, {@link buildUnlockScript},
- * {@link buildLockScript}, {@link computeWshOutputScript} and
- * {@link lockScriptToAddress} so the registration flow is a single call instead
- * of five hand-wired steps. Pure — no I/O.
+ * Combines {@link buildLockAddress}, {@link buildUnlockScript},
+ * {@link buildLockScript} so the registration flow is a single call instead
+ * of multiple hand-wired steps.
  *
  * @example
  * ```ts
@@ -565,9 +566,9 @@ export function buildRegisterMetadata(opts: {
   });
 
   return {
-    lockAddress: lockScriptToAddress(lockScript, networkNameFrom(opts.network)),
+    lockAddress: scriptToAddress(lockScript, networkNameFrom(opts.network)),
     lockScript,
-    outputScript: computeWshOutputScript(lockScript),
+    outputScript: scriptToWshOutput(lockScript),
     unlockBytes,
     unlockHeight,
   };

@@ -5,7 +5,7 @@ import {
   C_SCRIPT_NUM_MAX,
   buildLockProof,
   computeBitcoinTxid,
-  computeWshOutputScript,
+  scriptToWshOutput,
   pushCScriptNum,
   pushScriptBytes,
   serializeBitcoinHeader,
@@ -165,7 +165,7 @@ describe('computeWshOutputScript', () => {
   }
 
   it('returns a 34-byte buffer starting with 0x00 0x20', () => {
-    const out = computeWshOutputScript(new Uint8Array([0x01, 0x02, 0x03]));
+    const out = scriptToWshOutput(new Uint8Array([0x01, 0x02, 0x03]));
     expect(out.length).toBe(34);
     expect(out[0]).toBe(0x00);
     expect(out[1]).toBe(0x20);
@@ -175,9 +175,7 @@ describe('computeWshOutputScript', () => {
     'matches the reference impl (%s-byte script)',
     len => {
       const script = Uint8Array.from({ length: len }, (_, i) => i & 0xff);
-      expect(Array.from(computeWshOutputScript(script))).toEqual(
-        refComputeP2wshOutputScript(script)
-      );
+      expect(Array.from(scriptToWshOutput(script))).toEqual(refComputeP2wshOutputScript(script));
     }
   );
 });

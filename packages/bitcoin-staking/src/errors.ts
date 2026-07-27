@@ -1,3 +1,10 @@
+import {
+  ClarityType,
+  type ClarityValue,
+  type ResponseErrorCV,
+  type UIntCV,
+} from '@stacks/transactions';
+
 /**
  * Numeric error codes returned by `pox-5.clar` (the `(err uN)` payloads).
  *
@@ -55,7 +62,10 @@ export enum Pox5ErrorCode {
   RewardsPaused = 53,
 }
 
-/** The on-chain Clarity constant name for each error (e.g. `ERR_BOND_NOT_FOUND`). */
+/**
+ * @internal The on-chain Clarity constant name for each error (e.g.
+ * `ERR_BOND_NOT_FOUND`). Prefer {@link describePox5Error}, which range-checks the code.
+ */
 export const POX5_ERROR_NAMES: Record<Pox5ErrorCode, string> = {
   [Pox5ErrorCode.Unauthorized]: 'ERR_UNAUTHORIZED',
   [Pox5ErrorCode.CannotSetupBondTooSoon]: 'ERR_CANNOT_SETUP_BOND_TOO_SOON',
@@ -105,7 +115,10 @@ export const POX5_ERROR_NAMES: Record<Pox5ErrorCode, string> = {
   [Pox5ErrorCode.RewardsPaused]: 'ERR_REWARDS_PAUSED',
 };
 
-/** Human-readable descriptions per error code. */
+/**
+ * @internal Human-readable description per error code. Prefer
+ * {@link describePox5Error}, which range-checks the code.
+ */
 export const POX5_ERROR_DESCRIPTIONS: Record<Pox5ErrorCode, string> = {
   [Pox5ErrorCode.Unauthorized]:
     'The caller is not authorized for this operation (generic authorization failure).',
@@ -132,7 +145,7 @@ export const POX5_ERROR_DESCRIPTIONS: Record<Pox5ErrorCode, string> = {
   [Pox5ErrorCode.InvalidNumCycles]: 'The requested number of cycles is outside the allowed range.',
   [Pox5ErrorCode.SignerNotFound]: 'No signer was found for the supplied principal.',
   [Pox5ErrorCode.InvalidStartBurnHeight]:
-    'The provided start burn height does not resolve to the next reward cycle.',
+    'The provided start burn height must fall within the CURRENT reward cycle (the contract derives the next cycle from it), so a "post-dated" height in a later cycle is rejected.',
   [Pox5ErrorCode.UnauthorizedSignerRegistration]:
     'The caller is not authorized to register this signer.',
   [Pox5ErrorCode.NotStaking]: 'The principal is not currently staking.',
@@ -197,6 +210,36 @@ export const POX5_ERROR_DESCRIPTIONS: Record<Pox5ErrorCode, string> = {
  * // => { code: 7, name: 'ERR_BOND_NOT_FOUND', description: '...' }
  * ```
  */
+/**
+ * Extract the pox-5 error code from a contract result.
+ *
+ * Accepts either a Clarity value (a read-only call's `(err uN)` response) or the
+ * `repr` string the Stacks API reports for a failed transaction. Pairs with
+ * {@link describePox5Error}, which turns the code into a name and description.
+ *
+ * @returns The code, or `undefined` for an `ok` result or an unrecognized shape.
+ *
+ * @example
+ * ```ts
+ * import { describePox5Error, parsePox5Error } from '@stacks/bitcoin-staking';
+ *
+ * const code = parsePox5Error(tx.tx_result?.repr); // '(err u7)' -> 7
+ * const info = code !== undefined ? describePox5Error(code) : undefined;
+ * ```
+ */
+export function parsePox5Error(result: ClarityValue | string | undefined): number | undefined {
+  if (result == null) return undefined;
+
+  if (typeof result === 'string') {
+    const match = result.trim().match(/^\(err u(\d+)\)$/);
+    return match ? Number(match[1]) : undefined;
+  }
+
+  if (result.type !== ClarityType.ResponseErr) return undefined;
+  const value = (result as ResponseErrorCV).value;
+  return value.type === ClarityType.UInt ? Number((value as UIntCV).value) : undefined;
+}
+
 export function describePox5Error(
   code: number | bigint
 ): { code: number; name: string; description: string } | undefined {

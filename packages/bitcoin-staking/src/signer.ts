@@ -117,10 +117,13 @@ export function verifySignerGrant(
  * Mirrors the `signer-manager.validate-stake!` calldata tuple.
  */
 export function buildSignerCalldata(opts: SignerCalldataL1Payout): Uint8Array {
+  // A repr passed in directly gets the same check `parseSignerCalldata` applies on
+  // the way out — the blob is opaque to pox-5, and the signer-manager reads
+  // `pox-addr` as the BTC payout destination.
   const { version, data } =
     typeof opts.poxAddress === 'string'
       ? parseBtcAddress(opts.poxAddress, opts.network)
-      : opts.poxAddress;
+      : assertValidBtcAddressRepr(opts.poxAddress);
   return serializeCVBytes(
     Cl.tuple({
       'pox-addr': Cl.tuple({
