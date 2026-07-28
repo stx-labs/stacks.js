@@ -880,7 +880,7 @@ export async function fetchEligibleGrantSignerKey(
     /** Signer-manager being authorized. */
     signerManager: string;
     /** Replay nonce signed in the grant. */
-    authId: bigint | number;
+    authId: IntegerType;
     /** SIP-018 signature over the grant message. */
     signerSignature: Uint8Array | string;
   } & NetworkClientParam

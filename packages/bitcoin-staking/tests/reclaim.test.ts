@@ -45,7 +45,7 @@ const LOCK_SCRIPT = buildLockScript({
   earlyUnlockBytes: buildUnlockScript(COSIGNER_PUB),
 });
 
-const UTXO: Utxo = { txid: 'a'.repeat(64), vout: 0, value: 30_000n };
+const UTXO = { txid: 'a'.repeat(64), vout: 0, value: 30_000n } satisfies Utxo;
 const OUTPUT = { address: btc.p2wpkh(STAKER_PUB, btc.TEST_NETWORK).address!, feeSats: 1_000n };
 
 // Frozen golden finalized-tx hex for each reclaim branch (ECDSA is RFC6979
@@ -104,6 +104,18 @@ describe('buildReclaim', () => {
     expect(bytesToHex(tx.getOutput(0).script!)).toBe(
       bytesToHex(btc.p2wpkh(STAKER_PUB, btc.TEST_NETWORK).script)
     );
+  });
+
+  it('rejects a utxo whose scriptPubKey does not match the lockScript', () => {
+    expect(() =>
+      buildReclaim({
+        path: 'early-exit',
+        utxo: { ...UTXO, scriptPubKey: new Uint8Array(34) },
+        lockScript: LOCK_SCRIPT,
+        network: NETWORK,
+        output: OUTPUT,
+      })
+    ).toThrow(/does not match the lockScript/);
   });
 
   it('rejects a sweep below the dust limit', () => {

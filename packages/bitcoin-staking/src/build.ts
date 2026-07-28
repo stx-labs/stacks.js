@@ -265,9 +265,28 @@ export async function buildRegisterForBond(
   );
 }
 
+/** Contract caps on `register-for-bond`: `(list 10 …)` outputs, `(list 14 (buff 32))` siblings. */
+const MAX_LOCKUP_OUTPUTS = 10;
+const MAX_LEAF_HASHES = 14;
+
 /** @internal */
 function lockupToCV(lockup: BondLockup): ClarityValue {
   if (lockup.kind === 'sbtc') return Cl.error(Cl.uint(lockup.sbtcSats));
+  if (lockup.outputs.length === 0) {
+    throw new Error('buildRegisterForBond: `lockup.outputs` is empty — nothing would be locked');
+  }
+  if (lockup.outputs.length > MAX_LOCKUP_OUTPUTS) {
+    throw new Error(
+      `buildRegisterForBond: ${lockup.outputs.length} lockup outputs; the contract accepts at most ${MAX_LOCKUP_OUTPUTS}`
+    );
+  }
+  lockup.outputs.forEach((o, i) => {
+    if (o.leafHashes.length > MAX_LEAF_HASHES) {
+      throw new Error(
+        `buildRegisterForBond: output ${i} has ${o.leafHashes.length} merkle siblings; the contract accepts at most ${MAX_LEAF_HASHES}`
+      );
+    }
+  });
   return Cl.ok(
     Cl.tuple({
       outputs: Cl.list(

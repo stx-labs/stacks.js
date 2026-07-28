@@ -127,10 +127,10 @@ describe('minUstxForSatsAmount', () => {
 describe('burnHeightToRewardCycle', () => {
   it('round-trips with rewardCycleToBurnHeight', () => {
     expect(burnHeightToRewardCycle({ burnHeight: 305, poxInfo: REGTEST_POX_INFO })).toBe(15);
-    expect(rewardCycleToBurnHeight({ cycle: 15, poxInfo: REGTEST_POX_INFO })).toBe(300);
+    expect(rewardCycleToBurnHeight({ rewardCycle: 15, poxInfo: REGTEST_POX_INFO })).toBe(300);
     expect(
       burnHeightToRewardCycle({
-        burnHeight: rewardCycleToBurnHeight({ cycle: 42, poxInfo: REGTEST_POX_INFO }),
+        burnHeight: rewardCycleToBurnHeight({ rewardCycle: 42, poxInfo: REGTEST_POX_INFO }),
         poxInfo: REGTEST_POX_INFO,
       })
     ).toBe(42);
@@ -177,6 +177,15 @@ describe('isInPreparePhase (regtest-shaped snapshot)', () => {
 });
 
 describe('burnHeightToDistributionIndex / distributionCycleToBurnHeight / currentDistributionCycle', () => {
+  it('mirrors the contract runtime-abort before first-burnchain-block-height', () => {
+    expect(() =>
+      burnHeightToDistributionIndex({
+        burnHeight: -1,
+        poxInfo: { ...REGTEST_POX_INFO, firstBurnchainBlockHeight: 0 },
+      })
+    ).toThrow('before first-burnchain-block-height');
+  });
+
   it('ticks distribution cycles twice per reward cycle', () => {
     const distributionCycle = burnHeightToDistributionIndex({
       burnHeight: 305,
@@ -200,7 +209,7 @@ describe('bondPeriodToRewardCycle / bondPeriodToBurnHeight', () => {
     const bondIndex = 4;
     const cycle = bondPeriodToRewardCycle({ bondIndex, poxInfo: REGTEST_POX_INFO });
     expect(bondPeriodToBurnHeight({ bondIndex, poxInfo: REGTEST_POX_INFO })).toBe(
-      rewardCycleToBurnHeight({ cycle, poxInfo: REGTEST_POX_INFO })
+      rewardCycleToBurnHeight({ rewardCycle: cycle, poxInfo: REGTEST_POX_INFO })
     );
   });
 });

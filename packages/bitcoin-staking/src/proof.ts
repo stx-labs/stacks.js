@@ -1,6 +1,7 @@
 import * as btc from '@scure/btc-signer';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, concatBytes, equals, hexToBytes } from '@stacks/common';
+import type { IntegerType } from '@stacks/common';
 import { scriptToWshOutput } from './script';
 import type { BondL1LockupOutput } from './types';
 
@@ -250,7 +251,7 @@ export function buildLockProof(
      * contract can re-derive the expected script and enforce the bond's
      * minimum unlock height.
      */
-    unlockHeight: number | bigint;
+    unlockHeight: IntegerType;
     /**
      * Which output to prove, when the funding tx pays the lockup script more
      * than once. Omit for the common single-output case; a tx with several
@@ -403,7 +404,7 @@ export function buildLockProofFromBlock(
      * `unlockHeight` passed to {@link buildLockOutputScript}. Forwarded to
      * {@link buildLockProof} and recorded in the output tuple.
      */
-    unlockHeight: number | bigint;
+    unlockHeight: IntegerType;
     /** Which output to prove — see {@link buildLockProof}. */
     outputIndex?: number;
   } & ExpectedScriptInput

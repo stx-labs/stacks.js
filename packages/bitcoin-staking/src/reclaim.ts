@@ -1,8 +1,8 @@
 import * as btc from '@scure/btc-signer';
 // `signECDSA` is only exported from the `utils` subpath, not the package root.
 import { signECDSA } from '@scure/btc-signer/utils.js';
-import { concatBytes, equals, hexToBytes, privateKeyToBytes } from '@stacks/common';
-import type { PrivateKey } from '@stacks/common';
+import { concatBytes, equals, hexToBytes, intToBigInt, privateKeyToBytes } from '@stacks/common';
+import type { IntegerType, PrivateKey } from '@stacks/common';
 import type { StacksNetwork, StacksNetworkName } from '@stacks/network';
 import { btcNetworkFrom, computeRegisterPreimage, scriptToWshOutput } from './script';
 import type { Utxo } from './types';
@@ -116,7 +116,7 @@ export interface BuildReclaimOpts {
    * miners (`value - feeSats` is swept to `address`). The caller may still
    * mutate the returned tx's outputs before signing.
    */
-  output: { address: string; feeSats: bigint };
+  output: { address: string; feeSats: IntegerType };
   /**
    * The lockup `witnessScript` — the staker reuses `RegisterMetadata.lockScript`
    * verbatim; the CLTV unlock height is decoded from it. Rebuild it from its
@@ -155,11 +155,19 @@ export function buildReclaim(opts: BuildReclaimOpts): btc.Transaction {
   const lockScript = toBytes(opts.lockScript);
   const { unlockHeight: scriptHeight } = decodeLockScript(lockScript);
 
-  const amount = opts.utxo.value;
-  const { address, feeSats } = opts.output;
+  const amount = intToBigInt(opts.utxo.value);
+  const { address } = opts.output;
+  const feeSats = intToBigInt(opts.output.feeSats);
 
   if (feeSats < 0n) {
     throw new Error(`buildReclaim: feeSats (${feeSats}) must be non-negative`);
+  }
+
+  const outputScript = scriptToWshOutput(lockScript);
+  if (opts.utxo.scriptPubKey && !equals(opts.utxo.scriptPubKey, outputScript)) {
+    throw new Error(
+      'buildReclaim: utxo.scriptPubKey does not match the lockScript — the signature would commit to the wrong output and every reclaim attempt would fail at relay'
+    );
   }
 
   const sweepSats = amount - feeSats;
@@ -185,7 +193,7 @@ export function buildReclaim(opts: BuildReclaimOpts): btc.Transaction {
     txid: opts.utxo.txid,
     index: opts.utxo.vout,
     sequence: earlyExit ? 0xffffffff : 0xfffffffe,
-    witnessUtxo: { script: scriptToWshOutput(lockScript), amount },
+    witnessUtxo: { script: outputScript, amount },
     witnessScript: lockScript,
   });
   tx.addOutputAddress(address, sweepSats, network);
@@ -208,12 +216,13 @@ export function buildReclaim(opts: BuildReclaimOpts): btc.Transaction {
  */
 export function computeReclaimSighash(
   tx: btc.Transaction,
-  opts?: { witnessScript?: Uint8Array | string; amountSats?: bigint }
+  opts?: { witnessScript?: Uint8Array | string; amountSats?: IntegerType }
 ): Uint8Array {
   const input = tx.getInput(0);
   const witnessScript =
     opts?.witnessScript != null ? toBytes(opts.witnessScript) : input.witnessScript;
-  const amount = opts?.amountSats ?? input.witnessUtxo?.amount;
+  const amount =
+    opts?.amountSats != null ? intToBigInt(opts.amountSats) : input.witnessUtxo?.amount;
   if (!witnessScript || amount == null) {
     throw new Error(
       'computeReclaimSighash: need witnessScript + amount (pass `opts` for a raw-hex tx)'

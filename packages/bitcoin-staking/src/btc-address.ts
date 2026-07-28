@@ -113,8 +113,11 @@ function legacyHashModeToBtcAddressVersion(
   }
 }
 
-/** @internal */
-function fromPoxTuple(poxAddr: ClarityValue): BtcAddressRepr {
+/**
+ * @internal Decode a pox-5 `{ version, hashbytes }` tuple into a
+ * {@link BtcAddressRepr}, validating the version byte and hash length.
+ */
+export function fromPoxTuple(poxAddr: ClarityValue): BtcAddressRepr {
   const cv = poxAddr as TupleCV;
   if (cv.type !== ClarityType.Tuple || !cv.value) {
     throw new Error('Invalid argument, expected ClarityValue to be a TupleCV');

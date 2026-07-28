@@ -214,6 +214,34 @@ describe('buildRegisterForBond', () => {
     }
   });
 
+  it('rejects lockups that overflow the contract list caps', async () => {
+    const output = {
+      height: 12345,
+      tx: new Uint8Array([0xaa, 0xbb]),
+      outputIndex: 0,
+      header: new Uint8Array(80),
+      leafHashes: [new Uint8Array(32)],
+      txCount: 2,
+      txIndex: 0,
+      amount: 50000n,
+      unlockBurnHeight: 850_000,
+    };
+    const register = (outputs: (typeof output)[]) =>
+      buildRegisterForBond({
+        bondIndex: 1,
+        signerManager: SIGNER_MANAGER,
+        amountUstx: 1_000_000n,
+        lockup: { kind: 'btc', outputs, unlockBytes: new Uint8Array([0xde, 0xad]) },
+        ...COMMON_TX,
+      });
+
+    await expect(register([])).rejects.toThrow(/empty/);
+    await expect(register(Array(11).fill(output))).rejects.toThrow(/at most 10/);
+    await expect(
+      register([{ ...output, leafHashes: Array(15).fill(new Uint8Array(32)) }])
+    ).rejects.toThrow(/at most 14/);
+  });
+
   it('encodes an sBTC lockup as (err uint sbtcSats)', async () => {
     const tx = await buildRegisterForBond({
       bondIndex: 1,

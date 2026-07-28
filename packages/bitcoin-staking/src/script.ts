@@ -1,7 +1,8 @@
 import * as btc from '@scure/btc-signer';
 import { secp256k1 } from '@noble/curves/secp256k1.js';
 import { sha256 } from '@noble/hashes/sha2.js';
-import { concatBytes, hexToBytes } from '@stacks/common';
+import { concatBytes, hexToBytes, intToBigInt } from '@stacks/common';
+import type { IntegerType } from '@stacks/common';
 import type { StacksNetwork, StacksNetworkName } from '@stacks/network';
 import { Cl, serializeCVBytes } from '@stacks/transactions';
 import {
@@ -284,7 +285,7 @@ export function buildLockScript(opts: {
   /** Stacks address of the staker (standard or contract address). */
   stxAddress: string;
   /** Burn-block height at which the OP_CLTV branch becomes spendable. */
-  unlockHeight: number | bigint;
+  unlockHeight: IntegerType;
   /** Staker-signature subscript, run last in BOTH branches (the final spend-condition). */
   unlockBytes: Uint8Array | string;
   /**
@@ -312,19 +313,20 @@ export function buildLockScript(opts: {
   // Height 0 encodes as OP_0, which pushes an EMPTY value. OP_CLTV passes
   // (0 <= any nLockTime) but does not pop it, so the shared OP_VERIFY reads that
   // empty value as false and the timelocked branch can never validate.
-  if (BigInt(opts.unlockHeight) === 0n) {
+  const unlockHeight = intToBigInt(opts.unlockHeight);
+  if (unlockHeight === 0n) {
     throw new Error(
       'buildLockScript: unlockHeight 0 encodes as OP_0, leaving an empty value the shared OP_VERIFY reads as false — the timelocked branch would never be spendable'
     );
   }
-  if (BigInt(opts.unlockHeight) >= BITCOIN_LOCKTIME_THRESHOLD) {
+  if (unlockHeight >= BITCOIN_LOCKTIME_THRESHOLD) {
     throw new Error(
       'buildLockScript: unlockHeight >= 500,000,000 is rejected by the contract (ERR_INVALID_UNLOCK_HEIGHT) — Bitcoin would interpret the CLTV value as a timestamp (BIP-65)'
     );
   }
 
   // Used for validation mirroring .clar only, unlockHeight is encoded directly below.
-  serializeCScriptNum(opts.unlockHeight);
+  serializeCScriptNum(unlockHeight);
 
   // The committed staker hash <H> = sha256(sha256(consensus-buff(staker))).
   const stakerHash = sha256(computeRegisterPreimage(opts.stxAddress));
@@ -337,7 +339,7 @@ export function buildLockScript(opts: {
     // ELSE: early exit — the revealed 32-byte witness item must sha256 to <H>.
     btc.Script.encode([
       'IF',
-      Number(opts.unlockHeight),
+      Number(unlockHeight),
       'CHECKLOCKTIMEVERIFY',
       'ELSE',
       'SIZE',
@@ -370,7 +372,7 @@ export function scriptToWshOutput(script: Uint8Array): Uint8Array {
  */
 export function buildLockOutputScript(opts: {
   stxAddress: string;
-  unlockHeight: number | bigint;
+  unlockHeight: IntegerType;
   unlockBytes: Uint8Array | string;
   earlyUnlockBytes: Uint8Array | string;
 }): Uint8Array {
@@ -398,7 +400,7 @@ export function buildLockOutputScript(opts: {
  */
 export function buildLockAddress(opts: {
   stxAddress: string;
-  unlockHeight: number | bigint;
+  unlockHeight: IntegerType;
   unlockBytes: Uint8Array | string;
   earlyUnlockBytes: Uint8Array | string;
   network: StacksNetworkName | StacksNetwork;
@@ -406,7 +408,7 @@ export function buildLockAddress(opts: {
 }): string;
 export function buildLockAddress(opts: {
   stxAddress: string;
-  unlockHeight: number | bigint;
+  unlockHeight: IntegerType;
   publicKey: Uint8Array | string;
   earlyUnlockBytes: Uint8Array | string;
   network: StacksNetworkName | StacksNetwork;
@@ -414,7 +416,7 @@ export function buildLockAddress(opts: {
 }): string;
 export function buildLockAddress(opts: {
   stxAddress: string;
-  unlockHeight: number | bigint;
+  unlockHeight: IntegerType;
   unlockBytes?: Uint8Array | string;
   publicKey?: Uint8Array | string;
   earlyUnlockBytes: Uint8Array | string;
@@ -470,7 +472,7 @@ export function computeBondUnlockHeight(opts: { bondIndex: number; poxInfo: PoxI
     poxInfo: opts.poxInfo,
   });
   const endBurnHeight = rewardCycleToBurnHeight({
-    cycle: endCycle,
+    rewardCycle: endCycle,
     poxInfo: opts.poxInfo,
   });
   return endBurnHeight - Math.floor(opts.poxInfo.rewardCycleLength / 2);

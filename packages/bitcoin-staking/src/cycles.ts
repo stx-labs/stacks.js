@@ -1,3 +1,4 @@
+import { type IntegerType, intToBigInt } from '@stacks/common';
 import { BOND_GAP_CYCLES, BOND_LENGTH_CYCLES, POX5_CONTRACT_NAME } from './constants';
 import type { PoxInfo } from './types';
 
@@ -91,7 +92,7 @@ export function bondPeriodToRewardCycle(opts: { bondIndex: number; poxInfo: PoxI
  */
 export function bondPeriodToBurnHeight(opts: { bondIndex: number; poxInfo: PoxInfo }): number {
   return rewardCycleToBurnHeight({
-    cycle: bondPeriodToRewardCycle(opts),
+    rewardCycle: bondPeriodToRewardCycle(opts),
     poxInfo: opts.poxInfo,
   });
 }
@@ -111,8 +112,10 @@ export function burnHeightToRewardCycle(opts: { burnHeight: number; poxInfo: Pox
 }
 
 /** Mirrors `pox-5.reward-cycle-to-burn-height`. */
-export function rewardCycleToBurnHeight(opts: { cycle: number; poxInfo: PoxInfo }): number {
-  return opts.poxInfo.firstBurnchainBlockHeight + opts.cycle * opts.poxInfo.rewardCycleLength;
+export function rewardCycleToBurnHeight(opts: { rewardCycle: number; poxInfo: PoxInfo }): number {
+  return (
+    opts.poxInfo.firstBurnchainBlockHeight + opts.rewardCycle * opts.poxInfo.rewardCycleLength
+  );
 }
 
 /**
@@ -126,6 +129,9 @@ export function burnHeightToDistributionIndex(opts: {
   burnHeight: number;
   poxInfo: PoxInfo;
 }): number {
+  if (opts.burnHeight < opts.poxInfo.firstBurnchainBlockHeight) {
+    throw new Error('burnHeight is before first-burnchain-block-height');
+  }
   const distCycleLength = Math.floor(opts.poxInfo.rewardCycleLength / 2);
   return Math.floor((opts.burnHeight - opts.poxInfo.firstBurnchainBlockHeight) / distCycleLength);
 }
@@ -172,7 +178,7 @@ export function isInPreparePhase(opts: { burnHeight: number; poxInfo: PoxInfo })
   if (opts.burnHeight < opts.poxInfo.firstBurnchainBlockHeight) return false;
   const cycle = burnHeightToRewardCycle(opts);
   const nextCycleBurnHeight = rewardCycleToBurnHeight({
-    cycle: cycle + 1,
+    rewardCycle: cycle + 1,
     poxInfo: opts.poxInfo,
   });
   return opts.burnHeight >= nextCycleBurnHeight - opts.poxInfo.prepareCycleLength;
@@ -186,12 +192,13 @@ export function isInPreparePhase(opts: { burnHeight: number; poxInfo: PoxInfo })
  * `setup-bond`) and `minUstxRatioBps` (basis points; `500` = 5%).
  */
 export function minUstxForSatsAmount(opts: {
-  sats: bigint;
-  stxValueRatio: bigint;
-  minUstxRatioBps: number | bigint;
+  sats: IntegerType;
+  stxValueRatio: IntegerType;
+  minUstxRatioBps: IntegerType;
 }): bigint {
-  const ratio = BigInt(opts.minUstxRatioBps);
-  return (((opts.stxValueRatio * opts.sats) / 100n) * ratio) / 10000n;
+  const sats = intToBigInt(opts.sats);
+  const ratio = intToBigInt(opts.minUstxRatioBps);
+  return (((intToBigInt(opts.stxValueRatio) * sats) / 100n) * ratio) / 10000n;
 }
 
 /**

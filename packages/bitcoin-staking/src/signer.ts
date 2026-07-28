@@ -1,7 +1,6 @@
 import { sha256 } from '@noble/hashes/sha2.js';
-import { bytesToHex, hexToBytes, type PrivateKey } from '@stacks/common';
+import { bytesToHex, type PrivateKey } from '@stacks/common';
 import {
-  type BufferCV,
   Cl,
   ClarityType,
   type ClarityValue,
@@ -14,10 +13,10 @@ import {
 } from '@stacks/transactions';
 import {
   assertValidBtcAddressRepr,
+  fromPoxTuple,
   parse as parseBtcAddress,
   type BtcAddressRepr,
 } from './btc-address';
-import type { PoXAddressVersion } from './constants';
 import type { SignerCalldataL1Payout, SignerKeyGrantOptions } from './types';
 
 /**
@@ -168,17 +167,8 @@ export function parseSignerCalldata(calldata: Uint8Array | string): {
     throw new Error('Invalid signer calldata: unexpected `pox-addr` or `max-fee` types');
   }
 
-  const versionCV = poxAddrCV.value['version'] as BufferCV;
-  const hashbytesCV = poxAddrCV.value['hashbytes'] as BufferCV;
-  if (versionCV?.type !== ClarityType.Buffer || hashbytesCV?.type !== ClarityType.Buffer) {
-    throw new Error('Invalid signer calldata: expected buffer `version` and `hashbytes`');
-  }
-
   return {
-    poxAddress: assertValidBtcAddressRepr({
-      version: hexToBytes(versionCV.value)[0] as PoXAddressVersion,
-      data: hexToBytes(hashbytesCV.value),
-    }),
+    poxAddress: fromPoxTuple(poxAddrCV),
     maxFeeSats: BigInt(maxFeeCV.value),
   };
 }

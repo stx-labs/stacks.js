@@ -73,6 +73,13 @@ export interface PoxInfo {
   nextCycle: NextCycleInfo;
   /** One entry per deployed pox contract version (pox-1, …, pox-5). */
   contractVersions: PoxContractVersion[];
+  /**
+   * sBTC token contract this node uses for pox-5 payments. Fixed on mainnet;
+   * node-configured elsewhere, so read it rather than hardcoding it.
+   */
+  sbtcContract: string;
+  /** sBTC registry contract the node reads the per-cycle waterfall recipient from. */
+  sbtcRegistryContract: string;
 }
 
 /**
@@ -221,7 +228,7 @@ export interface SignerKeyGrantOptions {
   /** Stacks principal of the signer-manager contract being authorized. */
   signerManager: string;
   /** Replay nonce — must be unique per grant. */
-  authId: bigint | number;
+  authId: IntegerType;
   /** Stacks chain id (e.g. `1` for mainnet, `0x80000000` for testnet). */
   chainId: number;
 }
@@ -250,7 +257,7 @@ export type BuildGrantSignerKeyTxArgs = TxParams & {
   /** Stacks principal of the signer-manager being authorized. */
   signerManager: string;
   /** Replay nonce — must match the value signed in the SIP-018 grant. */
-  authId: bigint | number;
+  authId: IntegerType;
   /** Recoverable secp256k1 signature in RSV order (65 bytes). */
   signerSignature: Uint8Array | string;
 };
@@ -333,11 +340,11 @@ export interface BondL1LockupOutput {
  */
 export type BondLockup =
   | { kind: 'btc'; outputs: BondL1LockupOutput[]; unlockBytes: Uint8Array | string }
-  | { kind: 'sbtc'; sbtcSats: bigint };
+  | { kind: 'sbtc'; sbtcSats: IntegerType };
 
 /**
  * A confirmed Bitcoin UTXO, in the esplora / mempool.space shape (`txid` /
- * `vout` / `value`). The value is sats as a `bigint`. `scriptPubKey` is optional
+ * `vout` / `value`). The value is sats. `scriptPubKey` is optional
  * and only used as a cross-check — the lockup reclaim re-derives the P2WSH from
  * the lockup script.
  */
@@ -347,7 +354,7 @@ export interface Utxo {
   /** Output index within the funding transaction. */
   vout: number;
   /** Output value, in sats. */
-  value: bigint;
+  value: IntegerType;
   /** Output `scriptPubKey` bytes, if known. Optional — re-derived when omitted. */
   scriptPubKey?: Uint8Array;
 }

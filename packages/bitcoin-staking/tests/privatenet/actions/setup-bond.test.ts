@@ -105,7 +105,7 @@ test('setup-bond: admin creates a bond at the correct time', async () => {
   // its setup window (the BOND_GAP_CYCLES cycles before its start) is open now.
   const bondIndex = Math.floor((poxInfo.rewardCycleId - anchorCycle) / BOND_GAP_CYCLES) + 1;
   const startCycle = anchorCycle + bondIndex * BOND_GAP_CYCLES;
-  const startBurn = rewardCycleToBurnHeight({ cycle: startCycle, poxInfo });
+  const startBurn = rewardCycleToBurnHeight({ rewardCycle: startCycle, poxInfo });
 
   // Build allowlist from env-selected accounts, plus any extra principals.
   const allowlist = [

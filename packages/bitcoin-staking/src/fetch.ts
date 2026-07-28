@@ -1,4 +1,5 @@
 import { hexToBytes } from '@stacks/common';
+import type { IntegerType } from '@stacks/common';
 import type { NetworkClientParam } from '@stacks/network';
 import { clientFromNetwork, networkFrom } from '@stacks/network';
 import {
@@ -71,6 +72,8 @@ export async function fetchPoxInfo(opts: NetworkClientParam = {}): Promise<PoxIn
       activationBurnchainBlockHeight: v.activation_burnchain_block_height,
       firstRewardCycleId: v.first_reward_cycle_id,
     })),
+    sbtcContract: data.pox_5_sbtc_contract,
+    sbtcRegistryContract: data.pox_5_sbtc_registry_contract,
   };
 }
 
@@ -513,7 +516,7 @@ export async function fetchBondL1UnlockHeight(
 /** @internal Shared params for the two `construct-lockup-*` read-onlys. */
 interface ConstructLockupParams {
   stxAddress: string;
-  unlockHeight: number | bigint;
+  unlockHeight: IntegerType;
   /** Staker-signature subscript (the `staker-unlock-bytes` contract arg). */
   unlockBytes: Uint8Array | string;
   /** Per-bond early-unlock subscript (from {@link fetchBond}). */
@@ -869,38 +872,10 @@ export async function fetchBondAllowance(
   return BigInt(optional.value.value);
 }
 
-/**
- * **Intentionally not exposed.** Wraps the contract's
- * `current-distribution-cycle` read-only.
- *
- * The same value is derivable from `/v2/pox`'s
- * `current_burnchain_block_height` / `first_burnchain_block_height` /
- * `reward_cycle_length` — use the pure helper {@link currentDistributionCycle}
- * instead of paying an extra round trip.
- *
- * Kept here for completeness and as a regression guard. Throws at runtime if
- * called.
- *
- * @internal
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-// @ts-expect-error TS6133: intentionally unused — see JSDoc above
-async function _fetchCurrentDistributionCycle(_opts: NetworkClientParam = {}): Promise<number> {
-  // Reference implementation (intentionally unreachable):
-  //
-  //   const network = networkFrom(_opts.network ?? 'mainnet');
-  //   const result = await fetchCallReadOnlyFunction({
-  //     contractAddress: network.bootAddress,
-  //     contractName: POX5_CONTRACT_NAME,
-  //     functionName: 'current-distribution-cycle',
-  //     functionArgs: [],
-  //     senderAddress: network.bootAddress,
-  //     network: _opts.network,
-  //     client: _opts.client,
-  //   });
-  //   return Number((result as UIntCV).value);
-  throw new Error('not implemented');
-}
+// `current-distribution-cycle` is deliberately not wrapped: the value is
+// derivable from `/v2/pox` (`current_burnchain_block_height`,
+// `first_burnchain_block_height`, `reward_cycle_length`), so use the pure
+// `currentDistributionCycle` helper rather than paying a read-only round trip.
 
 /**
  * Wraps the contract's `get-signer-shares-staked-for-cycle` read-only.
@@ -1691,7 +1666,7 @@ export async function fetchSignerKeyGrantUsed(
   opts: {
     signerKey: Uint8Array | string;
     signerManager: string;
-    authId: bigint | number;
+    authId: IntegerType;
   } & NetworkClientParam
 ): Promise<boolean> {
   const network = networkFrom(opts.network ?? 'mainnet');
@@ -1723,7 +1698,7 @@ export async function fetchSignerKeyGrantUsed(
  * The hex string is lowercase and un-prefixed.
  */
 export async function fetchSignerGrantMessageHash(
-  opts: { signerManager: string; authId: bigint | number } & NetworkClientParam
+  opts: { signerManager: string; authId: IntegerType } & NetworkClientParam
 ): Promise<string> {
   const network = networkFrom(opts.network ?? 'mainnet');
   const result = await fetchCallReadOnlyFunction({
@@ -1745,35 +1720,6 @@ export async function fetchSignerGrantMessageHash(
 //     (`get-last-reward-compute-height` is now exposed — see
 //     `fetchLastRewardComputeHeight` in the pool/accounting reads above.)
 
-/**
- * **Intentionally not exposed.** Wraps the contract's
- * `get-first-pox-5-reward-cycle` read-only.
- *
- * The same value is already on `/v2/pox` at
- * `contractVersions[].firstRewardCycleId` for the `pox-5` row — derive it
- * locally with the pure helper {@link firstPox5RewardCycle} instead of paying
- * an extra round trip.
- *
- * Kept here for completeness and as a regression guard. Throws at runtime if
- * called.
- *
- * @internal
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-// @ts-expect-error TS6133: intentionally unused — see JSDoc above
-async function _fetchFirstPox5RewardCycle(_opts: NetworkClientParam = {}): Promise<number> {
-  // Reference implementation (intentionally unreachable):
-  //
-  //   const network = networkFrom(_opts.network ?? 'mainnet');
-  //   const result = await fetchCallReadOnlyFunction({
-  //     contractAddress: network.bootAddress,
-  //     contractName: POX5_CONTRACT_NAME,
-  //     functionName: 'get-first-pox-5-reward-cycle',
-  //     functionArgs: [],
-  //     senderAddress: network.bootAddress,
-  //     network: _opts.network,
-  //     client: _opts.client,
-  //   });
-  //   return Number((result as UIntCV).value);
-  throw new Error('not implemented');
-}
+// `get-first-pox-5-reward-cycle` is deliberately not wrapped: `/v2/pox` already
+// carries it at `contractVersions[].firstRewardCycleId` for the `pox-5` row, so
+// use the pure `firstPox5RewardCycle` helper instead.
