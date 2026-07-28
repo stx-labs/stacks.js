@@ -196,11 +196,8 @@ export const POX5_ERROR_DESCRIPTIONS: Record<Pox5ErrorCode, string> = {
 /**
  * Look up a pox-5 error code.
  *
- * @param code - The raw numeric code returned in an `(err uN)` payload. Accepts
- *   either `number` or `bigint` since Clarity values often deserialize as
- *   `bigint` in the Stacks.js stack.
- * @returns The matching code/name/description triple, or `undefined` if the
- *   code is not a known pox-5 error.
+ * Accepts `bigint` as well as `number` — Clarity values often deserialize as
+ * `bigint` in the Stacks.js stack. Returns `undefined` for an unknown code.
  *
  * @example
  * ```ts
@@ -216,8 +213,7 @@ export const POX5_ERROR_DESCRIPTIONS: Record<Pox5ErrorCode, string> = {
  * Accepts either a Clarity value (a read-only call's `(err uN)` response) or the
  * `repr` string the Stacks API reports for a failed transaction. Pairs with
  * {@link describePox5Error}, which turns the code into a name and description.
- *
- * @returns The code, or `undefined` for an `ok` result or an unrecognized shape.
+ * Returns `undefined` for an `ok` result or an unrecognized shape.
  *
  * @example
  * ```ts

@@ -513,8 +513,8 @@ export async function fetchBondL1UnlockHeight(
   return BigInt((result as UIntCV).value);
 }
 
-/** @internal Shared params for the two `construct-lockup-*` read-onlys. */
-interface ConstructLockupParams {
+/** Shared params for the two `construct-lockup-*` read-onlys. */
+export interface ConstructLockupParams {
   stxAddress: string;
   unlockHeight: IntegerType;
   /** Staker-signature subscript (the `staker-unlock-bytes` contract arg). */
@@ -1443,7 +1443,11 @@ export async function fetchSignerSetFirstItem(
 export async function fetchSignerSetLastItem(
   opts: { rewardCycle: number } & NetworkClientParam
 ): Promise<string | undefined> {
-  return fetchSignerSetPrincipal('get-signer-set-last-item-for-cycle', [Cl.uint(opts.rewardCycle)], opts);
+  return fetchSignerSetPrincipal(
+    'get-signer-set-last-item-for-cycle',
+    [Cl.uint(opts.rewardCycle)],
+    opts
+  );
 }
 
 /**
