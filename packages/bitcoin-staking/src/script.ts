@@ -180,7 +180,9 @@ function decodeSubscript(
   const bytes = typeof subscript === 'string' ? hexToBytes(subscript) : subscript;
 
   if (bytes.length === 0) {
-    throw new Error(`${label}: empty subscript — its branch would be spendable without a signature`);
+    throw new Error(
+      `${label}: empty subscript — its branch would be spendable without a signature`
+    );
   }
 
   try {

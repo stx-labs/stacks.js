@@ -113,9 +113,7 @@ export function burnHeightToRewardCycle(opts: { burnHeight: number; poxInfo: Pox
 
 /** Mirrors `pox-5.reward-cycle-to-burn-height`. */
 export function rewardCycleToBurnHeight(opts: { rewardCycle: number; poxInfo: PoxInfo }): number {
-  return (
-    opts.poxInfo.firstBurnchainBlockHeight + opts.rewardCycle * opts.poxInfo.rewardCycleLength
-  );
+  return opts.poxInfo.firstBurnchainBlockHeight + opts.rewardCycle * opts.poxInfo.rewardCycleLength;
 }
 
 /**

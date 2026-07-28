@@ -54,7 +54,6 @@ export type EligibilityResult =
   | { ok: true }
   | { ok: false; reasons: [Pox5ErrorCode, ...Pox5ErrorCode[]] };
 
-
 /**
  * Dry-run the checks of `register-for-bond` via read-only fetches, without
  * broadcasting anything.

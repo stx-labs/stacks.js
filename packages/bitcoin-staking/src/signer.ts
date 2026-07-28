@@ -91,8 +91,7 @@ export function verifySignerGrant(
     signature: string | Uint8Array;
   }
 ): boolean {
-  const expected =
-    typeof opts.publicKey === 'string' ? opts.publicKey : bytesToHex(opts.publicKey);
+  const expected = typeof opts.publicKey === 'string' ? opts.publicKey : bytesToHex(opts.publicKey);
   try {
     const recovered = publicKeyFromSignatureRsv(
       bytesToHex(computeSignerGrantHash(opts)),
