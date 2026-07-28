@@ -21,7 +21,7 @@ import {
 } from '../../../src';
 import { SIGNER_MANAGER } from '../constants';
 import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
-import { getNetwork } from '../../helpers/utils';
+import { getNetwork, isMocking } from '../../helpers/utils';
 import { broadcastAndWait, getNextNonce, getTransaction } from '../../helpers/wait';
 import { signTransaction } from '../../helpers/sign';
 import { getBondAdminAccount } from '../../helpers/bondAdmin';
@@ -91,8 +91,9 @@ test(`announce-l1-early-exit: staker=${STAKER_NAME}`, async () => {
   const txid = await broadcastAndWait(tx, stakerAccount.address, network);
   console.log('broadcast txid:', txid);
 
-  // Best-effort result check via /extended.
-  await new Promise(r => setTimeout(r, 5_000));
+  // Best-effort result check via /extended. A static fixture never changes, so
+  // the settle wait is pointless under replay.
+  if (!isMocking) await new Promise(r => setTimeout(r, 5_000));
   const record = await getTransaction(txid);
 
   if (record && record.tx_status !== 'pending') {

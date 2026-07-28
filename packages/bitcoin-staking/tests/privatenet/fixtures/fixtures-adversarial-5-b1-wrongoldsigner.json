@@ -1,6 +1,0 @@
-{
-  "/v2/transactions": {
-    "status": 400,
-    "body": "{\"error\":\"transaction rejected\",\"reason\":\"BadFunctionArgument\",\"reason_data\":{\"message\":\"NoSuchContract(\\\"ST000000000000000000002AMW42H.not-a-signer-manager\\\")\"},\"txid\":\"4a958d1e8d25e5d6d44337cd2b70bea4542bb5a5430b5be5fe3def0f9f3c514a\"}"
-  }
-}
