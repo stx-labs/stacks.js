@@ -20,6 +20,7 @@ import {
   fetchBondMembership,
   fetchEligibleRegisterForBond,
   fetchTotalSbtcStaked,
+  fetchVerifyBlockHeader,
   minUstxForSatsAmount,
 } from '../../../src';
 import { ACCOUNTS, REGTEST_KEYS, SIGNER_MANAGER, getAccount, type Account } from '../regtest';
@@ -145,6 +146,18 @@ test('one bond, two participants: user A (L1) + user B (sBTC)', async () => {
   const btcTxid = await sendToAddress(lockupAddress, Number(MAX_SATS) / 1e8);
   const proof = await waitForFulfilled(() => getBtcTxProofInputs(btcTxid));
   await waitForBurnBlockHeight(proof.blockHeight);
+  // The burn tip reaching the block is not enough: read-onlys evaluate at the
+  // STACKS tip, whose burn view lags several burn blocks at regtest cadence, so
+  // `get-burn-block-info?` still returns `none` and both the preflight and the
+  // on-chain register would false-negative with InvalidBtcHeader (u40).
+  await waitForFulfilled(async () => {
+    const visible = await fetchVerifyBlockHeader({
+      header: proof.header,
+      burnHeight: proof.blockHeight,
+      network,
+    });
+    if (!visible) throw new Error('lockup burn block not yet visible at stacks tip');
+  });
   const output = buildLockProofFromBlock({
     txHex: proof.txHex,
     header: proof.header,

@@ -23,6 +23,7 @@ import {
   fetchBondMembership,
   fetchEligibleRegisterForBond,
   fetchSignerInfo,
+  fetchVerifyBlockHeader,
   minUstxForSatsAmount,
 } from '../../../src';
 import { REGTEST_KEYS, SIGNER_MANAGER, getAccount, type Account } from '../regtest';
@@ -119,6 +120,18 @@ test('l1 register-for-bond happy path: setup-bond → fund BTC → prove → reg
   // SPV PROOF
   const proofInputs = await waitForFulfilled(() => getBtcTxProofInputs(btcTxid));
   await waitForBurnBlockHeight(proofInputs.blockHeight);
+  // The burn tip reaching the block is not enough: read-onlys evaluate at the
+  // STACKS tip, whose burn view lags several burn blocks at regtest cadence, so
+  // `get-burn-block-info?` still returns `none` and both the preflight and the
+  // on-chain register would false-negative with InvalidBtcHeader (u40).
+  await waitForFulfilled(async () => {
+    const visible = await fetchVerifyBlockHeader({
+      header: proofInputs.header,
+      burnHeight: proofInputs.blockHeight,
+      network,
+    });
+    if (!visible) throw new Error('lockup burn block not yet visible at stacks tip');
+  });
   const output = buildLockProofFromBlock({
     txHex: proofInputs.txHex,
     header: proofInputs.header,
