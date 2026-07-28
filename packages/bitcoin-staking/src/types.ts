@@ -280,12 +280,11 @@ export type BuildRevokeSignerKeyTxArgs = TxParams & {
  * Per-output proof tuple required by `register-for-bond` when committing an
  * L1 BTC lockup. Mirrors the contract's expected tuple shape.
  *
- * NOTE: a full merkle-proof builder is not provided by this SDK — the surface
- * area (block parsing, varint handling, witness stripping, merkle-tree
- * construction with Bitcoin's odd-row duplication quirk) is large enough that
- * callers should source proofs from a dedicated indexer / proof service. The
- * fields below document the expected shapes precisely so callers can supply
- * the values directly.
+ * Build these with {@link buildLockProof} (from already-fetched indexer
+ * responses) or {@link buildLockProofFromBlock} (from a raw block), which
+ * absorb the witness-stripping and merkle-branch handling that otherwise
+ * produce `ERR_INVALID_MERKLE_PROOF`. The fields are documented precisely so a
+ * caller holding proofs from another source can also supply them directly.
  */
 export interface BondL1LockupOutput {
   /** BTC block height containing the tx. */

@@ -51,9 +51,10 @@ plays no part in post conditions.
 | `buildUnstakeSbtc` | Contract sends `amountToWithdrawSats` to the staker | `ft` exact |
 | `buildUnstake` | Contract returns all custodied sBTC | none derivable |
 | `buildClaimRewards` | Contract sends the settled reward total | none derivable |
-| `buildClaimStakerRewardsForSigner` | Contract sends the staker's share | none derivable |
 
-Every other builder is bookkeeping or admin only and needs no post condition.
+Every other builder is bookkeeping or admin only and needs no post condition —
+including `buildClaimStakerRewardsForSigner`, which settles and zeroes a staker's
+entry and returns the amount, leaving the payout to the signer-manager.
 
 ### Locking STX
 
@@ -121,10 +122,10 @@ and never touches a Stacks asset.
 
 ### When no post condition can be derived
 
-`buildUnstake`, `buildClaimRewards` and `buildClaimStakerRewardsForSigner` all
-send an amount the contract computes at execution time. Any bound you write is a
-guess, and a guess that comes in low turns a working transaction into
-`abort_by_post_condition`. Use `postConditionMode: 'allow'` for these:
+`buildUnstake` and `buildClaimRewards` both send an amount the contract computes
+at execution time. Any bound you write is a guess, and a guess that comes in low
+turns a working transaction into `abort_by_post_condition`. Use
+`postConditionMode: 'allow'` for these:
 
 ```ts
 const tx = await buildClaimRewards({
@@ -138,6 +139,6 @@ const tx = await buildClaimRewards({
 });
 ```
 
-If you need a bound, read the amount first — `fetchEarned` for the reward paths,
+If you need a bound, read the amount first — `fetchEarned` for `buildClaimRewards`,
 `fetchStakerCustodiedSbtc` for `buildUnstake` — and accept that the value can
 change between the read and the broadcast.

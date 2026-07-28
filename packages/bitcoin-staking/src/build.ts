@@ -203,8 +203,9 @@ export async function buildSetupBond(
  *   each P2WSH output against the bitcoin chainstate.
  * - `kind: 'sbtc'` — no L1 (BTC) lockup; the contract pulls `sbtcSats` from the caller
  *   via `lock-sbtc`. The caller must supply `postConditions` covering the sBTC
- *   transfer (the sBTC token principal is deploy-configured per network, so no
- *   default is attached) — the default deny mode aborts the transfer otherwise.
+ *   transfer, or the default deny mode aborts it. The token principal differs per
+ *   network — read `PoxInfo.sbtcContract`; the package README shows the exact
+ *   post conditions per builder.
  *
  * Dry-run the registration first with {@link fetchEligibleRegisterForBond} — it
  * replays the contract's gates (allowlist, timing, STX minimum/balance, signer
@@ -678,16 +679,21 @@ export async function buildClaimRewards(
 /**
  * Build an unsigned `claim-staker-rewards-for-signer` transaction.
  *
- * Marks a specific staker as having claimed rewards for the leg at
+ * Settles and zeroes a staker's unclaimed-rewards bookkeeping for the leg at
  * `rewardCycle` — pass `bondIndex` to target a paired-BTC bond leg, omit it for
- * the STX-only leg. Only callable by the signer-manager contract (the contract
- * uses `contract-caller` to authorize the claim); a plain wallet call reverts
- * with `ERR_UNAUTHORIZED`.
+ * the STX-only leg. Returns the settled amount; it moves no sBTC, so the
+ * signer-manager is expected to pay the staker using the returned value.
+ *
+ * The contract does not check the caller. It reads `contract-caller` as the
+ * *signer identity*, and every map it writes is keyed on that principal, so a
+ * plain wallet call settles the caller's own empty position: it returns `u0`
+ * and changes nothing a real signer relies on, rather than reverting.
  *
  * @example
  * ```ts
- * // Mark a staker's bond-0 leg as claimed for a reward cycle (omit bondIndex
- * // for the STX-only leg). Called by the signer-manager contract.
+ * // Settle a staker's bond-0 leg for a reward cycle (omit bondIndex for the
+ * // STX-only leg). Call this from the signer-manager, whose principal is the
+ * // signer identity the rewards are keyed on.
  * const tx = await buildClaimStakerRewardsForSigner({
  *   staker: 'SP2C2YFP12AJZB4MABJBAJ55XECVS7E4PMMZ89YZR',
  *   rewardCycle: poxInfo.rewardCycleId - 1,
