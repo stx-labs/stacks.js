@@ -621,10 +621,62 @@ export async function buildCalculateRewards(
   return callPox5('calculate-rewards', [Cl.list(args.bondIndices.map(i => Cl.uint(i)))], args);
 }
 
-// todo: next: optional — add a helper that returns the active bond indices in
-// the contract's required order (descending stx-value-ratio, ties by lower
-// bond-index). Deliberately out of scope for now; ordering stays a caller
-// responsibility.
+// todo: `buildCalculateRewards` cannot be called from this SDK alone — the caller
+// must supply every active bond index, pre-sorted, and nothing here enumerates
+// bonds. The helper below closes that; written out rather than implemented so the
+// analysis isn't lost. Bounded at 6 reads. Everything it needs is already exported.
+//
+// The candidate set is pure math — `assert-all-active-bonds-included` derives it
+// the same way (pox-5.clar:2616), then folds offsets u0..u5 and requires every
+// active index to be present, else ERR_ACTIVE_BOND_NOT_INCLUDED:
+//
+//   export async function fetchActiveBondPeriods(
+//     opts: { calculationHeight: number; poxInfo: PoxInfo } & NetworkClientParam
+//   ): Promise<number[]> {
+//     const calcCycle = burnHeightToRewardCycle({
+//       burnHeight: opts.calculationHeight,
+//       poxInfo: opts.poxInfo,
+//     });
+//     const firstBondCycle = firstPox5RewardCycle(opts.poxInfo);        // = first-bond-period-cycle
+//     const latest =
+//       calcCycle <= firstBondCycle ? 0 : Math.floor((calcCycle - firstBondCycle) / BOND_GAP_CYCLES);
+//
+//     // Offsets 0..5 mirror the contract's fold; negatives don't exist yet.
+//     const candidates = range(6)
+//       .map(offset => latest - offset)
+//       .filter(bondIndex => bondIndex >= 0);
+//
+//     // Two things pure math can't answer, both from the same read:
+//     //  1. existence — the contract's `is-bond-active-at-height` also asserts
+//     //     `(is-some (map-get? protocol-bonds bond-index))`; ours skips it, so a
+//     //     computed candidate whose bond was never set up must be dropped;
+//     //  2. `stxValueRatio`, which the ordering below is keyed on.
+//     const bonds = await Promise.all(
+//       candidates.map(async bondIndex => ({
+//         bondIndex,
+//         bond: await fetchBond({ bondIndex, ...networkClient }),
+//       }))
+//     );
+//
+//     return bonds
+//       .filter(
+//         ({ bondIndex, bond }) =>
+//           bond !== undefined &&
+//           isBondActiveAtHeight({ bondIndex, burnHeight: opts.calculationHeight, poxInfo: opts.poxInfo })
+//       )
+//       // ERR_INVALID_BOND_PERIOD_ORDERING (pox-5.clar:2287): descending
+//       // stx-value-ratio, and on a tie the LOWER bond-index first.
+//       .sort((a, b) =>
+//         a.bond!.stxValueRatio === b.bond!.stxValueRatio
+//           ? a.bondIndex - b.bondIndex
+//           : Number(b.bond!.stxValueRatio - a.bond!.stxValueRatio)
+//       )
+//       .map(({ bondIndex }) => bondIndex);
+//   }
+//
+// Caveat to settle when picking this up: `isBondActiveAtHeight` is `(start, end]`
+// while `bondStatus` calls the trailing prepare phase `locked` — see T25. This
+// helper must follow the CONTRACT's boundary, not the UI-friendly one.
 
 /**
  * Build an unsigned `claim-rewards` transaction.
