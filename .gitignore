@@ -56,3 +56,7 @@ docs
 unused
 
 *.tgz
+
+*.local
+
+.claude

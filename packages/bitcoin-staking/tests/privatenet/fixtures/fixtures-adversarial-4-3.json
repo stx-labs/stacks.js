@@ -1,0 +1,8 @@
+{
+  "/v2/contracts/call-read/ST000000000000000000002AMW42H/pox-5/get-protocol-bond#ST000000000000000000002AMW42H:[\"0x010000000000000000000000000000002f\"]": "{\"okay\":true,\"result\":\"0x09\"}",
+  "/v2/contracts/call-read/ST000000000000000000002AMW42H/pox-5/get-protocol-bond#ST000000000000000000002AMW42H:[\"0x0100000000000000000000000000000030\"]": "{\"okay\":true,\"result\":\"0x09\"}",
+  "/v2/contracts/call-read/ST000000000000000000002AMW42H/pox-5/get-protocol-bond#ST000000000000000000002AMW42H:[\"0x0100000000000000000000000000000031\"]": "{\"okay\":true,\"result\":\"0x09\"}",
+  "/v2/contracts/call-read/ST000000000000000000002AMW42H/pox-5/get-protocol-bond#ST000000000000000000002AMW42H:[\"0x0100000000000000000000000000000032\"]": "{\"okay\":true,\"result\":\"0x09\"}",
+  "/v2/contracts/call-read/ST000000000000000000002AMW42H/pox-5/get-protocol-bond#ST000000000000000000002AMW42H:[\"0x0100000000000000000000000000000033\"]": "{\"okay\":true,\"result\":\"0x09\"}",
+  "/v2/contracts/call-read/ST000000000000000000002AMW42H/pox-5/get-protocol-bond#ST000000000000000000002AMW42H:[\"0x0100000000000000000000000000000034\"]": "{\"okay\":true,\"result\":\"0x09\"}"
+}
