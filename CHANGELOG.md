@@ -3,6 +3,24 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [7.6.0](https://github.com/stx-labs/stacks.js/compare/v7.5.0...v7.6.0) (2026-07-29)
+
+### @stacks/api, @stacks/auth, @stacks/bns, @stacks/cli, @stacks/encryption, @stacks/internal, @stacks/network, @stacks/profile, @stacks/stacking, @stacks/storage, @stacks/wallet-sdk
+
+**Note:** Updated sibling dependencies only.
+
+### @stacks/common
+
+#### Patch Changes
+
+- [#1854](https://github.com/stx-labs/stacks.js/pull/1854) [`162cdef`](https://github.com/stx-labs/stacks.js/commit/162cdef305a5d1991d8711d3b05571a6896659ed) - Fixes `hexToBigInt` to now accept a 0x prefix.
+
+### @stacks/transactions
+
+#### Patch Changes
+
+- [#1854](https://github.com/stx-labs/stacks.js/pull/1854) [`162cdef`](https://github.com/stx-labs/stacks.js/commit/162cdef305a5d1991d8711d3b05571a6896659ed) - Fixes `Address.parse` return type to now include `version` / `versionChar`.
+
 ## [7.5.0](https://github.com/stx-labs/stacks.js/compare/v7.4.0...v7.5.0) (2026-06-23)
 
 ### @stacks/api, @stacks/auth, @stacks/bns, @stacks/cli, @stacks/common, @stacks/encryption, @stacks/internal, @stacks/network, @stacks/profile, @stacks/stacking, @stacks/storage, @stacks/wallet-sdk

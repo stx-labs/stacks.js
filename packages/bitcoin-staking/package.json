@@ -1,6 +1,6 @@
 {
   "name": "@stacks/bitcoin-staking",
-  "version": "0.0.1",
+  "version": "7.6.0",
   "description": "Library for Bitcoin Staking.",
   "license": "MIT",
   "author": "Hiro Systems PBC (https://hiro.so)",
@@ -24,14 +24,14 @@
     "@noble/hashes": "2.0.1",
     "@scure/base": "2.0.0",
     "@scure/btc-signer": "2.2.0",
-    "@stacks/common": "^7.5.0",
-    "@stacks/encryption": "^7.5.0",
-    "@stacks/network": "^7.5.0",
-    "@stacks/transactions": "^7.5.0"
+    "@stacks/common": "^7.6.0",
+    "@stacks/encryption": "^7.6.0",
+    "@stacks/network": "^7.6.0",
+    "@stacks/transactions": "^7.6.0"
   },
   "devDependencies": {
     "@stacks/internal": "file:../internal",
-    "@stacks/wallet-sdk": "^7.4.0",
+    "@stacks/wallet-sdk": "^7.6.0",
     "process": "^0.11.10",
     "rimraf": "^3.0.2"
   },

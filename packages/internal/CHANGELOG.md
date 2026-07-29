@@ -1,5 +1,7 @@
 # Change Log
 
+## 7.6.0
+
 ## 7.5.0
 
 ## [7.4.0](https://github.com/stx-labs/stacks.js/compare/v7.3.1...v7.4.0) (2026-03-23)
