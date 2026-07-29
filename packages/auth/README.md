@@ -93,7 +93,7 @@ userSession.signUserOut();
 
 ### Data encryption
 
-Stacks authentication also provides an easy way to encrypt the user's data. If you are using the [`@stacks/storage`](https://github.com/blockstack/stacks.js/tree/main/packages/storage) package, encryption is automatically enabled. If you would like to perform encryption outside of storage you can use the `userSession.encryptContent` and `userSession.decryptContent` methods.
+Stacks authentication also provides an easy way to encrypt the user's data. If you are using the [`@stacks/storage`](https://github.com/hirosystems/stacks.js/tree/main/packages/storage) package, encryption is automatically enabled. If you would like to perform encryption outside of storage you can use the `userSession.encryptContent` and `userSession.decryptContent` methods.
 
 ```typescript
 const message = 'My secret message';
