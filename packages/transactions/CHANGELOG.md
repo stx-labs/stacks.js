@@ -1,5 +1,15 @@
 # Change Log
 
+## 7.6.0
+
+### Patch Changes
+
+- [#1854](https://github.com/stx-labs/stacks.js/pull/1854) [`162cdef`](https://github.com/stx-labs/stacks.js/commit/162cdef305a5d1991d8711d3b05571a6896659ed) - Fixes `Address.parse` return type to now include `version` / `versionChar`.
+
+- Updated dependencies [[`162cdef`](https://github.com/stx-labs/stacks.js/commit/162cdef305a5d1991d8711d3b05571a6896659ed)]:
+  - @stacks/common@7.6.0
+  - @stacks/network@7.6.0
+
 ## 7.5.0
 
 ### Minor Changes
