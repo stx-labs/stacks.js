@@ -2,6 +2,7 @@
 
 Construct, decode transactions and work with Clarity smart contracts on the Stacks blockchain.
 
+
 ## Installation
 
 ```
@@ -30,7 +31,11 @@ const publicKey = getPublicKey(privateKey);
 const key = 'b244296d5907de9864c0b0d51f98a13c52890be0404e83f273144cd5b9960eed01';
 const privateKey = createStacksPrivateKey(key);
 ```
-
+> **⚠️ SECURITY WARNING**
+>
+> Always use `PostConditionMode.Deny` for production transactions.
+>
+> Using `PostConditionMode.Allow` permits the contract to transfer **any** amount of your assets without restriction. Only use `Allow` for local debugging.
 ## STX Token Transfer Transaction
 
 ```typescript
