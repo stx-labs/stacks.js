@@ -146,8 +146,10 @@ const txOptions = {
   functionArgs: [bufferCVFromString('foo')],
   fee: 0,
   senderKey: 'b244296d5907de9864c0b0d51f98a13c52890be0404e83f273144cd5b9960eed01',
+ // Validates arguments against the contract's ABI (requires network access)
   validateWithAbi: true,
-  sponsored: true,
+  network,
+  postConditions,
 };
 
 const transaction = await makeContractCall(txOptions);
