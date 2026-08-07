@@ -77,3 +77,7 @@ Join our community and stay connected with the latest updates and discussions:
 ## License
 
 Stacks.js is open source and released under the MIT License.
+
+
+## DeFi Examples by @serayd61
+Added practical DeFi examples for the Stacks ecosystem.
