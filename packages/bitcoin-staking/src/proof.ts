@@ -1,6 +1,6 @@
 import * as btc from '@scure/btc-signer';
 import { sha256 } from '@noble/hashes/sha2.js';
-import { bytesToHex, concatBytes, equals, hexToBytes } from '@stacks/common';
+import { bytesToHex, concatBytes, equals, hexToBytes, intToBigInt } from '@stacks/common';
 import type { IntegerType } from '@stacks/common';
 import { scriptToWshOutput } from './script';
 import type { BondL1LockupOutput } from './types';
@@ -314,7 +314,7 @@ export function buildLockProof(
     txCount: input.txCount,
     txIndex: input.merkleProof.pos,
     amount,
-    unlockBurnHeight: Number(input.unlockHeight),
+    unlockBurnHeight: Number(intToBigInt(input.unlockHeight)),
   };
 }
 
