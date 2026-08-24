@@ -2426,9 +2426,9 @@ describe(fetchNonce.name, () => {
     const address = 'STB44HYPYAT2BB2QE513NSP81HTMYWBJP02HPGK6';
 
     fetchMock.mockOnce(
-      `{"last_executed_tx_nonce":${nonce - 2n},"last_mempool_tx_nonce":${
+      `{"next_nonce":${nonce},"last_confirmed_nonce":${nonce - 2n},"mempool":{"last_nonce":${
         nonce - 1n
-      },"possible_next_nonce":${nonce},"detected_missing_nonces":[],"detected_mempool_nonces":[]}`
+      },"pending_nonces":[],"missing_nonces":[]}}`
     );
 
     await expect(

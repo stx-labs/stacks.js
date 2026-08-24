@@ -51,7 +51,7 @@ import 'cross-fetch/polyfill';
 
 import { StackerInfo, StackingClient } from '@stacks/stacking';
 
-import { AccountsApi, Configuration, FaucetsApi } from '@stacks/blockchain-api-client';
+import { Configuration, FaucetsApi } from '@stacks/blockchain-api-client';
 
 import { GaiaHubConfig } from '@stacks/storage';
 
@@ -1675,14 +1675,7 @@ async function canStack(_network: CLINetworkAdapter, args: string[]): Promise<st
   const network = getStacksNetwork(_network);
   const stacker = new StackingClient({ address: stxAddress, network });
 
-  const apiConfig = new Configuration({
-    basePath: network.client.baseUrl,
-  });
-  const accounts = new AccountsApi(apiConfig);
-
-  const balancePromise = accounts.getAccountBalance({
-    principal: stxAddress,
-  });
+  const balancePromise = stacker.getAccountExtendedBalances();
 
   const poxInfoPromise = stacker.getPoxInfo();
 
@@ -1691,7 +1684,7 @@ async function canStack(_network: CLINetworkAdapter, args: string[]): Promise<st
   return Promise.all([balancePromise, poxInfoPromise, stackingEligiblePromise])
     .then(([balance, poxInfo, stackingEligible]) => {
       const minAmount = BigInt(poxInfo.min_amount_ustx);
-      const balanceBN = BigInt(balance.stx.balance);
+      const balanceBN = balance.balance;
 
       if (minAmount > amount) {
         throw new Error(
@@ -1735,18 +1728,11 @@ async function stack(_network: CLINetworkAdapter, args: string[]): Promise<strin
 
   const network = getStacksNetwork(_network);
 
-  const apiConfig = new Configuration({
-    basePath: network.client.baseUrl,
-  });
-  const accounts = new AccountsApi(apiConfig);
-
   const stxAddress = getAddressFromPrivateKey(privateKey, network);
 
-  const balancePromise = accounts.getAccountBalance({
-    principal: stxAddress,
-  });
-
   const stacker = new StackingClient({ address: stxAddress, network });
+
+  const balancePromise = stacker.getAccountExtendedBalances();
 
   const poxInfoPromise = stacker.getPoxInfo();
 
@@ -1757,7 +1743,7 @@ async function stack(_network: CLINetworkAdapter, args: string[]): Promise<strin
   return Promise.all([balancePromise, poxInfoPromise, coreInfoPromise, stackingEligiblePromise])
     .then(([balance, poxInfo, coreInfo, stackingEligible]) => {
       const minAmount = BigInt(poxInfo.min_amount_ustx);
-      const balanceBN = BigInt(balance.stx.balance);
+      const balanceBN = balance.balance;
       const burnChainBlockHeight = coreInfo.burn_block_height;
       const startBurnBlock = burnChainBlockHeight + 3;
 

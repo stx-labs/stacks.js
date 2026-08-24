@@ -139,13 +139,17 @@ export class StacksNodeApi {
 
   /** Get extended account balances */
   async getExtendedAccountBalances(address: string): Promise<ExtendedAccountBalances> {
-    return this.fetch(`${this.baseUrl}/extended/v1/address/${address}/balances`)
+    return this.fetch(`${this.baseUrl}/extended/v3/principals/${address}/balances/stx`)
       .then(res => res.json())
       .then(json => {
-        json.stx.balance = BigInt(json.stx.balance);
-        json.stx.total_sent = BigInt(json.stx.total_sent);
-        json.stx.total_received = BigInt(json.stx.total_received);
-        json.stx.locked = BigInt(json.stx.locked);
+        json.balance = BigInt(json.balance);
+        json.available = BigInt(json.available);
+        if (json.locked) json.locked.amount = BigInt(json.locked.amount);
+        if (json.mempool) {
+          json.mempool.estimated_balance = BigInt(json.mempool.estimated_balance);
+          json.mempool.inbound = BigInt(json.mempool.inbound);
+          json.mempool.outbound = BigInt(json.mempool.outbound);
+        }
         return json;
       });
   }

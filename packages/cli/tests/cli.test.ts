@@ -435,7 +435,7 @@ describe('Subdomain Migration', () => {
 test('can_stack', async () => {
   fetchMock.resetMocks();
   fetchMock.mockOnce(
-    `{"stx":{"balance":"16216000000000","total_sent":"0","total_received":"0","total_fees_sent":"0","total_miner_rewards_received":"0","lock_tx_id":"","locked":"0","lock_height":0,"burnchain_lock_height":0,"burnchain_unlock_height":0},"fungible_tokens":{},"non_fungible_tokens":{}}`
+    `{"balance":"16216000000000","available":"16216000000000","locked":null,"mempool":null}`
   );
   fetchMock.mockOnce(
     '{"contract_id":"ST000000000000000000002AMW42H.pox","pox_activation_threshold_ustx":827381723155441,"first_burnchain_block_height":2000000,"prepare_phase_block_length":50,"reward_phase_block_length":1000,"reward_slots":2000,"rejection_fraction":12,"total_liquid_supply_ustx":41369086157772050,"current_cycle":{"id":269,"min_threshold_ustx":5180000000000,"stacked_ustx":0,"is_pox_active":false},"next_cycle":{"id":270,"min_threshold_ustx":5180000000000,"min_increment_ustx":5171135769721,"stacked_ustx":5600000000000,"prepare_phase_start_block_height":2283450,"blocks_until_prepare_phase":146,"reward_phase_start_block_height":2283500,"blocks_until_reward_phase":196,"ustx_until_pox_rejection":4964290338932640},"min_amount_ustx":5180000000000,"prepare_cycle_length":50,"reward_cycle_id":269,"reward_cycle_length":1050,"rejection_votes_left_required":4964290338932640,"next_reward_cycle_in":196}'
