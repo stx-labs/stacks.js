@@ -1684,7 +1684,7 @@ async function canStack(_network: CLINetworkAdapter, args: string[]): Promise<st
   return Promise.all([balancePromise, poxInfoPromise, stackingEligiblePromise])
     .then(([balance, poxInfo, stackingEligible]) => {
       const minAmount = BigInt(poxInfo.min_amount_ustx);
-      const balanceBN = balance.balance;
+      const balanceBN = balance.available;
 
       if (minAmount > amount) {
         throw new Error(
@@ -1694,7 +1694,7 @@ async function canStack(_network: CLINetworkAdapter, args: string[]): Promise<st
 
       if (amount > balanceBN) {
         throw new Error(
-          `Stacking amount greater than account balance of ${balanceBN.toString()} microstacks`
+          `Stacking amount greater than spendable account balance of ${balanceBN.toString()} microstacks`
         );
       }
 
@@ -1743,7 +1743,7 @@ async function stack(_network: CLINetworkAdapter, args: string[]): Promise<strin
   return Promise.all([balancePromise, poxInfoPromise, coreInfoPromise, stackingEligiblePromise])
     .then(([balance, poxInfo, coreInfo, stackingEligible]) => {
       const minAmount = BigInt(poxInfo.min_amount_ustx);
-      const balanceBN = balance.balance;
+      const balanceBN = balance.available;
       const burnChainBlockHeight = coreInfo.burn_block_height;
       const startBurnBlock = burnChainBlockHeight + 3;
 
@@ -1755,7 +1755,7 @@ async function stack(_network: CLINetworkAdapter, args: string[]): Promise<strin
 
       if (amount > balanceBN) {
         throw new Error(
-          `Stacking amount greater than account balance of ${balanceBN.toString()} microstacks`
+          `Stacking amount greater than spendable account balance of ${balanceBN.toString()} microstacks`
         );
       }
 

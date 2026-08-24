@@ -2417,7 +2417,9 @@ describe(fetchNonce.name, () => {
     ).resolves.toEqual(nonce);
 
     expect(fetchMock.mock.calls.length).toEqual(2);
-    expect(fetchMock.mock.calls[0][0]).toContain('https://api.testnet.hiro.so/extended/');
+    expect(fetchMock.mock.calls[0][0]).toEqual(
+      `https://api.testnet.hiro.so/extended/v3/principals/${address}/nonces`
+    );
     expect(fetchMock.mock.calls[1][0]).toContain('https://api.testnet.hiro.so/v2/');
   });
 
@@ -2441,7 +2443,9 @@ describe(fetchNonce.name, () => {
     ).resolves.toEqual(nonce);
 
     expect(fetchMock.mock.calls.length).toEqual(1);
-    expect(fetchMock.mock.calls[0][0]).toContain('https://api.testnet.hiro.so/extended/');
+    expect(fetchMock.mock.calls[0][0]).toEqual(
+      `https://api.testnet.hiro.so/extended/v3/principals/${address}/nonces`
+    );
   });
 });
 

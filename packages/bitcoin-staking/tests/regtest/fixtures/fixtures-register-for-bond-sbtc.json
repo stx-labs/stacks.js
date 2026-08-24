@@ -1,5 +1,5 @@
 {
-  "/extended/v1/address/ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP/nonces": "{\"last_mempool_tx_nonce\":39,\"last_executed_tx_nonce\":38,\"possible_next_nonce\":40,\"detected_missing_nonces\":[],\"detected_mempool_nonces\":[]}",
+  "/extended/v3/principals/ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP/nonces": "{\"next_nonce\":40,\"last_confirmed_nonce\":38,\"mempool\":{\"last_nonce\":39,\"pending_nonces\":[],\"missing_nonces\":[]}}",
   "/v2/accounts/ST11NJTTKGVT6D1HY4NJRVQWMQM7TVAR091EJ8P2Y?proof=0": "{\"balance\":\"0x0000000000000000002386f26fbfee90\",\"locked\":\"0x00000000000000000000000000000000\",\"unlock_height\":0,\"nonce\":7}",
   "/v2/accounts/ST1V2ASRWGR81W7GBN1Z4W2JQKXJWCADPVZG30X45?proof=0": "{\"balance\":\"0x0000000000000000002386f26f2709f0\",\"locked\":\"0x00000000000000000000000000000000\",\"unlock_height\":0,\"nonce\":9}",
   "/v2/accounts/STEH2J3C05BAHYS0RBAQBANJ1AXR6SR43VMZ0D49?proof=0": "{\"balance\":\"0x0000000000000000002386f26fc0c568\",\"locked\":\"0x00000000000000000000000000001388\",\"unlock_height\":880,\"nonce\":1}",

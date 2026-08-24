@@ -1069,6 +1069,84 @@ test('get account balance', async () => {
   expect(responseBalanceInfo.toString()).toEqual(BigInt(balanceInfo.balance).toString());
 });
 
+test('get extended account balances', async () => {
+  const address = 'ST3XKKN4RPV69NN1PHFDNX3TYKXT7XPC4N8KC1ARH';
+  const network = STACKS_TESTNET;
+
+  const extendedBalanceInfo = {
+    balance: '1000000',
+    available: '950000',
+    locked: {
+      amount: '50000',
+      pox_version: 4,
+      lock_tx_id: '0xec94e7d20af8979b44d17a0520c126bf742b999a0fc7ddbcbe0ab21b228ecc8c',
+      stacks_lock_height: 100,
+      burn_lock_height: 100,
+      burn_unlock_height: 200,
+    },
+    mempool: {
+      estimated_balance: '990000',
+      inbound: '50000',
+      outbound: '10000',
+    },
+  };
+
+  fetchMock.mockResponse(() => {
+    return Promise.resolve({
+      body: JSON.stringify(extendedBalanceInfo),
+      status: 200,
+    });
+  });
+
+  const { StackingClient } = require('../src'); // needed for jest.mock module
+  const client = new StackingClient({ address, network });
+
+  const responseBalanceInfo = await client.getAccountExtendedBalances();
+
+  expect(fetchMock.mock.calls[0][0]).toEqual(
+    `${HIRO_TESTNET_URL}/extended/v3/principals/${address}/balances/stx`
+  );
+  expect(responseBalanceInfo.balance).toEqual(1000000n);
+  expect(responseBalanceInfo.available).toEqual(950000n);
+  expect(responseBalanceInfo.locked?.amount).toEqual(50000n);
+  expect(responseBalanceInfo.locked?.burn_unlock_height).toEqual(200);
+  expect(responseBalanceInfo.mempool?.estimated_balance).toEqual(990000n);
+  expect(responseBalanceInfo.mempool?.inbound).toEqual(50000n);
+  expect(responseBalanceInfo.mempool?.outbound).toEqual(10000n);
+});
+
+test('get extended account balances without locked or mempool activity', async () => {
+  const address = 'ST3XKKN4RPV69NN1PHFDNX3TYKXT7XPC4N8KC1ARH';
+  const network = STACKS_TESTNET;
+
+  const extendedBalanceInfo = {
+    balance: '1000000',
+    available: '1000000',
+    locked: null,
+    mempool: null,
+  };
+
+  fetchMock.mockResponse(() => {
+    return Promise.resolve({
+      body: JSON.stringify(extendedBalanceInfo),
+      status: 200,
+    });
+  });
+
+  const { StackingClient } = require('../src'); // needed for jest.mock module
+  const client = new StackingClient({ address, network });
+
+  const responseBalanceInfo = await client.getAccountExtendedBalances();
+
+  expect(fetchMock.mock.calls[0][0]).toEqual(
+    `${HIRO_TESTNET_URL}/extended/v3/principals/${address}/balances/stx`
+  );
+  expect(responseBalanceInfo.balance).toEqual(1000000n);
+  expect(responseBalanceInfo.available).toEqual(1000000n);
+  expect(responseBalanceInfo.locked).toBeNull();
+  expect(responseBalanceInfo.mempool).toBeNull();
+});
+
 test('get seconds until next cycle', async () => {
   const address = 'ST3XKKN4RPV69NN1PHFDNX3TYKXT7XPC4N8KC1ARH';
   const network = STACKS_TESTNET;
