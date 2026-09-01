@@ -1,5 +1,11 @@
 # Change Log
 
+## 7.6.0
+
+### Patch Changes
+
+- [#1854](https://github.com/stx-labs/stacks.js/pull/1854) [`162cdef`](https://github.com/stx-labs/stacks.js/commit/162cdef305a5d1991d8711d3b05571a6896659ed) - Fixes `hexToBigInt` to now accept a 0x prefix.
+
 ## 7.5.0
 
 ## [7.3.1](https://github.com/stx-labs/stacks.js/compare/v7.3.0...v7.3.1) (2025-12-16)

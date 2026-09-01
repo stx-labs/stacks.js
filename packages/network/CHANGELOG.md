@@ -1,5 +1,12 @@
 # Change Log
 
+## 7.6.0
+
+### Patch Changes
+
+- Updated dependencies [[`162cdef`](https://github.com/stx-labs/stacks.js/commit/162cdef305a5d1991d8711d3b05571a6896659ed)]:
+  - @stacks/common@7.6.0
+
 ## 7.5.0
 
 ### Patch Changes

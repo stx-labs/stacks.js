@@ -1,0 +1,14 @@
+{
+  "/extended/v1/tx/0xa1d0ba5093d678f1514c8ce3a713e14a1e56550d6e45714d3783b65476c725d8": {
+    "status": 200,
+    "body": "{\"tx_id\":\"0xa1d0ba5093d678f1514c8ce3a713e14a1e56550d6e45714d3783b65476c725d8\",\"nonce\":26,\"fee_rate\":\"10000\",\"sender_address\":\"STEH2J3C05BAHYS0RBAQBANJ1AXR6SR43VMZ0D49\",\"sponsored\":false,\"post_condition_mode\":\"deny\",\"post_conditions\":[],\"anchor_mode\":\"any\",\"block_hash\":\"0x4cd32a2b58351e0565cac522dba0f3b84e6e0317bbea5848935cc0c5f4f2970a\",\"block_height\":20114,\"block_time\":1783549794,\"block_time_iso\":\"2026-07-08T22:29:54.000Z\",\"burn_block_time\":1783549756,\"burn_block_height\":744,\"burn_block_time_iso\":\"2026-07-08T22:29:16.000Z\",\"parent_burn_block_time\":1783549756,\"parent_burn_block_time_iso\":\"2026-07-08T22:29:16.000Z\",\"canonical\":true,\"tx_index\":0,\"tx_status\":\"abort_by_response\",\"tx_result\":{\"hex\":\"0x08010000000000000000000000000000000c\",\"repr\":\"(err u12)\"},\"event_count\":0,\"parent_block_hash\":\"0x25d6f31048e6ac2bbf5cac3726baf2ce14c281c99a7b9626c795300c93a667cf\",\"is_unanchored\":false,\"microblock_hash\":\"0x\",\"microblock_sequence\":2147483647,\"microblock_canonical\":true,\"execution_cost_read_count\":5,\"execution_cost_read_length\":136322,\"execution_cost_runtime\":143056,\"execution_cost_write_count\":0,\"execution_cost_write_length\":0,\"vm_error\":null,\"events\":[],\"tx_type\":\"contract_call\",\"contract_call\":{\"contract_id\":\"ST000000000000000000002AMW42H.pox-5\",\"function_name\":\"grant-signer-key\",\"function_signature\":\"(define-public (grant-signer-key (signer-key (buff 33)) (signer-manager principal) (auth-id uint) (signer-sig (buff 65))))\",\"function_args\":[{\"hex\":\"0x0200000021022bb4b050afd84f0a7eedd02d4ea6ebe426bbb02744dfcca0b789a643eff6e78c\",\"repr\":\"0x022bb4b050afd84f0a7eedd02d4ea6ebe426bbb02744dfcca0b789a643eff6e78c\",\"name\":\"signer-key\",\"type\":\"(buff 33)\"},{\"hex\":\"0x051a1d11486c0156a8fb20c2d575aab20abb8367041e\",\"repr\":\"'STEH2J3C05BAHYS0RBAQBANJ1AXR6SR43VMZ0D49\",\"name\":\"signer-manager\",\"type\":\"principal\"},{\"hex\":\"0x01000000000000000000000000000f3e59\",\"repr\":\"u999001\",\"name\":\"auth-id\",\"type\":\"uint\"},{\"hex\":\"0x0200000041741757a0c040f88490b814a91866a57619166190a82c5d20ae0ed42ee3bdd89a1db032e340c8a6098cadc78406af26a3b5791f9cd1a4b48ffa023d90118d8eb000\",\"repr\":\"0x741757a0c040f88490b814a91866a57619166190a82c5d20ae0ed42ee3bdd89a1db032e340c8a6098cadc78406af26a3b5791f9cd1a4b48ffa023d90118d8eb000\",\"name\":\"signer-sig\",\"type\":\"(buff 65)\"}]}}"
+  },
+  "/v2/accounts/STEH2J3C05BAHYS0RBAQBANJ1AXR6SR43VMZ0D49?proof=0": {
+    "status": 200,
+    "body": "{\"balance\":\"0x0000000000000000002386f26fad8b88\",\"locked\":\"0x000000000000000000000000000f7cd8\",\"unlock_height\":820,\"nonce\":26}"
+  },
+  "/v2/transactions": {
+    "status": 200,
+    "body": "\"a1d0ba5093d678f1514c8ce3a713e14a1e56550d6e45714d3783b65476c725d8\""
+  }
+}
