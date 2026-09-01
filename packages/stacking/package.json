@@ -30,7 +30,6 @@
     "bs58": "^5.0.0"
   },
   "devDependencies": {
-    "@stacks/blockchain-api-client": "^7.3.0",
     "@stacks/internal": "file:../internal",
     "jest-fetch-mock": "^3.0.3",
     "process": "^0.11.10",
