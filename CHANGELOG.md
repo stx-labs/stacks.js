@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [7.6.1](https://github.com/stx-labs/stacks.js/compare/v7.6.0...v7.6.1) (2026-09-08)
+
+### @stacks/api, @stacks/bitcoin-staking, @stacks/bns, @stacks/cli, @stacks/common, @stacks/encryption, @stacks/internal, @stacks/profile, @stacks/stacking, @stacks/storage, @stacks/transactions, @stacks/wallet-sdk
+
+**Note:** Updated sibling dependencies only.
+
+### @stacks/auth, @stacks/network
+
+#### Patch Changes
+
+- [#1882](https://github.com/stx-labs/stacks.js/pull/1882) [`dd6a2ff`](https://github.com/stx-labs/stacks.js/commit/dd6a2ff9b7aad667c88d874804fdf3d3d3d4d331) - Remove unused `cross-fetch` dependency from `@stacks/network` and `@stacks/auth`. Neither package has imported it since v7; network calls rely on the global `fetch` via `@stacks/common`.
+
 ## [7.6.0](https://github.com/stx-labs/stacks.js/compare/v7.5.0...v7.6.0) (2026-07-29)
 
 ### @stacks/api, @stacks/auth, @stacks/bns, @stacks/cli, @stacks/encryption, @stacks/internal, @stacks/network, @stacks/profile, @stacks/stacking, @stacks/storage, @stacks/wallet-sdk

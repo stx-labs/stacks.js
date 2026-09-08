@@ -1,5 +1,14 @@
 # Change Log
 
+## 7.6.1
+
+### Patch Changes
+
+- [#1882](https://github.com/stx-labs/stacks.js/pull/1882) [`dd6a2ff`](https://github.com/stx-labs/stacks.js/commit/dd6a2ff9b7aad667c88d874804fdf3d3d3d4d331) - Remove unused `cross-fetch` dependency from `@stacks/network` and `@stacks/auth`. Neither package has imported it since v7; network calls rely on the global `fetch` via `@stacks/common`.
+
+- Updated dependencies []:
+  - @stacks/common@7.6.1
+
 ## 7.6.0
 
 ### Patch Changes
