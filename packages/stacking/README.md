@@ -377,18 +377,17 @@ const responseBalanceLockedInfo = await client.getAccountBalanceLocked();
 const responseBalancesInfo = await client.getAccountExtendedBalances();
 
 // {
-//   stx: {
-//     balance: '1000000',
-//     total_sent: '0',
-//     total_received: '1000000',
+//   balance: 1000000n,
+//   available: 950000n,
+//   locked: {
+//     amount: 50000n,
+//     pox_version: 4,
 //     lock_tx_id: '0xec94e7d20af8979b44d17a0520c126bf742b999a0fc7ddbcbe0ab21b228ecc8c',
-//     locked: '50000',
-//     lock_height: 100,
-//     burnchain_lock_height: 100,
-//     burnchain_unlock_height: 200,
+//     stacks_lock_height: 100,
+//     burn_lock_height: 100,
+//     burn_unlock_height: 200,
 //   },
-//   fungible_tokens: {},
-//   non_fungible_tokens: {},
+//   mempool: null,
 // }
 ```
 

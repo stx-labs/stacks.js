@@ -84,10 +84,10 @@ async function _getNonceApi({
   client: _client,
 }: { address: string } & NetworkClientParam): Promise<bigint> {
   const client = Object.assign({}, clientFromNetwork(networkFrom(network)), _client);
-  const url = `${client.baseUrl}/extended/v1/address/${address}/nonces`;
+  const url = `${client.baseUrl}/extended/v3/principals/${address}/nonces`;
   const response = await client.fetch(url);
   const result = await response.json();
-  return BigInt(result.possible_next_nonce);
+  return BigInt(result.next_nonce);
 }
 
 /**

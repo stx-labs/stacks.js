@@ -389,13 +389,17 @@ export class StackingClient {
   /** Get extended account balances */
   async getAccountExtendedBalances(): Promise<ExtendedAccountBalances> {
     return this.client
-      .fetch(`${this.client.baseUrl}/extended/v1/address/${this.address}/balances`)
+      .fetch(`${this.client.baseUrl}/extended/v3/principals/${this.address}/balances/stx`)
       .then(res => res.json())
       .then(json => {
-        json.stx.balance = BigInt(json.stx.balance);
-        json.stx.total_sent = BigInt(json.stx.total_sent);
-        json.stx.total_received = BigInt(json.stx.total_received);
-        json.stx.locked = BigInt(json.stx.locked);
+        json.balance = BigInt(json.balance);
+        json.available = BigInt(json.available);
+        if (json.locked) json.locked.amount = BigInt(json.locked.amount);
+        if (json.mempool) {
+          json.mempool.estimated_balance = BigInt(json.mempool.estimated_balance);
+          json.mempool.inbound = BigInt(json.mempool.inbound);
+          json.mempool.outbound = BigInt(json.mempool.outbound);
+        }
         return json;
       });
   }
@@ -1704,34 +1708,40 @@ export interface V1InfoBlockTimesResponse {
 
 /** @beta @ignore Type export subject to change*/
 export interface ExtendedAccountBalancesResponse {
-  stx: {
-    balance: string;
-    total_sent: string;
-    total_received: string;
-    locked: string;
+  balance: string;
+  available: string;
+  locked: {
+    amount: string;
+    pox_version: number;
     lock_tx_id: string;
-    lock_height: number;
-    burnchain_lock_height: number;
-    burnchain_unlock_height: number;
-  };
-  fungible_tokens: any;
-  non_fungible_tokens: any;
+    stacks_lock_height: number;
+    burn_lock_height: number;
+    burn_unlock_height: number;
+  } | null;
+  mempool: {
+    estimated_balance: string;
+    inbound: string;
+    outbound: string;
+  } | null;
 }
 
 /** @beta @ignore Type export subject to change*/
 export interface ExtendedAccountBalances {
-  stx: {
-    balance: bigint;
-    total_sent: bigint;
-    total_received: bigint;
-    locked: bigint;
+  balance: bigint;
+  available: bigint;
+  locked: {
+    amount: bigint;
+    pox_version: number;
     lock_tx_id: string;
-    lock_height: number;
-    burnchain_lock_height: number;
-    burnchain_unlock_height: number;
-  };
-  fungible_tokens: any;
-  non_fungible_tokens: any;
+    stacks_lock_height: number;
+    burn_lock_height: number;
+    burn_unlock_height: number;
+  } | null;
+  mempool: {
+    estimated_balance: bigint;
+    inbound: bigint;
+    outbound: bigint;
+  } | null;
 }
 
 /** @beta @ignore Type export subject to change*/
