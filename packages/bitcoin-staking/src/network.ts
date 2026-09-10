@@ -14,10 +14,21 @@ export function networkNameFrom(network: StacksNetworkName | StacksNetwork): Sta
   // intermediate key. Replace with a single resolver that returns the params
   // directly (see `BTC_NETWORKS` in `script.ts`, the address tables in
   // `constants.ts`, and `btc-address.ts`), so the closed lookups stop being
-  // spread across modules. Also: an unrecognized *name string* is returned
-  // as-is here and then misses those tables, which currently falls through to
-  // mainnet params — the resolver must throw instead.
-  if (typeof network === 'string') return network;
+  // spread across modules.
+  if (typeof network === 'string') {
+    if (
+      network === 'mainnet' ||
+      network === 'testnet' ||
+      network === 'devnet' ||
+      network === 'mocknet'
+    ) {
+      return network;
+    }
+    // An unrecognized name would miss the closed per-network tables downstream
+    // and silently fall through to mainnet params (e.g. a mainnet lock address
+    // for `'regtest'`), so reject it here.
+    throw new Error(`networkNameFrom: unrecognized network name '${network}'`);
+  }
   if (network.chainId === STACKS_MAINNET.chainId) return 'mainnet';
   if (network.magicBytes === STACKS_MAINNET.magicBytes) return 'mainnet';
   if (network.magicBytes === STACKS_DEVNET.magicBytes) return 'devnet';
