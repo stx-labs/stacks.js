@@ -300,6 +300,13 @@ describe('signed builders isolate the transaction from caller data', () => {
       network: 'testnet',
     });
 
+    // the transaction must not hold references to the caller's objects
+    const payload = tx.payload as any;
+    expect(payload.functionArgs).not.toBe(functionArgs);
+    expect(payload.functionArgs[0]).not.toBe(functionArgs[0]);
+    expect(payload.functionArgs[1]).not.toBe(functionArgs[1]);
+    expect(tx.postConditions.values[0]).not.toBe(postConditions[0]);
+
     expectUnaffected(tx, () => {
       functionArgs[0] = uintCV(2);
       (functionArgs[1] as any).value.amount.value = 99n;
@@ -319,6 +326,8 @@ describe('signed builders isolate the transaction from caller data', () => {
       nonce: 0n,
       network: 'testnet',
     });
+
+    expect((tx.payload as any).recipient).not.toBe(recipient);
 
     expectUnaffected(tx, () => {
       (recipient as any).value = 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM';
@@ -361,6 +370,9 @@ describe('signed builders isolate the transaction from caller data', () => {
       nonce: 0n,
       network: 'testnet',
     });
+
+    expect((tx.payload as any).functionArgs).not.toBe(functionArgs);
+    expect((tx.payload as any).functionArgs[0]).not.toBe(functionArgs[0]);
 
     expectUnaffected(tx, () => {
       publicKeys.reverse();
