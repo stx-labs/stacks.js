@@ -1,0 +1,6 @@
+{
+  "/v2/contracts/call-read/ST11NJTTKGVT6D1HY4NJRVQWMQM7TVAR091EJ8P2Y/staker-vault/is-allowed#ST11NJTTKGVT6D1HY4NJRVQWMQM7TVAR091EJ8P2Y:[\"0x051a1d11486c0156a8fb20c2d575aab20abb8367041e\"]": {
+    "status": 200,
+    "body": "{\"okay\":true,\"result\":\"0x04\"}"
+  }
+}

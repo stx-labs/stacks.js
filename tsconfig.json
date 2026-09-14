@@ -15,6 +15,7 @@
       "@stacks/stacking": ["packages/stacking/src"],
       "@stacks/storage": ["packages/storage/src"],
       "@stacks/transactions": ["packages/transactions/src"],
+      "@stacks/bitcoin-staking": ["packages/bitcoin-staking/src"],
       "@stacks/wallet-sdk": ["packages/wallet-sdk/src"]
     }
   },
@@ -24,6 +25,7 @@
     "entryPointStrategy": "packages",
     "entryPoints": [
       "packages/api",
+      "packages/bitcoin-staking",
       "packages/auth",
       "packages/encryption",
       "packages/network",

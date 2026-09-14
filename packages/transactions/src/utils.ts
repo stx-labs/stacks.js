@@ -52,9 +52,9 @@ export function cloneDeep<T>(obj: T): T {
  * `prop` removed; nested values are shared by reference with `obj`. Callers
  * must not mutate the result's nested fields.
  */
-export function omit<T extends object, K extends keyof any>(obj: T, prop: K): Omit<T, K> {
-  const { [prop as keyof T]: _omitted, ...rest } = obj;
-  return rest as Omit<T, K>;
+export function omit<T extends object, K extends keyof T>(obj: T, prop: K): Omit<T, K> {
+  const { [prop]: _omitted, ...rest } = obj;
+  return rest;
 }
 
 export const hash160 = (input: Uint8Array): Uint8Array => {

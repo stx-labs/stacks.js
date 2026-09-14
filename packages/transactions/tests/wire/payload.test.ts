@@ -144,6 +144,22 @@ test('Versioned smart contract payload serialization and deserialization', () =>
   expect(deserialized.codeBody.content).toBe(codeBody);
 });
 
+test('Versioned smart contract payload serialization and deserialization (Clarity6)', () => {
+  const contractName = 'contract_name';
+  const codeBody = '(define-public (noop) (ok true))';
+
+  const payload = createSmartContractPayload(contractName, codeBody, ClarityVersion.Clarity6);
+
+  const deserialized = serializeDeserialize(
+    payload,
+    StacksWireType.Payload
+  ) as VersionedSmartContractPayloadWire;
+  expect(deserialized.clarityVersion).toBe(ClarityVersion.Clarity6);
+  expect(deserialized.clarityVersion).toBe(6);
+  expect(deserialized.contractName.content).toBe(contractName);
+  expect(deserialized.codeBody.content).toBe(codeBody);
+});
+
 test('Coinbase payload serialization and deserialization', () => {
   const coinbaseBuffer = utf8ToBytes('coinbase buffer                 ');
 

@@ -51,7 +51,53 @@ export type NonFungiblePostCondition = {
   assetId: ClarityValue;
 };
 
-export type PostCondition = StxPostCondition | FungiblePostCondition | NonFungiblePostCondition;
+/**
+ * Staking post-condition (SIP-044).
+ *
+ * Guards staking STX (or modifying staked STX) for a principal — e.g. pox-5
+ * `stake`, `register-for-bond`, `stake-update`. Uses the same fungible
+ * comparators as {@link StxPostCondition}.
+ */
+export interface StakingPostCondition {
+  type: 'staking-postcondition';
+  /** Address staking the STX (principal `address`, `contract-id`, or `'origin'`) */
+  address: string;
+  /** Comparator to check the amount to be staked (`eq`, `gt`, `gte`, `lt`, `lte`) */
+  condition: `${FungibleComparator}`;
+  /** `BigInt` compatible amount to be checked in post-condition */
+  amount: string | bigint | number;
+}
+
+/**
+ * The type of PoX post-condition comparison (SIP-044).
+ *
+ * - `will-not-perform`: The principal must not perform a gated PoX action.
+ * - `may-perform`: The principal may or may not perform a gated PoX action (always passes).
+ * - `will-perform`: The principal must perform a gated PoX action.
+ */
+export type PoxComparator = 'will-not-perform' | 'may-perform' | 'will-perform';
+
+/**
+ * PoX post-condition (SIP-044).
+ *
+ * Guards PoX state changes that do not alter locking status — e.g. pox-5
+ * `unstake`, `unstake-sbtc`, `update-bond-registration`,
+ * `announce-l1-early-exit`.
+ */
+export interface PoxPostCondition {
+  type: 'pox-postcondition';
+  /** Address whose PoX actions are constrained (principal `address`, `contract-id`, or `'origin'`) */
+  address: string;
+  /** Comparator constraining PoX actions (`will-not-perform`, `may-perform`, `will-perform`) */
+  condition: `${PoxComparator}`;
+}
+
+export type PostCondition =
+  | StxPostCondition
+  | FungiblePostCondition
+  | NonFungiblePostCondition
+  | StakingPostCondition
+  | PoxPostCondition;
 
 /**
  * Describes how unspecified asset transfers are handled in a transaction:
