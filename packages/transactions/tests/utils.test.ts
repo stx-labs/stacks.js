@@ -6,12 +6,19 @@ import {
   createStandardAuth,
   emptyMessageSignature,
 } from '../src/authorization';
-import { intCV, standardPrincipalCV, tupleCV } from '../src/clarity';
-import { AddressHashMode, AuthType } from '../src/constants';
+import { makeContractCall, makeContractDeploy, makeSTXTokenTransfer } from '../src/builders';
+import { intCV, standardPrincipalCV, tupleCV, uintCV } from '../src/clarity';
+import { AddressHashMode, AuthType, PubKeyEncoding } from '../src/constants';
+import { createStacksPublicKey, privateKeyToPublic } from '../src/keys';
+import * as Pc from '../src/pc';
 import { TransactionSigner } from '../src/signer';
 import { StacksTransactionWire } from '../src/transaction';
-import { createMessageSignature, createTokenTransferPayload } from '../src/wire';
-import { cloneDeep, validateStacksAddress } from '../src/utils';
+import { cloneDeep, omit, validateStacksAddress } from '../src/utils';
+import {
+  createMessageSignature,
+  createTokenTransferPayload,
+  createTransactionAuthField,
+} from '../src/wire';
 
 describe(validateStacksAddress.name, () => {
   test('it returns true for a legit address', () => {
@@ -104,24 +111,32 @@ describe(cloneDeep.name, () => {
       expect(tx.auth.spendingCondition!.nonce).not.toBe(clone.auth.spendingCondition!.nonce);
     });
 
-    test('createSponsorSigner flow: clone, setSponsor, verifyOrigin', () => {
+    test('createSponsorSigner clones the transaction and leaves the original untouched', () => {
       const tx = buildSponsoredTx();
-      // Sign the origin first so verifyOrigin has something real to check
-      const originSigner = new TransactionSigner(tx);
-      originSigner.signOrigin('edf9aee84d9b7abc145504dde6726c64f369d37ee34ded868fabd876c26570bc01');
-      // This mirrors createSponsorSigner: clone, then call class methods on the clone
+      new TransactionSigner(tx).signOrigin(
+        'edf9aee84d9b7abc145504dde6726c64f369d37ee34ded868fabd876c26570bc01'
+      );
+      const originalSponsorSigner =
+        tx.auth.authType === AuthType.Sponsored ? tx.auth.sponsorSpendingCondition.signer : '';
       const sponsorCond = createSingleSigSpendingCondition(
         AddressHashMode.P2PKH,
         PUBKEY_2,
         2n,
         50n
       );
-      const clone = cloneDeep(tx);
-      expect(() => clone.setSponsor(sponsorCond)).not.toThrow();
-      expect(() => clone.verifyOrigin()).not.toThrow();
+
+      const sponsorSigner = TransactionSigner.createSponsorSigner(tx, sponsorCond);
+
+      expect(sponsorSigner.transaction).toBeInstanceOf(StacksTransactionWire);
+      expect(sponsorSigner.transaction).not.toBe(tx);
+      if (sponsorSigner.transaction.auth.authType === AuthType.Sponsored) {
+        expect(sponsorSigner.transaction.auth.sponsorSpendingCondition.signer).toBe(
+          sponsorCond.signer
+        );
+      }
       // original auth must be untouched
       if (tx.auth.authType === AuthType.Sponsored) {
-        expect(tx.auth.sponsorSpendingCondition.signer).not.toBe(sponsorCond.signer);
+        expect(tx.auth.sponsorSpendingCondition.signer).toBe(originalSponsorSigner);
       }
     });
 
@@ -172,8 +187,10 @@ describe(cloneDeep.name, () => {
         3n,
         500n
       );
-      // simulate a populated fields array (clearCondition wipes it on the clone)
-      cond.fields = [{ marker: 'original' } as any];
+      // populate fields the way mutatingSignAppendMultiSig does (clearCondition wipes them on the clone)
+      cond.fields = [
+        createTransactionAuthField(PubKeyEncoding.Compressed, createStacksPublicKey(PUBKEY)),
+      ];
 
       const clone = cloneDeep(cond);
       expect(typeof clone.fee).toBe('bigint');
@@ -181,9 +198,16 @@ describe(cloneDeep.name, () => {
       expect(clone.fields).not.toBe(cond.fields);
       expect(clone.fields[0]).not.toBe(cond.fields[0]);
 
+      const cloneData = (clone.fields[0].contents as any).data;
+      const originalData = (cond.fields[0].contents as any).data;
+      expect(cloneData).toBeInstanceOf(Uint8Array);
+      expect(cloneData).not.toBe(originalData);
+      expect(cloneData).toEqual(originalData);
+      expect(clone.fields[0].contents.type).toBe(cond.fields[0].contents.type);
+
       clone.fields = [];
       expect(cond.fields).toHaveLength(1);
-      expect((cond.fields[0] as any).marker).toBe('original');
+      expect((cond.fields[0].contents as any).data).toEqual(originalData);
     });
   });
 
@@ -206,5 +230,144 @@ describe(cloneDeep.name, () => {
       expect((original.amount as any).value).toBe(42n);
     });
   });
+});
 
+describe(omit.name, () => {
+  test('removes the key, keeps the rest, does not mutate the input', () => {
+    const fetch = jest.fn();
+    const input = { senderKey: 'secret', fee: 1n, client: { fetch } };
+    const result = omit(input, 'senderKey');
+
+    expect(result).not.toBe(input);
+    expect('senderKey' in result).toBe(false);
+    expect(result.fee).toBe(1n);
+    expect(result.client.fetch).toBe(fetch);
+    expect(input.senderKey).toBe('secret');
+  });
+});
+
+describe('signed builders isolate the transaction from caller data', () => {
+  const SENDER_KEY = 'edf9aee84d9b7abc145504dde6726c64f369d37ee34ded868fabd876c26570bc01';
+
+  test('custom client.fetch survives omit and is invoked for the nonce lookup', async () => {
+    const fetch = jest.fn(async () =>
+      new Response(JSON.stringify({ balance: '0', nonce: 4 }), { status: 200 })
+    );
+
+    const tx = await makeContractCall({
+      contractAddress: 'ST3KC0MTNW34S1ZXD36JYKFD3JJMWA01M55DSJ4JE',
+      contractName: 'counter',
+      functionName: 'increment',
+      functionArgs: [uintCV(1)],
+      senderKey: SENDER_KEY,
+      fee: 100n,
+      network: 'testnet',
+      client: { fetch },
+    });
+
+    expect(fetch).toHaveBeenCalled();
+    expect(tx.auth.spendingCondition!.nonce).toBe(4n);
+  });
+
+  const CONTRACT = 'ST3KC0MTNW34S1ZXD36JYKFD3JJMWA01M55DSJ4JE';
+  const MULTISIG_KEYS = [
+    '6d430bb91222408e7706c9001cfaeb91b08c2be6d5ac95779ab52c6b431950e001',
+    '2a584d899fed1d24e26b524f202763c8ab30260167429f157f1c119f550fa6af01',
+    'd5200dee706ee53ae98a03fba6cf4fdcc5084c30cfa9e1b3462dcdeaa3e0f1d201',
+  ];
+
+  // Before the `omit` change, options were deep-cloned, so mutating any option value after
+  // the builder returned could not affect the signed transaction. Keep that guarantee.
+  function expectUnaffected(tx: StacksTransactionWire, mutate: () => void) {
+    const before = tx.serialize();
+    mutate();
+    expect(tx.serialize()).toBe(before);
+    expect(() => tx.verifyOrigin()).not.toThrow();
+  }
+
+  test('makeContractCall: functionArgs and postConditions', async () => {
+    const functionArgs = [uintCV(1), tupleCV({ amount: uintCV(10) })];
+    const postConditions = [Pc.principal(CONTRACT).willSendEq(100).ustx()];
+    const tx = await makeContractCall({
+      contractAddress: CONTRACT,
+      contractName: 'counter',
+      functionName: 'increment',
+      functionArgs,
+      postConditions,
+      senderKey: SENDER_KEY,
+      fee: 100n,
+      nonce: 0n,
+      network: 'testnet',
+    });
+
+    expectUnaffected(tx, () => {
+      functionArgs[0] = uintCV(2);
+      (functionArgs[1] as any).value.amount.value = 99n;
+      functionArgs.push(uintCV(3));
+      (postConditions[0] as any).amount = 1n;
+      postConditions.push(Pc.principal(CONTRACT).willSendEq(5).ustx());
+    });
+  });
+
+  test('makeSTXTokenTransfer: recipient value', async () => {
+    const recipient = standardPrincipalCV(CONTRACT);
+    const tx = await makeSTXTokenTransfer({
+      recipient,
+      amount: 12345n,
+      senderKey: SENDER_KEY,
+      fee: 100n,
+      nonce: 0n,
+      network: 'testnet',
+    });
+
+    expectUnaffected(tx, () => {
+      (recipient as any).value = 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM';
+    });
+  });
+
+  test('makeContractDeploy: postConditions', async () => {
+    const postConditions = [Pc.principal(CONTRACT).willSendEq(100).ustx()];
+    const tx = await makeContractDeploy({
+      contractName: 'hello',
+      codeBody: '(define-public (hi) (ok u1))',
+      postConditions,
+      senderKey: SENDER_KEY,
+      fee: 100n,
+      nonce: 0n,
+      network: 'testnet',
+    });
+
+    expectUnaffected(tx, () => {
+      (postConditions[0] as any).amount = 1n;
+      postConditions.length = 0;
+    });
+  });
+
+  test('multi-sig makeContractCall: publicKeys, functionArgs and postConditions', async () => {
+    const publicKeys = MULTISIG_KEYS.map(privateKeyToPublic);
+    const signerKeys = MULTISIG_KEYS.slice(0, 2);
+    const functionArgs = [uintCV(1)];
+    const postConditions = [Pc.principal(CONTRACT).willSendEq(100).ustx()];
+    const tx = await makeContractCall({
+      contractAddress: CONTRACT,
+      contractName: 'counter',
+      functionName: 'increment',
+      functionArgs,
+      postConditions,
+      publicKeys,
+      numSignatures: 2,
+      signerKeys,
+      fee: 100n,
+      nonce: 0n,
+      network: 'testnet',
+    });
+
+    expectUnaffected(tx, () => {
+      publicKeys.reverse();
+      publicKeys.push(publicKeys[0]);
+      signerKeys.length = 0;
+      functionArgs[0] = uintCV(2);
+      (postConditions[0] as any).amount = 1n;
+    });
+  });
 });
