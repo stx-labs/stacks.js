@@ -11,8 +11,6 @@ config.plugins = [
   ...config.plugins,
 ];
 
-config.resolve.fallback = {
-  util: require.resolve('util/'),
-};
+config.resolve.fallback = {};
 
 module.exports = config;

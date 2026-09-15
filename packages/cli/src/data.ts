@@ -54,7 +54,7 @@ function makeFakeAuthResponseToken(
  * Make an association token for the given address.
  * TODO belongs in a "gaia.js" library
  */
-export function makeAssociationToken(appPrivateKey: string, identityKey: string): string {
+function makeAssociationToken(appPrivateKey: string, identityKey: string): string {
   const appPublicKey = getPublicKeyFromPrivateKey(`${canonicalPrivateKey(appPrivateKey)}01`);
   const FOUR_MONTH_SECONDS = 60 * 60 * 24 * 31 * 4;
   const salt = crypto.randomBytes(16).toString('hex');
@@ -212,7 +212,7 @@ function gaiaFindProfileName(
  * @privateKey (string) the private key to use to sign the challenge
  * @blockstackID (string) optional; the blockstack ID for which this profile will be stored.
  */
-export function gaiaUploadProfile(
+function gaiaUploadProfile(
   network: CLINetworkAdapter,
   gaiaHubURL: string,
   gaiaData: string,
@@ -279,7 +279,7 @@ export function gaiaUploadProfileAll(
 /*
  * Given a Gaia bucket URL, extract its address
  */
-export function getGaiaAddressFromURL(appUrl: string): string {
+function getGaiaAddressFromURL(appUrl: string): string {
   const matches = appUrl.match(/([13][a-km-zA-HJ-NP-Z0-9]{26,35})/);
   if (!matches) {
     throw new Error('Failed to parse gaia address');
