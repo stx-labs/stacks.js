@@ -8,6 +8,7 @@ import {
   PayloadType,
   PostConditionPrincipalId,
   PostConditionType,
+  PoxConditionCode,
   PubKeyEncoding,
   TenureChangeCause,
 } from '../constants';
@@ -261,10 +262,29 @@ export interface NonFungiblePostConditionWire {
 }
 
 /** @ignore */
+export interface StakingPostConditionWire {
+  readonly type: StacksWireType.PostCondition;
+  readonly conditionType: PostConditionType.Staking;
+  readonly principal: PostConditionPrincipalWire;
+  readonly conditionCode: FungibleConditionCode;
+  readonly amount: bigint;
+}
+
+/** @ignore */
+export interface PoxPostConditionWire {
+  readonly type: StacksWireType.PostCondition;
+  readonly conditionType: PostConditionType.PoX;
+  readonly principal: PostConditionPrincipalWire;
+  readonly conditionCode: PoxConditionCode;
+}
+
+/** @ignore */
 export type PostConditionWire =
   | STXPostConditionWire
   | FungiblePostConditionWire
-  | NonFungiblePostConditionWire;
+  | NonFungiblePostConditionWire
+  | StakingPostConditionWire
+  | PoxPostConditionWire;
 
 /** @ignore */
 export type PostConditionPrincipalWire =

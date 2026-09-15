@@ -1,0 +1,6 @@
+{
+  "/v2/accounts/STEH2J3C05BAHYS0RBAQBANJ1AXR6SR43VMZ0D49?proof=0": {
+    "status": 200,
+    "body": "{\"balance\":\"0x0000000000000000002386f26fdf3660\",\"locked\":\"0x00000000000000000000000000000000\",\"unlock_height\":0,\"nonce\":2}"
+  }
+}

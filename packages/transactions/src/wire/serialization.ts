@@ -34,6 +34,7 @@ import {
   PayloadType,
   PostConditionPrincipalId,
   PostConditionType,
+  PoxConditionCode,
   PubKeyEncoding,
   RECOVERABLE_ECDSA_SIG_LENGTH_BYTES,
   TenureChangeCause,
@@ -369,7 +370,8 @@ export function serializePostConditionWireBytes(postCondition: PostConditionWire
 
   if (
     postCondition.conditionType === PostConditionType.STX ||
-    postCondition.conditionType === PostConditionType.Fungible
+    postCondition.conditionType === PostConditionType.Fungible ||
+    postCondition.conditionType === PostConditionType.Staking
   ) {
     // SIP-005: Maximal length of amount is 8 bytes
     if (postCondition.amount > BigInt('0xffffffffffffffff'))
@@ -436,6 +438,29 @@ export function deserializePostConditionWire(
         asset,
         assetName,
       };
+    case PostConditionType.Staking:
+      conditionCode = bytesReader.readUInt8Enum(FungibleConditionCode, n => {
+        throw new DeserializationError(`Could not read ${n} as FungibleConditionCode`);
+      });
+      amount = BigInt(`0x${bytesToHex(bytesReader.readBytes(8))}`);
+      return {
+        type: StacksWireType.PostCondition,
+        conditionType: PostConditionType.Staking,
+        principal,
+        conditionCode,
+        amount,
+      };
+    case PostConditionType.PoX: {
+      const poxConditionCode = bytesReader.readUInt8Enum(PoxConditionCode, n => {
+        throw new DeserializationError(`Could not read ${n} as PoxConditionCode`);
+      });
+      return {
+        type: StacksWireType.PostCondition,
+        conditionType: PostConditionType.PoX,
+        principal,
+        conditionCode: poxConditionCode,
+      };
+    }
   }
 }
 

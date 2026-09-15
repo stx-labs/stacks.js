@@ -1,0 +1,6 @@
+{
+  "/v2/contracts/call-read/ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP/sbtc-token/get-balance-available#ST11NJTTKGVT6D1HY4NJRVQWMQM7TVAR091EJ8P2Y.staker-vault:[\"0x061a43596b5386f466863e25658ddf94bd0fadab00480c7374616b65722d7661756c74\"]": {
+    "status": 200,
+    "body": "{\"okay\":true,\"result\":\"0x070100000000000000000000000000000fa0\"}"
+  }
+}

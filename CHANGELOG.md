@@ -3,6 +3,38 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [7.6.0](https://github.com/stx-labs/stacks.js/compare/v7.5.0...v7.6.0) (2026-07-29)
+
+### @stacks/api, @stacks/auth, @stacks/bns, @stacks/cli, @stacks/encryption, @stacks/internal, @stacks/network, @stacks/profile, @stacks/stacking, @stacks/storage, @stacks/wallet-sdk
+
+**Note:** Updated sibling dependencies only.
+
+### @stacks/common
+
+#### Patch Changes
+
+- [#1854](https://github.com/stx-labs/stacks.js/pull/1854) [`162cdef`](https://github.com/stx-labs/stacks.js/commit/162cdef305a5d1991d8711d3b05571a6896659ed) - Fixes `hexToBigInt` to now accept a 0x prefix.
+
+### @stacks/transactions
+
+#### Patch Changes
+
+- [#1854](https://github.com/stx-labs/stacks.js/pull/1854) [`162cdef`](https://github.com/stx-labs/stacks.js/commit/162cdef305a5d1991d8711d3b05571a6896659ed) - Fixes `Address.parse` return type to now include `version` / `versionChar`.
+
+## [7.5.0](https://github.com/stx-labs/stacks.js/compare/v7.4.0...v7.5.0) (2026-06-23)
+
+### @stacks/api, @stacks/auth, @stacks/bns, @stacks/cli, @stacks/common, @stacks/encryption, @stacks/internal, @stacks/network, @stacks/profile, @stacks/stacking, @stacks/storage, @stacks/wallet-sdk
+
+**Note:** Updated sibling dependencies only.
+
+### @stacks/transactions
+
+#### Minor Changes
+
+- [#1869](https://github.com/stx-labs/stacks.js/pull/1869) [`b7f0ed3`](https://github.com/stx-labs/stacks.js/commit/b7f0ed3f87cd4c5bfb7ab3c4bd8787c2018e3cec) - Add SIP-044 staking (`0x03`) and PoX (`0x04`) post-conditions, including `Pc` builder support (`.ustxToLock()`, `.willPerformPox()`, `.willNotPerformPox()`, `.mayPerformPox()`).
+
+- [#1869](https://github.com/stx-labs/stacks.js/pull/1869) [`b7f0ed3`](https://github.com/stx-labs/stacks.js/commit/b7f0ed3f87cd4c5bfb7ab3c4bd8787c2018e3cec) - Add `ClarityVersion.Clarity6` (enabled with Epoch 4.0).
+
 ## [7.4.0](https://github.com/stx-labs/stacks.js/compare/v7.3.1...v7.4.0) (2026-03-23)
 
 

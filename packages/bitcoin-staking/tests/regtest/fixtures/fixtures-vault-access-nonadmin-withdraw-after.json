@@ -1,0 +1,6 @@
+{
+  "/v2/accounts/ST11NJTTKGVT6D1HY4NJRVQWMQM7TVAR091EJ8P2Y.staker-vault?proof=0": {
+    "status": 200,
+    "body": "{\"balance\":\"0x000000000000000000000000000f4240\",\"locked\":\"0x00000000000000000000000000000000\",\"unlock_height\":0,\"nonce\":0}"
+  }
+}

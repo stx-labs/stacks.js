@@ -1,0 +1,14 @@
+{
+  "/extended/v1/tx/0x7d581ffca92b218f89e821d8c904c465d17c7869b01127ea9d98f9d79a4e45a7": {
+    "status": 200,
+    "body": "{\"tx_id\":\"0x7d581ffca92b218f89e821d8c904c465d17c7869b01127ea9d98f9d79a4e45a7\",\"nonce\":32,\"fee_rate\":\"10000\",\"sender_address\":\"STEH2J3C05BAHYS0RBAQBANJ1AXR6SR43VMZ0D49\",\"sponsored\":false,\"post_condition_mode\":\"allow\",\"post_conditions\":[],\"anchor_mode\":\"any\",\"block_hash\":\"0xaee766696e0a22b26afa074b0d9933f8d0b2a237b4db40bacb37d127d9b543ac\",\"block_height\":20728,\"block_time\":1783551768,\"block_time_iso\":\"2026-07-08T23:02:48.000Z\",\"burn_block_time\":1783551679,\"burn_block_height\":760,\"burn_block_time_iso\":\"2026-07-08T23:01:19.000Z\",\"parent_burn_block_time\":1783551679,\"parent_burn_block_time_iso\":\"2026-07-08T23:01:19.000Z\",\"canonical\":true,\"tx_index\":0,\"tx_status\":\"abort_by_response\",\"tx_result\":{\"hex\":\"0x080100000000000000000000000000000026\",\"repr\":\"(err u38)\"},\"event_count\":0,\"parent_block_hash\":\"0x2ced8de37ed95a14da91cc66271b97ec96a13e29986a0d0934cae982dec74a6b\",\"is_unanchored\":false,\"microblock_hash\":\"0x\",\"microblock_sequence\":2147483647,\"microblock_canonical\":true,\"execution_cost_read_count\":17,\"execution_cost_read_length\":136558,\"execution_cost_runtime\":177541,\"execution_cost_write_count\":0,\"execution_cost_write_length\":0,\"vm_error\":null,\"events\":[],\"tx_type\":\"contract_call\",\"contract_call\":{\"contract_id\":\"ST000000000000000000002AMW42H.pox-5\",\"function_name\":\"unstake-sbtc\",\"function_signature\":\"(define-public (unstake-sbtc (signer-manager trait_reference) (amount-to-withdrawal-sats uint)))\",\"function_args\":[{\"hex\":\"0x061aeabc65f3e890fb8bf20d153e95119c72d85765a90e7369676e65722d6d616e61676572\",\"repr\":\"'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager\",\"name\":\"signer-manager\",\"type\":\"trait_reference\"},{\"hex\":\"0x0100000000000000000000000000000001\",\"repr\":\"u1\",\"name\":\"amount-to-withdrawal-sats\",\"type\":\"uint\"}]}}"
+  },
+  "/v2/accounts/STEH2J3C05BAHYS0RBAQBANJ1AXR6SR43VMZ0D49?proof=0": {
+    "status": 200,
+    "body": "{\"balance\":\"0x0000000000000000002386f26faca128\",\"locked\":\"0x000000000000000000000000000f7cd8\",\"unlock_height\":820,\"nonce\":32}"
+  },
+  "/v2/transactions": {
+    "status": 200,
+    "body": "\"7d581ffca92b218f89e821d8c904c465d17c7869b01127ea9d98f9d79a4e45a7\""
+  }
+}

@@ -8,7 +8,7 @@
     "no-var": "error",
     "prefer-const": "error",
     "no-new-wrappers": "error",
-    "no-unused-vars": ["error", { "caughtErrors": "none", "argsIgnorePattern": "^_" }]
+    "no-unused-vars": ["error", { "caughtErrors": "none", "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }]
   },
   "ignorePatterns": ["**/*.js", "**/node_modules/**"]
 }
