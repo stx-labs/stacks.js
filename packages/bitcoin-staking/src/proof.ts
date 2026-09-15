@@ -305,6 +305,14 @@ export function buildLockProof(
     throw new Error('buildLockProof: matched output has no decodable amount');
   }
 
+  // `unlockBurnHeight` is a `number`; a bigint/string above 2^53 would round silently.
+  const unlockBurnHeight = intToBigInt(input.unlockHeight);
+  if (unlockBurnHeight > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error(
+      `buildLockProof: unlockHeight ${unlockBurnHeight} exceeds Number.MAX_SAFE_INTEGER`
+    );
+  }
+
   return {
     height: input.merkleProof.block_height,
     tx: serializeBitcoinTx(legacy),
@@ -314,7 +322,7 @@ export function buildLockProof(
     txCount: input.txCount,
     txIndex: input.merkleProof.pos,
     amount,
-    unlockBurnHeight: Number(intToBigInt(input.unlockHeight)),
+    unlockBurnHeight: Number(unlockBurnHeight),
   };
 }
 

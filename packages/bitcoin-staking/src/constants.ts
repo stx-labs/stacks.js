@@ -44,14 +44,6 @@ export const POX_ADDR_DATA_LENGTH: Record<PoXAddressVersion, number> = {
   [PoXAddressVersion.P2TR]: 32,
 };
 
-/** @internal Bitcoin base58 address version bytes per network */
-export const BitcoinNetworkVersion = {
-  mainnet: { P2PKH: 0x00, P2SH: 0x05 },
-  testnet: { P2PKH: 0x6f, P2SH: 0xc4 },
-  devnet: { P2PKH: 0x6f, P2SH: 0xc4 },
-  mocknet: { P2PKH: 0x6f, P2SH: 0xc4 },
-} as const;
-
 /** @internal Regex matching base58 (legacy) BTC address prefixes */
 export const B58_ADDR_PREFIXES = /^(1|3|m|n|2)/;
 
@@ -63,14 +55,6 @@ export const SEGWIT_V0_ADDR_PREFIX = /^(bc1q|tb1q|bcrt1q)/i;
 
 /** @internal Segwit v1 (taproot) address prefix regex */
 export const SEGWIT_V1_ADDR_PREFIX = /^(bc1p|tb1p|bcrt1p)/i;
-
-/** @internal Bech32 human-readable part per network */
-export const SegwitPrefix = {
-  mainnet: 'bc',
-  testnet: 'tb',
-  devnet: 'bcrt',
-  mocknet: 'bcrt',
-} as const;
 
 /** @internal Segwit v0 */
 export const SEGWIT_V0 = 0;
