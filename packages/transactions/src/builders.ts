@@ -36,7 +36,7 @@ import { postConditionModeFrom, postConditionToWire } from './postcondition';
 import { PostCondition, PostConditionModeName } from './postcondition-types';
 import { TransactionSigner } from './signer';
 import { StacksTransactionWire, deriveNetworkFromTx } from './transaction';
-import { omit } from './utils';
+import { cloneDeep, omit } from './utils';
 import {
   PostConditionWire,
   addressFromPublicKeys,
@@ -210,7 +210,9 @@ export async function makeSTXTokenTransfer(
     // single-sig
     const publicKey = privateKeyToPublic(txOptions.senderKey);
     const options = omit(txOptions, 'senderKey');
-    const transaction = await makeUnsignedSTXTokenTransfer({ publicKey, ...options });
+    // Deep-clone so later mutation of caller-supplied option values (e.g. functionArgs)
+    // cannot alter the signed transaction.
+    const transaction = cloneDeep(await makeUnsignedSTXTokenTransfer({ publicKey, ...options }));
 
     const privKey = txOptions.senderKey;
     const signer = new TransactionSigner(transaction);
@@ -220,7 +222,9 @@ export async function makeSTXTokenTransfer(
   } else {
     // multi-sig
     const options = omit(txOptions, 'signerKeys');
-    const transaction = await makeUnsignedSTXTokenTransfer(options);
+    // Deep-clone so later mutation of caller-supplied option values (e.g. functionArgs)
+    // cannot alter the signed transaction.
+    const transaction = cloneDeep(await makeUnsignedSTXTokenTransfer(options));
 
     mutatingSignAppendMultiSig(
       transaction,
@@ -287,7 +291,9 @@ export async function makeContractDeploy(
     // single-sig
     const publicKey = privateKeyToPublic(txOptions.senderKey);
     const options = omit(txOptions, 'senderKey');
-    const transaction = await makeUnsignedContractDeploy({ publicKey, ...options });
+    // Deep-clone so later mutation of caller-supplied option values (e.g. functionArgs)
+    // cannot alter the signed transaction.
+    const transaction = cloneDeep(await makeUnsignedContractDeploy({ publicKey, ...options }));
 
     const privKey = txOptions.senderKey;
     const signer = new TransactionSigner(transaction);
@@ -297,7 +303,9 @@ export async function makeContractDeploy(
   } else {
     // multi-sig
     const options = omit(txOptions, 'signerKeys');
-    const transaction = await makeUnsignedContractDeploy(options);
+    // Deep-clone so later mutation of caller-supplied option values (e.g. functionArgs)
+    // cannot alter the signed transaction.
+    const transaction = cloneDeep(await makeUnsignedContractDeploy(options));
 
     mutatingSignAppendMultiSig(
       transaction,
@@ -569,7 +577,9 @@ export async function makeContractCall(
     // single-sig
     const publicKey = privateKeyToPublic(txOptions.senderKey);
     const options = omit(txOptions, 'senderKey');
-    const transaction = await makeUnsignedContractCall({ publicKey, ...options });
+    // Deep-clone so later mutation of caller-supplied option values (e.g. functionArgs)
+    // cannot alter the signed transaction.
+    const transaction = cloneDeep(await makeUnsignedContractCall({ publicKey, ...options }));
 
     const privKey = txOptions.senderKey;
     const signer = new TransactionSigner(transaction);
@@ -579,7 +589,9 @@ export async function makeContractCall(
   } else {
     // multi-sig
     const options = omit(txOptions, 'signerKeys');
-    const transaction = await makeUnsignedContractCall(options);
+    // Deep-clone so later mutation of caller-supplied option values (e.g. functionArgs)
+    // cannot alter the signed transaction.
+    const transaction = cloneDeep(await makeUnsignedContractCall(options));
 
     mutatingSignAppendMultiSig(
       transaction,
