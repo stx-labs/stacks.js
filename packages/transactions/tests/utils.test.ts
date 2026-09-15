@@ -251,7 +251,7 @@ describe('signed builders isolate the transaction from caller data', () => {
 
   test('custom client.fetch survives omit and is invoked for the nonce lookup', async () => {
     const fetch = jest.fn(async () =>
-      new Response(JSON.stringify({ balance: '0', nonce: 4 }), { status: 200 })
+      ({ ok: true, json: async () => ({ nonce: 4 }) }) as Response
     );
 
     const tx = await makeContractCall({
