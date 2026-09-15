@@ -52,10 +52,10 @@
       "ajv": "6.12.6",
       "tough-cookie": "4.1.3"
     },
-    "json5": "2.2.3",
     "nth-check": "2.0.1",
-    "schema-inspector": "2.0.2",
-    "socket.io-client": "4.5.3"
+    "request": "npm:@cypress/request@^4.0.1",
+    "schema-inspector": "^2.0.2",
+    "tmp": "^0.2.7"
   },
   "repository": {
     "type": "git",
