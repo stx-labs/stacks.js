@@ -23,17 +23,13 @@
     "@stacks/auth": "^7.6.0",
     "@stacks/common": "^7.6.0",
     "@stacks/encryption": "^7.6.0",
-    "@stacks/network": "^7.6.0",
     "base64-js": "^1.5.1",
     "jsontokens": "^4.0.1"
   },
   "devDependencies": {
-    "@stacks/network": "^7.6.0",
     "@types/jsdom": "^16.2.10",
     "jsdom": "^16.5.3",
-    "process": "^0.11.10",
-    "rimraf": "^3.0.2",
-    "stream-browserify": "^3.0.0"
+    "rimraf": "^3.0.2"
   },
   "sideEffects": false,
   "typings": "dist/index.d.ts",

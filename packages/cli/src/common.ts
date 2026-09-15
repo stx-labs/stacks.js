@@ -54,7 +54,7 @@ export function getPrivateKeyAddress(
   return network.coerceAddress(btcAddress);
 }
 
-export function isCLITransactionSigner(
+function isCLITransactionSigner(
   signer: string | CLITransactionSigner
 ): signer is CLITransactionSigner {
   return (signer as CLITransactionSigner).signerVersion !== undefined;

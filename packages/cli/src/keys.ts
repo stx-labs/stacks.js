@@ -23,7 +23,7 @@ const BITCOIN_WIF = 128;
 const BITCOIN_WIF_TESTNET = 239;
 
 export const STX_WALLET_COMPATIBLE_SEED_STRENGTH = 256;
-export const DERIVATION_PATH = "m/44'/5757'/0'/0/0";
+const DERIVATION_PATH = "m/44'/5757'/0'/0/0";
 
 export type OwnerKeyInfoType = {
   privateKey: string;

@@ -29,13 +29,9 @@ export const getBlockCount = () => bitcoinRpc<number>('getblockcount');
 
 export const getBlockHash = (height: number) => bitcoinRpc<string>('getblockhash', [height]);
 
-export const getBestBlockHash = () => bitcoinRpc<string>('getbestblockhash');
-
 // Wallet RPCs default to the `main` (mining-funded) wallet — the only one tests use.
 export const getNewAddress = (label = '', wallet = 'main') =>
   bitcoinRpc<string>('getnewaddress', [label], wallet);
-
-export const getBalance = (wallet = 'main') => bitcoinRpc<number>('getbalance', [], wallet);
 
 export const getReceivedByAddress = (address: string, minconf = 0, wallet = 'main') =>
   bitcoinRpc<number>('getreceivedbyaddress', [address, minconf], wallet);

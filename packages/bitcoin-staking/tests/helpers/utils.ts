@@ -370,23 +370,6 @@ export function withRetry<T, A extends unknown[]>(
   };
 }
 
-export function withTimeout<T, A extends unknown[]>(
-  timeoutMs: number,
-  fn: (...args: A) => Promise<T>
-): (...args: A) => Promise<T> {
-  return async function timeoutWrapper(...args: A): Promise<T> {
-    let handle: NodeJS.Timeout | undefined;
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      handle = setTimeout(() => reject(new Error('Timeout')), timeoutMs);
-    });
-    try {
-      return await Promise.race([timeoutPromise, fn(...args)]);
-    } finally {
-      if (handle) clearTimeout(handle);
-    }
-  };
-}
-
 // Network lifecycle (inversion of control): a clean up / down / reset abstraction.
 // The harness has no docker/compose knowledge — it only execs the caller-provided
 // `NETWORK_*_CMD` commands (see `ENV`); an unset command makes the op a no-op.
@@ -402,10 +385,10 @@ async function networkCmd(label: string, cmd: string): Promise<string | undefine
   return (await sh(cmd, { maxBuffer: 64 * 1024 * 1024 })).stdout;
 }
 
-/** Start the network, keeping chain state. */
+/** Start the network, keeping chain state. @knipignore part of the lifecycle trio */
 export const networkUp = () => networkCmd('network up', ENV.NETWORK_UP_CMD);
 
-/** Stop the network, keeping chain state. */
+/** Stop the network, keeping chain state. @knipignore part of the lifecycle trio */
 export const networkDown = () => networkCmd('network down', ENV.NETWORK_DOWN_CMD);
 
 /** Fresh chain: one command that wipes state and starts back up. */
