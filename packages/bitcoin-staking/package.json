@@ -30,8 +30,10 @@
     "@stacks/transactions": "^7.6.0"
   },
   "devDependencies": {
-    "@stacks/internal": "file:../internal",
+    "@jest/test-sequencer": "^29.7.0",
+    "@scure/bip32": "^1.1.3",
     "@stacks/wallet-sdk": "^7.6.0",
+    "c32check": "^2.0.0",
     "process": "^0.11.10",
     "rimraf": "^3.0.2"
   },

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  // Deprecated/renamed aliases (e.g. `txidFromData` -> `txidFromBytes`) are kept on purpose
+  "exclude": ["duplicates"],
+  "ignoreDependencies": [
+    // invoked via `npx @commitlint/cli` in .github/.husky/commit-msg and by CI
+    "@commitlint/cli",
+    "@commitlint/config-conventional",
+    // peer dependency of esbuild-loader (configs/webpack.config.js)
+    "esbuild"
+  ],
+  "workspaces": {
+    "packages/bitcoin-staking": {
+      "entry": [
+        // manually-run dev utilities, documented in tests/*/README.md
+        "tests/privatenet/prep-stakers.ts",
+        "tests/regtest/restore-bond-admin.ts"
+      ]
+    }
+  }
+}
