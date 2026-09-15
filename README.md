@@ -1,11 +1,6 @@
-# Stacks.js [![Test Action Badge](https://github.com/stx-labs/stacks.js/actions/workflows/tests.yml/badge.svg)](https://github.com/stx-labs/stacks.js/actions/workflows/tests.yml) [![Monorepo Version Label](https://img.shields.io/github/package-json/v/stx-labs/stacks.js?filename=packages%2Fcommon%2Fpackage.json&label=monorepo)](https://github.com/stx-labs/stacks.js/tree/main/packages)
+# Stacks.js [![Test Action Badge](https://github.com/stx-labs/stacks.js/actions/workflows/tests.yml/badge.svg)](https://github.com/stx-labs/stacks.js/actions/workflows/tests.yml) [![Monorepo Version Label](https://img.shields.io/npm/v/%40stacks%2Fcommon?label=monorepo)](./packages)
 
-> [!IMPORTANT]
-> Looking for Nakamoto updates?
-> Use version `6.16.0` or later to test the latest nakamoto changes.
-> e.g., `npm install @stacks/stacking@6.16.0`
-
-Welcome to the Stacks.js repository, your one-stop solution for working with the Stacks blockchain using JavaScript/TypeScript. This repository nests a collection of packages designed to provide you with the essential building blocks to work with the [Stacks blockchain](https://www.stacks.co/what-is-stacks) from JavaScript/TypeScript.
+Welcome to the Stacks.js repository, your one-stop solution for working with the Stacks blockchain using JavaScript/TypeScript. This repository nests a collection of packages designed to provide you with the essential building blocks to work with the [Stacks blockchain](https://www.stacks.co/learn/introduction) from JavaScript/TypeScript.
 
 ## Packages
 
@@ -13,28 +8,24 @@ For installation instructions and usage guidelines, refer to the respective `REA
 
 ### Connecting Wallets
 
-- [`@stacks/connect`](https://github.com/hirosystems/connect) Connect web application to Stacks wallet browser extensions _(separate repo)_.
+- [`@stacks/connect`](https://github.com/stx-labs/connect) Connect web application to Stacks wallet browser extensions _(separate repo)_.
 
 ### Stacks Primitives
 
-- [`@stacks/transactions`](https://github.com/hirosystems/stacks.js/tree/main/packages/transactions) Construct, decode transactions, and work with Clarity smart contracts on the Stacks blockchain.
-- [`@stacks/wallet-sdk`](https://github.com/hirosystems/stacks.js/tree/main/packages/wallet-sdk) Library for building wallets, managing accounts, and handling keys for the Stacks blockchain.
-- [`@stacks/storage`](https://github.com/hirosystems/stacks.js/tree/main/packages/storage) Store and fetch files with Gaia, the decentralized storage system.
-- [`@stacks/encryption`](https://github.com/hirosystems/stacks.js/tree/main/packages/encryption) Encryption functions used by stacks.js packages.
-- [`@stacks/auth`](https://github.com/hirosystems/stacks.js/tree/main/packages/auth) Construct and decode authentication requests for Stacks apps.
-- [`@stacks/profile`](https://github.com/hirosystems/stacks.js/tree/main/packages/profile) Functions for manipulating user profiles.
-- [`@stacks/network`](https://github.com/hirosystems/stacks.js/tree/main/packages/network) Network and API library for working with Stacks blockchain nodes.
-- [`@stacks/common`](https://github.com/hirosystems/stacks.js/tree/main/packages/common) Common utilities used by stacks.js packages.
+- [`@stacks/transactions`](./packages/transactions) Build, sign, and broadcast transactions. Construct and read Clarity values. Guard transfers with post conditions.
+- [`@stacks/wallet-sdk`](./packages/wallet-sdk) Create a Stacks wallet from a seed phrase and manage its accounts.
+- [`@stacks/encryption`](./packages/encryption) Encryption functions used by stacks.js packages.
+- [`@stacks/network`](./packages/network) Network configuration for Stacks.js.
+- [`@stacks/common`](./packages/common) Shared low-level primitives for Stacks.js.
+- [`@stacks/api`](./packages/api) Javascript library for interacting with the Stacks Blockchain Node and API.
 
-### Native Smart Contract Interaction
+### Bitcoin Staking
 
-- [`@stacks/bns`](https://github.com/hirosystems/stacks.js/tree/main/packages/bns) Library for interacting with the BNS contract.
-- [`@stacks/stacking`](https://github.com/hirosystems/stacks.js/tree/main/packages/stacking) Library for PoX stacking.
+- [`@stacks/bitcoin-staking`](./packages/bitcoin-staking) Library for Bitcoin Staking.
 
 ### Others
 
-- [`@stacks/cli`](https://github.com/hirosystems/stacks.js/tree/main/packages/cli) Command line interface to interact with auth, storage, and Stacks transactions.
-- `@stacks/keychain` _**DEPRECATED:** replaced by [`@stacks/wallet-sdk`](https://github.com/hirosystems/stacks.js/tree/main/packages/wallet-sdk)_
+- [`@stacks/cli`](./packages/cli) Command line interface for the Stacks blockchain.
 
 ## Reference
 
@@ -60,11 +51,11 @@ Development of Stacks.js happens in the open on GitHub, and we are grateful to t
 
 ### Code of Conduct
 
-Please read Stacks.js' [Code of Conduct](https://github.com/hirosystems/stacks.js/blob/main/CODE_OF_CONDUCT.md) since we expect project participants to adhere to it.
+Please read Stacks.js' [Code of Conduct](./CODE_OF_CONDUCT.md) since we expect project participants to adhere to it.
 
 ### Contributing Guide
 
-Read our [contributing guide](https://github.com/hirosystems/stacks.js/blob/main/.github/CONTRIBUTING.md) to learn about our development process, how to propose bug fixes and improvements, and how to build and test your changes.
+Read our [contributing guide](./.github/CONTRIBUTING.md) to learn about our development process, how to propose bug fixes and improvements, and how to build and test your changes.
 
 ## Community
 
