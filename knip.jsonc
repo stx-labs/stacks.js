@@ -1,21 +1,22 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  // Deprecated/renamed aliases (e.g. `txidFromData` -> `txidFromBytes`) are kept on purpose
-  "exclude": ["duplicates"],
-  "ignoreDependencies": [
-    // invoked via `npx @commitlint/cli` in .github/.husky/commit-msg and by CI
-    "@commitlint/cli",
-    "@commitlint/config-conventional",
-    // peer dependency of esbuild-loader (configs/webpack.config.js)
-    "esbuild"
-  ],
+  "rules": {
+    // Deprecated/renamed aliases (e.g. `txidFromData` -> `txidFromBytes`) are kept on
+    // purpose, so duplicates are reported without failing the run.
+    "duplicates": "warn"
+  },
+  // husky is installed into .github/.husky (see the root `prepare` script), which the
+  // husky and commitlint plugins do not scan by default.
+  "husky": { "config": [".github/.husky/*"] },
+  "commitlint": { "config": [".github/.husky/commitlint.json"] },
+  // `@knipignore` marks an export that is deliberately kept without a caller, e.g. one
+  // half of a documented API whose other half is in use.
+  "tags": ["-knipignore"],
   "workspaces": {
     "packages/bitcoin-staking": {
-      "entry": [
-        // manually-run dev utilities, documented in tests/*/README.md
-        "tests/privatenet/prep-stakers.ts",
-        "tests/regtest/restore-bond-admin.ts"
-      ]
+      // The regtest/privatenet harness keeps helper modules fully exported even where a
+      // helper is currently only used inside its own module.
+      "ignoreExportsUsedInFile": true
     }
   }
 }

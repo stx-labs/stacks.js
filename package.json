@@ -29,7 +29,6 @@
     "@commitlint/cli": "^17.7.1",
     "@commitlint/config-conventional": "^17.7.0",
     "@types/jest": "^29.5.3",
-    "esbuild": "^0.19.0",
     "esbuild-loader": "^4.0.0",
     "husky": "^8.0.3",
     "inspectpack": "^4.7.1",

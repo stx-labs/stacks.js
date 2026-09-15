@@ -31,7 +31,6 @@
   "devDependencies": {
     "@stacks/internal": "file:../internal",
     "jest-fetch-mock": "^3.0.3",
-    "process": "^0.11.10",
     "rimraf": "^3.0.2"
   },
   "sideEffects": false,

@@ -13,6 +13,8 @@
     "clean": "rimraf dist && tsc -b tsconfig.build.json --clean",
     "pack": "npm pack",
     "prepublishOnly": "npm run test && NODE_ENV=production npm run build",
+    "privatenet:prep-stakers": "npx tsx tests/privatenet/prep-stakers.ts",
+    "regtest:restore-bond-admin": "npx tsx tests/regtest/restore-bond-admin.ts",
     "start": "tsc -b tsconfig.build.json --watch --verbose",
     "test": "jest",
     "test:watch": "jest --watch --coverage=false",
@@ -33,8 +35,6 @@
     "@jest/test-sequencer": "^29.7.0",
     "@scure/bip32": "^1.1.3",
     "@stacks/wallet-sdk": "^7.6.0",
-    "c32check": "^2.0.0",
-    "process": "^0.11.10",
     "rimraf": "^3.0.2"
   },
   "sideEffects": false,

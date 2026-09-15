@@ -125,10 +125,6 @@ export async function getStxBalance(address: string): Promise<bigint> {
 
 // cycle math (port of functional-tests helpers.ts, on our camelCase PoxInfo)
 
-export function burnHeightToRewardCycle(burnHeight: number, poxInfo: PoxInfo): number {
-  return Math.floor((burnHeight - poxInfo.firstBurnchainBlockHeight) / poxInfo.rewardCycleLength);
-}
-
 export function rewardCycleToBurnHeight(cycle: number, poxInfo: PoxInfo): number {
   return poxInfo.firstBurnchainBlockHeight + cycle * poxInfo.rewardCycleLength;
 }
@@ -212,14 +208,6 @@ export async function waitForSignerManager(signerManager: string): Promise<void>
     if (!info) throw new Error('signer-manager not registered yet');
   }, ENV.POLL_INTERVAL, ENV.BOOT_TIMEOUT);
   console.log('signer-manager registered');
-}
-
-export async function waitForNextCycle(poxInfo: PoxInfo): Promise<void> {
-  const pos =
-    (poxInfo.currentBurnchainBlockHeight - poxInfo.firstBurnchainBlockHeight) %
-    poxInfo.rewardCycleLength;
-  const blocksUntilNext = poxInfo.rewardCycleLength - pos;
-  return waitForBurnBlockHeight(poxInfo.currentBurnchainBlockHeight + blocksUntilNext);
 }
 
 /** Wait until we're in the prepare phase (optional `diff` block offset). */
@@ -328,14 +316,6 @@ export async function assertTolerableResult(
 
   console.log(`${label}: tx SUCCEEDED`);
   return undefined;
-}
-
-export async function waitForNextNonce(
-  address: string,
-  currentNonce: number,
-  interval: number = ENV.POLL_INTERVAL
-): Promise<void> {
-  await waitFor(async () => (await getNextNonce(address)) === currentNonce + 1, interval);
 }
 
 /**
