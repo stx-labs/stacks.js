@@ -29,8 +29,6 @@ import {
 
 import { StacksNetwork, TransactionVersion } from '@stacks/network';
 
-const ZoneFile = require('zone-file');
-
 import {
   PRIVATE_KEY_NOSIGN_PATTERN,
   PRIVATE_KEY_PATTERN,
@@ -39,7 +37,7 @@ import {
   ID_ADDRESS_PATTERN,
 } from './argparse';
 
-import { CLITransactionSigner, isCLITransactionSigner } from './common';
+import { CLITransactionSigner } from './common';
 
 import { decryptBackupPhrase } from './encrypt';
 
@@ -47,16 +45,16 @@ import { getOwnerKeyInfo, getApplicationKeyInfo, extractAppKey } from './keys';
 
 import { NameInfoType, CLINetworkAdapter } from './network';
 
-export interface UTXO {
+interface UTXO {
   value?: number;
   confirmations?: number;
   tx_hash: string;
   tx_output_n: number;
 }
 
-export class NullSigner extends CLITransactionSigner {}
+class NullSigner extends CLITransactionSigner {}
 
-export class MultiSigKeySigner extends CLITransactionSigner {
+class MultiSigKeySigner extends CLITransactionSigner {
   redeemScript: Buffer;
   privateKeys: string[];
   m: number;
@@ -100,7 +98,7 @@ export class MultiSigKeySigner extends CLITransactionSigner {
   }
 }
 
-export class SegwitP2SHKeySigner extends CLITransactionSigner {
+class SegwitP2SHKeySigner extends CLITransactionSigner {
   redeemScript: Buffer;
   witnessScript: Buffer;
   privateKeys: string[];
@@ -187,21 +185,12 @@ export class SegwitP2SHKeySigner extends CLITransactionSigner {
   }
 }
 
-export function hasKeys(signer: string | CLITransactionSigner): boolean {
-  if (isCLITransactionSigner(signer)) {
-    const s = signer;
-    return s.isComplete;
-  } else {
-    return true;
-  }
-}
-
 /*
  * Parse a string into a NullSigner
  * The string has the format "nosign:address"
  * @return a NullSigner instance
  */
-export function parseNullSigner(addrString: string): NullSigner {
+function parseNullSigner(addrString: string): NullSigner {
   if (!addrString.startsWith('nosign:')) {
     throw new Error('Invalid nosign string');
   }
@@ -216,7 +205,7 @@ export function parseNullSigner(addrString: string): NullSigner {
  * @serializedPrivateKeys (string) the above string
  * @return a MultiSigKeySigner instance
  */
-export function parseMultiSigKeys(serializedPrivateKeys: string): MultiSigKeySigner {
+function parseMultiSigKeys(serializedPrivateKeys: string): MultiSigKeySigner {
   const matches = serializedPrivateKeys.match(PRIVATE_KEY_MULTISIG_PATTERN);
   if (!matches) {
     throw new Error('Invalid multisig private key string');
@@ -254,7 +243,7 @@ export function parseMultiSigKeys(serializedPrivateKeys: string): MultiSigKeySig
  * @serializedPrivateKeys (string) the above string
  * @return a MultiSigKeySigner instance
  */
-export function parseSegwitP2SHKeys(serializedPrivateKeys: string): SegwitP2SHKeySigner {
+function parseSegwitP2SHKeys(serializedPrivateKeys: string): SegwitP2SHKeySigner {
   const matches = serializedPrivateKeys.match(PRIVATE_KEY_SEGWIT_P2SH_PATTERN);
   if (!matches) {
     throw new Error('Invalid segwit p2sh private key string');
@@ -373,13 +362,6 @@ export function canonicalPrivateKey(privkey: string): string {
 }
 
 /*
- * Hash160 function for zone files
- */
-export function hash160(buff: Buffer): Buffer {
-  return bitcoinjs.crypto.hash160(buff);
-}
-
-/*
  * Sign a profile into a JWT
  */
 export function makeProfileJWT(profileData: object, privateKey: string): string {
@@ -408,60 +390,6 @@ export function getNameInfoEasy(
     });
 
   return nameInfoPromise;
-}
-
-/*
- * Look up a name's zone file, profile URL, and profile
- * Returns a Promise to the above, or throws an error.
- */
-export async function nameLookup(
-  network: CLINetworkAdapter,
-  name: string,
-  includeProfile: boolean = true
-): Promise<{ profile: any; profileUrl?: string; zonefile?: string }> {
-  const nameInfoPromise = getNameInfoEasy(network, name);
-  const profilePromise = includeProfile
-    ? blockstack.lookupProfile(name).catch(() => null)
-    : Promise.resolve().then(() => null);
-
-  const zonefilePromise = nameInfoPromise.then((nameInfo: NameInfoType | null) =>
-    nameInfo ? nameInfo.zonefile : null
-  );
-
-  const [profile, zonefile, nameInfo] = await Promise.all([
-    profilePromise,
-    zonefilePromise,
-    nameInfoPromise,
-  ]);
-  let profileObj = profile;
-
-  if (!nameInfo) {
-    throw new Error('Name not found');
-  }
-  if (nameInfo.hasOwnProperty('grace_period') && nameInfo.grace_period) {
-    throw new Error(
-      `Name is expired at block ${nameInfo.expire_block} ` +
-        `and must be renewed by block ${nameInfo.renewal_deadline}`
-    );
-  }
-
-  let profileUrl = null;
-  try {
-    const zonefileJSON = ZoneFile.parseZoneFile(zonefile);
-    if (zonefileJSON.uri && zonefileJSON.hasOwnProperty('$origin')) {
-      profileUrl = blockstack.getTokenFileUrl(zonefileJSON);
-    }
-  } catch (e) {
-    profileObj = null;
-  }
-
-  const ret = {
-    zonefile: zonefile,
-    profile: profileObj,
-    profileUrl: profileUrl,
-  };
-  // @ts-ignore
-  return ret;
 }
 
 /*
@@ -558,10 +486,7 @@ export function mkdirs(path: string): void {
 /*
  * Given a name or ID address, return a promise to the ID Address
  */
-export async function getIDAddress(
-  network: CLINetworkAdapter,
-  nameOrIDAddress: string
-): Promise<string> {
+async function getIDAddress(network: CLINetworkAdapter, nameOrIDAddress: string): Promise<string> {
   if (nameOrIDAddress.match(ID_ADDRESS_PATTERN)) {
     return nameOrIDAddress;
   } else {
@@ -575,7 +500,7 @@ export async function getIDAddress(
  * Find all identity addresses until we have one that matches the given one.
  * Loops forever if not found
  */
-export async function getOwnerKeyFromIDAddress(
+async function getOwnerKeyFromIDAddress(
   network: CLINetworkAdapter,
   mnemonic: string,
   idAddress: string
@@ -640,7 +565,7 @@ export interface ClarityFunctionArg {
   type: ClarityAbiType;
 }
 
-export function argToPrompt(arg: ClarityFunctionArg): InquirerPrompt {
+function argToPrompt(arg: ClarityFunctionArg): InquirerPrompt {
   const name = arg.name;
   const type = arg.type;
   const typeString = getTypeString(type);
@@ -721,7 +646,7 @@ export function parseClarityFunctionArgAnswers(
   return functionArgs;
 }
 
-export function answerToClarityValue(answer: any, arg: ClarityFunctionArg): ClarityValue {
+function answerToClarityValue(answer: any, arg: ClarityFunctionArg): ClarityValue {
   const type = arg.type;
   const typeString = getTypeString(type);
   if (isClarityAbiPrimitive(type)) {

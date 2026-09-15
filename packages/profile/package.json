@@ -29,7 +29,6 @@
   },
   "devDependencies": {
     "bitcoinjs-lib": "^5.2.0",
-    "process": "^0.11.10",
     "rimraf": "^3.0.2"
   },
   "sideEffects": false,

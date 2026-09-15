@@ -128,7 +128,7 @@ export function makeAuthRequestToken(
  * @private
  * @ignore
  */
-export async function encryptPrivateKey(publicKey: string, privateKey: string): Promise<string> {
+async function encryptPrivateKey(publicKey: string, privateKey: string): Promise<string> {
   const encryptedObj = await encryptECIES(publicKey, utf8ToBytes(privateKey), true);
   const encryptedJSON = JSON.stringify(encryptedObj);
   return bytesToHex(utf8ToBytes(encryptedJSON));

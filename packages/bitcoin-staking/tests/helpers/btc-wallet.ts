@@ -204,9 +204,6 @@ export async function fetchBlockHeader(blockHash: string): Promise<string> {
   return (await resp.text()).trim();
 }
 
-/** Alias for {@link fetchBlockHeader} matching the "headerHex" naming used by callers. */
-export const fetchBlockHeaderHex = fetchBlockHeader;
-
 /**
  * Build the merkle proof for `txid` from the block's ordered txid list.
  *

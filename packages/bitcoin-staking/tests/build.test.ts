@@ -2,6 +2,7 @@ import {
   type ClarityValue,
   type ContractCallPayload,
   type MultiSigSpendingCondition,
+  Address,
   AddressHashMode,
   AddressVersion,
   ClarityType,
@@ -11,7 +12,6 @@ import {
   cvToString,
   privateKeyToPublic,
 } from '@stacks/transactions';
-import { c32address } from 'c32check';
 import {
   buildAnnounceL1EarlyExit,
   buildCalculateRewards,
@@ -102,7 +102,9 @@ describe('multisig builders', () => {
         PUB_KEYS.map(createStacksPublicKey)
       )
     );
-    expect(c32address(AddressVersion.TestnetMultiSig, sc.signer)).toBe(expected);
+    expect(
+      Address.stringify({ version: AddressVersion.TestnetMultiSig, hash160: sc.signer })
+    ).toBe(expected);
     expect(payloadOf(tx).functionName.content).toBe('set-bond-admin');
   });
 
