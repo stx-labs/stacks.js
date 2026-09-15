@@ -1,229 +1,76 @@
 # @stacks/wallet-sdk
 
-`@stacks/wallet-sdk` is a library for building wallets for the Stacks blockchain.
+Create a Stacks wallet from a seed phrase and manage its accounts.
 
-- [Features](#features)
-- [Key Concepts](#key-concepts)
-  - [Secret Key](#secret-key)
-  - [Wallet](#wallet)
-  - [Account](#account)
-  - [Derivation paths](#derivation-paths)
-- [Usage](#usage)
-  - [Installation](#installation)
-  - [Generate a Secret Key](#generate-a-secret-key)
-  - [Generate a wallet](#generate-a-wallet)
-  - [Generating new accounts](#generating-new-accounts)
-  - [Restoring accounts for an existing Wallet](#restoring-accounts-for-an-existing-wallet)
-  - [Making an authentication response](#making-an-authentication-response)
-  - [Usage with `@stacks/transactions`](#usage-with-stackstransactions)
-    - [Getting an account's STX address](#getting-an-accounts-stx-address)
-    - [Signing Stacks Transactions](#signing-stacks-transactions)
+This package derives BIP39/BIP32 wallets and accounts. Each account holds a plain hex private key. You pass that key to [`@stacks/transactions`](../transactions) to sign and broadcast. This package does not build, sign, or broadcast transactions itself, and it is not a network client.
 
-## Features
+## Installation
 
-- Generate a wallet from scratch
-- Encrypt a wallet with a password
-- Restore a wallet and associated accounts
-- Generate new accounts in a wallet
-- Sign transactions for the Stacks blockchain
-- Register usernames on BNS, the naming service built into the Stacks Blockchain
-
-## Key Concepts
-
-### Secret Key
-
-A Secret Key is a 12 or 24 word mnemonic phrase, which can be used to deterministically generate a wallet and any number of addresses. When the same Secret Key is used, the exact same addresses will be generated. The Secret Key acts as an easily rememberable and highly secure mechanism for backing up a wallet.
-
-Secret Keys conform to the [BIP 39](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki) standard.
-
-### Wallet
-
-A "wallet" is a set of private keys for an individual user. A wallet will contain any number of accounts.
-
-### Account
-
-Accounts act as a way for users to separate assets and data within their own account. You could think of accounts like different Google accounts while logged into Gmail. You can easily switch between different accounts, but they all have different data and information.
-
-- Each account is associated with an individual Stacks address.
-- Each account has its own balance and state on the blockchain.
-- Accounts can have usernames.
-- When a user logs in through a wallet, they choose an individual account from their wallet.
-- Application data is completely segregated from different accounts.
-- External parties have no way of knowing that two accounts belong to the same wallet
-
-### Derivation paths
-
-Private keys are generated according to the [BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) and [BIP44](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki) standards.
-
-The "coin type" for the Stacks blockchain is `5757`.
-
-The private key for each account's STX address is derived from `m/44'/5757'/0'/0/n`, where `n` is the index of the account.
-
-## Usage
-
-### Installation
-
-With NPM:
-
-```bash
+```
 npm install @stacks/wallet-sdk
 ```
 
-### Generate a Secret Key
+## Usage
 
-By default, a random 24-word Secret Key is generated, using 256 bits of entropy. You can generate a random 12-word key by passing `128` as the `entropy` argument.
-
-```typescript
-import { generateSecretKey } from '@stacks/wallet-sdk';
-
-const secretKey = generateSecretKey();
-// aunt birth lounge misery utility blind holiday walnut fuel make gift parent gap picnic exact various express sphere family nerve oil drill engage youth
-
-const secretKey128 = generateSecretKey(128);
-// winter crash infant long upset beauty cram tank short remove decade ladder
-```
-
-### Generate a wallet
-
-Create a random Secret Key and a `Wallet` object. When a wallet is generated, the first account is automatically generated as well.
+### Create a new wallet
 
 ```typescript
-import { generateWallet, generateSecretKey } from '@stacks/wallet-sdk';
+import { randomSeedPhrase, generateWallet } from '@stacks/wallet-sdk';
 
-const password = 'password';
-const secretKey = generateSecretKey();
+const secretKey = randomSeedPhrase(); // 24-word seed phrase
 
 const wallet = await generateWallet({
   secretKey,
-  password,
+  password: 'user-supplied-password',
 });
+
+const account = wallet.accounts[0];
 ```
 
-A `Wallet` is a normal JavaScript object with the following properties:
+`generateWallet` derives the first account (`index: 0`). Keep the seed phrase and the private keys in memory only.
 
-```ts
-interface Wallet {
-  /** Used when generating app private keys, which encrypt app-specific data */
-  salt: string;
-  /** The private key associated with the root of a BIP39 keychain */
-  rootKey: string;
-  /** A private key used to encrypt configuration data */
-  configPrivateKey: string;
-  /** The encrypted secret key */
-  encryptedSecretKey: string;
-  /** A list of accounts generated by this wallet */
-  accounts: Account[];
-}
-```
+### Restore a wallet from a seed phrase
 
-### Generating new accounts
-
-Accounts allow users to use separate Stacks addresses from within the same wallet. Each account has it's own Stacks address and balance. When a user logs into an app, they choose a specific account.
-
-When using `generateNewAccount`, the new account is created with next index, based on the existing accounts in a wallet. For example, if a wallet has 5 accounts, calling `generateNewAccount` will make the sixth account. The `generateNewAccount` treats as the input wallet as immutable. It returns a new wallet object with all available accounts (based on the input wallet object and the additional generated account).
+There is no separate restore function. Derivation is deterministic: the same seed phrase always produces the same keys. Run `generateWallet` again with the known seed phrase.
 
 ```typescript
 import { generateWallet, generateNewAccount } from '@stacks/wallet-sdk';
 
-let wallet = await generateWallet({
-  secretKey,
-  password,
-});
-wallet = generateNewAccount(wallet); // adds a new account to an existing wallet object, immutable, NOT in-place
-```
+let wallet = await generateWallet({ secretKey: seedPhrase, password });
 
-An `Account` is a JavaScript object with these properties:
-
-```typescript
-interface Account {
-  /** The private key used for STX payments */
-  stxPrivateKey: string;
-  /** The private key used in Stacks 1.0 to register BNS names */
-  dataPrivateKey: string;
-  /** The salt is the same as the wallet-level salt. Used for app-specific keys */
-  salt: string;
-  /** A single username registered via BNS for this account */
-  username?: string;
-  /** A profile object that is publicly associated with this account's username */
-  profile?: Profile;
-  /** The root of the keychain used to generate app-specific keys */
-  appsKey: string;
-  /** The index of this account in the user's wallet. Zero-indexed */
-  index: number;
+// Derive the same additional accounts again
+for (let i = 1; i < accountCount; i++) {
+  wallet = generateNewAccount(wallet);
 }
 ```
 
-### Restoring accounts for an existing Wallet
+`generateNewAccount` also adds an account to any existing wallet. It does not mutate the input wallet — it returns a new wallet with the next account appended.
 
-When a user restores their wallet in a new app, you can automatically restore any previously-used accounts from the same wallet. It will also restore any usernames owned by this user.
+### Get an address and send a transaction
 
-The private keys used to encrypt this data is derived from the path `m/44/5757'/0'/1`. This data is stored in [Gaia](https://docs.stacks.co/docs/gaia/), the decentralized storage system in the Stacks network. Users can host their own Gaia hub, and this library's API can use that Gaia hub, if provided.
-
-```typescript
-import { restoreWalletAccounts } from '@stacks/wallet-sdk';
-
-const restoredWallet = await restoreWalletAccounts({
-  // `baseWallet` is returned from `generateWallet`
-  wallet: baseWallet,
-  gaiaHubUrl: 'https://hub.blockstack.org',
-  network: new StacksMainnet(),
-});
-```
-
-### Making an authentication response
-
-With an account, you can generate an authentication response, which conforms to the Stacks authentication protocol. The resulting `authResponse` is a string, representing a signed JSON web token. [Learn more about the authentication protocol](https://docs.hiro.so/build-apps/authentication#authresponse-payload-schema).
-
-```typescript
-// The transit public key is provided in an "authentication request"
-const transitPublicKey = 'xxxx';
-
-const authResponse = await makeAuthResponse({
-  gaiaHubUrl: 'https://hub.blockstack.org',
-  appDomain: 'https://example-app.com',
-  transitPublicKey,
-  scopes: ['publish_data'],
-  // `account` is one of the user's accounts
-  account,
-});
-```
-
-### Usage with `@stacks/transactions`
-
-This library is meant to be used in conjunction with the [`@stacks/transactions`](https://github.com/blockstack/stacks.js/tree/main/packages/transactions) library for signing transactions.
-
-#### Getting an account's STX address
+An account does not store an address. The address depends on the network, so you derive it on demand with `getStxAddress`.
 
 ```typescript
 import { getStxAddress } from '@stacks/wallet-sdk';
-import { TransactionVersion } from '@stacks/transactions';
+import {
+  makeSTXTokenTransfer,
+  broadcastTransaction,
+} from '@stacks/transactions';
 
-// get an account from the user's wallet
 const account = wallet.accounts[0];
 
-const testnetAddress = getStxAddress({ account, transactionVersion: TransactionVersion.Testnet });
-const mainnetAddress = getStxAddress({ account, transactionVersion: TransactionVersion.Mainnet });
-```
+const address = getStxAddress({ account, network: 'testnet' });
 
-#### Signing Stacks Transactions
-
-You can generate signed transactions by following the documentation from `@stacks/transactions`. Use the `stxPrivateKey` of an account as the `senderKey` option when creating a transaction.
-
-```ts
-import { StacksMainnet } from '@stacks/network';
-import { makeSTXTokenTransfer } from '@stacks/transactions';
-
-const network = new StacksMainnet();
-
-// get an account from the user's wallet
-const account = wallet.accounts[0];
-
-const txOptions = {
+const transaction = await makeSTXTokenTransfer({
   recipient: 'SP3FGQ8Z7JY9BWYZ5WM53E0M9NK7WHJF0691NZ159',
   amount: 12345n,
   senderKey: account.stxPrivateKey,
-  network,
-};
+  network: 'testnet',
+});
 
-const transaction = await makeSTXTokenTransfer(txOptions);
+const result = await broadcastTransaction({ transaction, network: 'testnet' });
 ```
+
+`getStxAddress` defaults to `'mainnet'` when you omit the network. Pass `account.stxPrivateKey` directly as `senderKey`; it is a ready-to-use hex string.
+
+For contract calls, post conditions, and everything past this hand-off, see [`@stacks/transactions`](../transactions).

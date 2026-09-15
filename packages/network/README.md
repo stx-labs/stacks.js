@@ -1,6 +1,10 @@
 # @stacks/network
 
-Network and API library for working with Stacks blockchain nodes.
+Network configuration for Stacks.js.
+
+This package defines which chain and which node the other `@stacks/*` packages talk to. A network is a plain data object. It is not a class. It holds constants (chain id, transaction version, address versions) and a static client instance with the node URL.
+
+The network is a plain object on purpose. You can serialize it, copy it, and override single fields.
 
 ## Installation
 
@@ -10,119 +14,101 @@ npm install @stacks/network
 
 ## Usage
 
-### Create a Stacks mainnet, testnet or mocknet network
+### Use a network
 
-```typescript
-import { StacksMainnet, StacksTestnet, StacksMocknet } from '@stacks/network';
-
-const network = new StacksMainnet();
-
-const testnet = new StacksTestnet();
-
-const mocknet = new StacksMocknet();
-```
-
-### Set a custom node URL
-
-```typescript
-const network = new StacksMainnet({ url: 'https://www.mystacksnode.com/' });
-```
-
-### Check if network is mainnet
-
-```typescript
-const isMainnet = network.isMainnet();
-```
-
-### Network usage in transaction building
+In most cases the string name is enough. Every function that accepts a network accepts `'mainnet'`, `'testnet'`, or `'devnet'`.
 
 ```typescript
 import { makeSTXTokenTransfer } from '@stacks/transactions';
 
-const txOptions = {
-  network,
-  recipient: 'SP2BS6HD7TN34V8Z5BNF8Q2AW3K8K2DPV4264CF26',
-  amount: new BigNum(12345),
-  senderKey: 'b244296d5907de9864c0b0d51f98a13c52890be0404e83f273144cd5b9960eed01',
-};
-
-const transaction = await makeSTXTokenTransfer(txOptions);
+const tx = await makeSTXTokenTransfer({
+  // ...
+  network: 'testnet',
+});
 ```
 
-### Use the built-in API key middleware
-
-Some Stacks APIs make use API keys to provide less rate-limited plans.
+The exported constants hold the full network objects. Use them when you want the object itself.
 
 ```typescript
-import { createApiKeyMiddleware, createFetchFn, StacksMainnet } from '@stacks/network';
-import { broadcastTransaction, getNonce, makeSTXTokenTransfer } from '@stacks/transactions';
+import { STACKS_MAINNET, STACKS_TESTNET, STACKS_DEVNET } from '@stacks/network';
 
-const myApiMiddleware = createApiKeyMiddleware('example_e8e044a3_41d8b0fe_3dd3988ef302');
-const myFetchFn = createFetchFn(myApiMiddleware); // middlewares can be used to create a new fetch function
-const myMainnet = new StacksMainnet({ fetchFn: myFetchFn }); // the fetchFn options can be passed to a StacksNetwork to override the default fetch function
-
-const txOptions = {
-  recipient: 'SP3FGQ8Z7JY9BWYZ5WM53E0M9NK7WHJF0691NZ159',
-  amount: 12345n,
-  senderKey: 'b244296d5907de9864c0b0d51f98a13c52890be0404e83f273144cd5b9960eed01',
-  memo: 'some memo',
-  anchorMode: AnchorMode.Any,
-  network: myMainnet, // make sure to pass in the custom network object
-};
-const transaction = await makeSTXTokenTransfer(txOptions); // fee-estimation will use the custom fetchFn
-
-const response = await broadcastTransaction(transaction, myMainnet); // make sure to broadcast via the custom network object
-
-// stacks.js functions, which take a StacksNetwork object will use the custom fetchFn
-const nonce = await getNonce('SP3FGQ8Z7JY9BWYZ5WM53E0M9NK7WHJF0691NZ159', myMainnet);
+const tx = await makeSTXTokenTransfer({
+  // ...
+  network: STACKS_TESTNET,
+});
 ```
 
-### Use custom middleware
+### Customize a network
 
-Middleware can be used to hook into network calls before sending a request or after receiving a response.
+Use `createNetwork` to set an API key or a custom node URL.
 
 ```typescript
-import { createFetchFn, RequestContext, ResponseContext, StacksTestnet } from '@stacks/network';
-import { broadcastTransaction, getNonce, makeSTXTokenTransfer } from '@stacks/transactions';
+import { createNetwork } from '@stacks/network';
 
-const preMiddleware = (ctx: RequestContext) => {
-  ctx.init.headers = new Headers();
-  ctx.init.headers.set('x-foo', 'bar'); // override headers and set new `x-foo` header
-};
-const postMiddleware = (ctx: ResponseContext) => {
-  console.log(await ctx.response.json()); // log response body as json
-};
+// Network name and API key
+const network = createNetwork('mainnet', 'my-api-key');
 
-const fetchFn = createFetchFn({ pre: preMiddleware, post: preMiddleware }); // a middleware can contain `pre`, `post`, or both
-const network = new StacksTestnet({ fetchFn });
+// Options object
+const network2 = createNetwork({ network: 'testnet', apiKey: 'my-api-key' });
 
-// stacks.js functions, which take a StacksNetwork object will use the custom fetchFn
-const nonce = await getNonce('SP3FGQ8Z7JY9BWYZ5WM53E0M9NK7WHJF0691NZ159', network);
+// Custom node URL
+const network3 = createNetwork({
+  network: 'mainnet',
+  client: { baseUrl: 'https://custom-api.example.com' },
+});
 ```
 
-### Get various API URLs
+`createNetwork` copies the base network. It does not mutate `STACKS_MAINNET` or the other constants.
+
+The API key is sent as an `x-api-key` header. By default, the header is only sent to Hiro API hosts.
+
+### The network and client options
+
+Functions in other packages accept the network and the client as separate options. The network selects the chain. The client selects the node URL and the fetch function.
 
 ```typescript
-const txBroadcastUrl = network.getBroadcastApiUrl();
+import { broadcastTransaction } from '@stacks/transactions';
 
-const feeEstimateUrl = network.getTransferFeeEstimateApiUrl();
+await broadcastTransaction({
+  transaction,
+  network: 'mainnet',
+  client: { baseUrl: 'https://custom-api.example.com' }, // optional override
+});
+```
 
-const address = 'SP2BS6HD7TN34V8Z5BNF8Q2AW3K8K2DPV4264CF26';
-const accountInfoUrl = network.getAccountApiUrl(address);
+The network's own `client` is used by default. A `client` option overrides it, field by field.
 
-const contractName = 'hello_world';
-const abiUrl = network.getAbiApiUrl(address, contractName);
+The `client` object has two optional fields:
 
-const functionName = 'hello';
-const readOnlyFunctionCallUrl = network.getReadOnlyFunctionCallApiUrl(
-  address,
-  contractName,
-  functionName
-);
+- `baseUrl` — the node URL.
+- `fetch` — a custom [fetch-compatible](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API) function.
 
-const nodeInfoUrl = network.getInfoUrl();
+`fetch` is the only field of a network that is not serializable. It is also the extension point: bake middleware (authentication, retries, logging) into your `fetch` function.
 
-const blockTimeUrl = network.getBlockTimeInfoUrl();
+On the exported constants, `client.fetch` is undefined. The consuming function creates a default fetch function when it needs one.
 
-const poxInfoUrl = network.getPoxInfoUrl();
+## The network object
+
+A `StacksNetwork` object has this shape:
+
+```typescript
+interface StacksNetwork {
+  chainId: number;
+  transactionVersion: number;
+  peerNetworkId: number;
+  magicBytes: string;
+  bootAddress: string;
+  addressVersion: { singleSig: number; multiSig: number };
+  client: { baseUrl: string; fetch?: FetchFn };
+}
+```
+
+The constants `ChainId`, `TransactionVersion`, and `AddressVersion` are exported for code that reads these fields.
+
+```typescript
+import { AddressVersion, ChainId, TransactionVersion } from '@stacks/network';
+
+ChainId.Mainnet; // 0x00000001
+TransactionVersion.Mainnet; // 0x00
+AddressVersion.MainnetSingleSig; // 22
 ```
