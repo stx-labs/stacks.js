@@ -111,6 +111,10 @@ export type NoCoinbaseViaMempoolRejection = {
   reason: 'NoCoinbaseViaMempool';
 } & BaseRejection;
 
+export type ConflictingNonceInMempoolRejection = {
+  reason: 'ConflictingNonceInMempool';
+} & BaseRejection;
+
 export type ServerFailureNoSuchChainTipRejection = {
   reason: 'ServerFailureNoSuchChainTip';
 } & BaseRejection;
@@ -149,6 +153,7 @@ export type TxBroadcastResultRejected =
   | PoisonMicroblockIsInvalidRejection
   | BadAddressVersionByteRejection
   | NoCoinbaseViaMempoolRejection
+  | ConflictingNonceInMempoolRejection
   | ServerFailureNoSuchChainTipRejection
   | ServerFailureDatabaseRejection
   | ServerFailureOtherRejection;

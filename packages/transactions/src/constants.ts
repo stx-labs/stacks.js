@@ -293,6 +293,7 @@ export enum TxRejectedReason {
   PoisonMicroblockIsInvalid = 'PoisonMicroblockIsInvalid',
   BadAddressVersionByte = 'BadAddressVersionByte',
   NoCoinbaseViaMempool = 'NoCoinbaseViaMempool',
+  ConflictingNonceInMempool = 'ConflictingNonceInMempool',
   ServerFailureNoSuchChainTip = 'ServerFailureNoSuchChainTip',
   ServerFailureDatabase = 'ServerFailureDatabase',
   ServerFailureOther = 'ServerFailureOther',
