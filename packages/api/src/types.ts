@@ -54,33 +54,39 @@ export interface V1InfoBlockTimesResponse {
 }
 
 export interface ExtendedAccountBalancesResponse {
-  stx: {
-    balance: string;
-    total_sent: string;
-    total_received: string;
-    locked: string;
+  balance: string;
+  available: string;
+  locked: {
+    amount: string;
+    pox_version: number;
     lock_tx_id: string;
-    lock_height: number;
-    burnchain_lock_height: number;
-    burnchain_unlock_height: number;
-  };
-  fungible_tokens: any;
-  non_fungible_tokens: any;
+    stacks_lock_height: number;
+    burn_lock_height: number;
+    burn_unlock_height: number;
+  } | null;
+  mempool: {
+    estimated_balance: string;
+    inbound: string;
+    outbound: string;
+  } | null;
 }
 
 export interface ExtendedAccountBalances {
-  stx: {
-    balance: bigint;
-    total_sent: bigint;
-    total_received: bigint;
-    locked: bigint;
+  balance: bigint;
+  available: bigint;
+  locked: {
+    amount: bigint;
+    pox_version: number;
     lock_tx_id: string;
-    lock_height: number;
-    burnchain_lock_height: number;
-    burnchain_unlock_height: number;
-  };
-  fungible_tokens: any;
-  non_fungible_tokens: any;
+    stacks_lock_height: number;
+    burn_lock_height: number;
+    burn_unlock_height: number;
+  } | null;
+  mempool: {
+    estimated_balance: bigint;
+    inbound: bigint;
+    outbound: bigint;
+  } | null;
 }
 
 export interface PaginationOptions {

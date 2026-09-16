@@ -51,7 +51,7 @@ import 'cross-fetch/polyfill';
 
 import { StackerInfo, StackingClient } from '@stacks/stacking';
 
-import { AccountsApi, Configuration, FaucetsApi } from '@stacks/blockchain-api-client';
+import { Configuration, FaucetsApi } from '@stacks/blockchain-api-client';
 
 import { GaiaHubConfig } from '@stacks/storage';
 
@@ -96,7 +96,7 @@ import {
 
 import { gaiaAuth, gaiaConnect, gaiaUploadProfileAll, getGaiaAddressFromProfile } from './data';
 
-import { STACKS_TESTNET } from '@stacks/network';
+import { STACKS_TESTNET, StacksNetwork } from '@stacks/network';
 import { internal_parseCommaSeparated } from '@stacks/transactions';
 import {
   generateNewAccount,
@@ -1666,6 +1666,18 @@ async function stackingStatus(_network: CLINetworkAdapter, args: string[]): Prom
     });
 }
 
+/**
+ * Fetch the spendable (unlocked) STX balance of an address via the
+ * `/extended/v3/principals/{principal}/balances/stx` endpoint.
+ */
+async function fetchAvailableBalance(network: StacksNetwork, address: string): Promise<bigint> {
+  const res = await fetch(
+    `${network.client.baseUrl}/extended/v3/principals/${address}/balances/stx`
+  );
+  const json: { available: string } = await res.json();
+  return BigInt(json.available);
+}
+
 async function canStack(_network: CLINetworkAdapter, args: string[]): Promise<string> {
   const amount = BigInt(args[0]);
   const cycles = Number(args[1]);
@@ -1675,14 +1687,7 @@ async function canStack(_network: CLINetworkAdapter, args: string[]): Promise<st
   const network = getStacksNetwork(_network);
   const stacker = new StackingClient({ address: stxAddress, network });
 
-  const apiConfig = new Configuration({
-    basePath: network.client.baseUrl,
-  });
-  const accounts = new AccountsApi(apiConfig);
-
-  const balancePromise = accounts.getAccountBalance({
-    principal: stxAddress,
-  });
+  const balancePromise = fetchAvailableBalance(network, stxAddress);
 
   const poxInfoPromise = stacker.getPoxInfo();
 
@@ -1691,7 +1696,7 @@ async function canStack(_network: CLINetworkAdapter, args: string[]): Promise<st
   return Promise.all([balancePromise, poxInfoPromise, stackingEligiblePromise])
     .then(([balance, poxInfo, stackingEligible]) => {
       const minAmount = BigInt(poxInfo.min_amount_ustx);
-      const balanceBN = BigInt(balance.stx.balance);
+      const balanceBN = balance;
 
       if (minAmount > amount) {
         throw new Error(
@@ -1701,7 +1706,7 @@ async function canStack(_network: CLINetworkAdapter, args: string[]): Promise<st
 
       if (amount > balanceBN) {
         throw new Error(
-          `Stacking amount greater than account balance of ${balanceBN.toString()} microstacks`
+          `Stacking amount greater than spendable account balance of ${balanceBN.toString()} microstacks`
         );
       }
 
@@ -1735,18 +1740,11 @@ async function stack(_network: CLINetworkAdapter, args: string[]): Promise<strin
 
   const network = getStacksNetwork(_network);
 
-  const apiConfig = new Configuration({
-    basePath: network.client.baseUrl,
-  });
-  const accounts = new AccountsApi(apiConfig);
-
   const stxAddress = getAddressFromPrivateKey(privateKey, network);
 
-  const balancePromise = accounts.getAccountBalance({
-    principal: stxAddress,
-  });
-
   const stacker = new StackingClient({ address: stxAddress, network });
+
+  const balancePromise = fetchAvailableBalance(network, stxAddress);
 
   const poxInfoPromise = stacker.getPoxInfo();
 
@@ -1757,7 +1755,7 @@ async function stack(_network: CLINetworkAdapter, args: string[]): Promise<strin
   return Promise.all([balancePromise, poxInfoPromise, coreInfoPromise, stackingEligiblePromise])
     .then(([balance, poxInfo, coreInfo, stackingEligible]) => {
       const minAmount = BigInt(poxInfo.min_amount_ustx);
-      const balanceBN = BigInt(balance.stx.balance);
+      const balanceBN = balance;
       const burnChainBlockHeight = coreInfo.burn_block_height;
       const startBurnBlock = burnChainBlockHeight + 3;
 
@@ -1769,7 +1767,7 @@ async function stack(_network: CLINetworkAdapter, args: string[]): Promise<strin
 
       if (amount > balanceBN) {
         throw new Error(
-          `Stacking amount greater than account balance of ${balanceBN.toString()} microstacks`
+          `Stacking amount greater than spendable account balance of ${balanceBN.toString()} microstacks`
         );
       }
 

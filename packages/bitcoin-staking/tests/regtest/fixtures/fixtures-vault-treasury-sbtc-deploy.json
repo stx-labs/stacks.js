@@ -1,7 +1,7 @@
 {
-  "/extended/v1/address/ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP/nonces": {
+  "/extended/v3/principals/ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP/nonces": {
     "status": 200,
-    "body": "{\"last_mempool_tx_nonce\":null,\"last_executed_tx_nonce\":9,\"possible_next_nonce\":10,\"detected_missing_nonces\":[],\"detected_mempool_nonces\":[]}"
+    "body": "{\"next_nonce\":10,\"last_confirmed_nonce\":9,\"mempool\":{\"last_nonce\":null,\"pending_nonces\":[],\"missing_nonces\":[]}}"
   },
   "/v2/contracts/interface/ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP/sbtc-deposit": {
     "status": 200,

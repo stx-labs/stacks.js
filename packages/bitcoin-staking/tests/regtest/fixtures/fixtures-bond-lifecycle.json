@@ -1,5 +1,5 @@
 {
-  "/extended/v1/address/ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP/nonces": "{\"last_mempool_tx_nonce\":null,\"last_executed_tx_nonce\":225,\"possible_next_nonce\":226,\"detected_missing_nonces\":[],\"detected_mempool_nonces\":[]}",
+  "/extended/v3/principals/ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP/nonces": "{\"next_nonce\":226,\"last_confirmed_nonce\":225,\"mempool\":{\"last_nonce\":null,\"pending_nonces\":[],\"missing_nonces\":[]}}",
   "/v2/accounts/ST176BZ1B8SWTE3JD1FPBB57TX30M7Q6S2YT4DVYP?proof=0": "{\"balance\":\"0x00000000000000000000000000989680\",\"locked\":\"0x00000000000000000000000000000000\",\"unlock_height\":0,\"nonce\":0}",
   "/v2/accounts/ST1V2ASRWGR81W7GBN1Z4W2JQKXJWCADPVZG30X45?proof=0": "{\"balance\":\"0x0000000000000000002386f25d3931f0\",\"locked\":\"0x00000000000000000000000000000000\",\"unlock_height\":0,\"nonce\":89}",
   "/v2/contracts/call-read/ST000000000000000000002AMW42H/pox-5/get-bond-membership#ST000000000000000000002AMW42H:[\"0x051a4e65fc2b4679a70e4d0becb594fae8c143dcd917\"]": "{\"okay\":true,\"result\":\"0x09\"}",
