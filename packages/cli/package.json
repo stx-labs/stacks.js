@@ -49,7 +49,6 @@
     "@types/inquirer": "^8.2.12",
     "@types/node": "^18.0.4",
     "@types/node-fetch": "^2.5.0",
-    "@types/triplesec": "^3.0.3",
     "@types/wif": "^2.0.2",
     "rimraf": "^3.0.2"
   },

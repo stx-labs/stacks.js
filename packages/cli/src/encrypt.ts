@@ -1,5 +1,4 @@
 import { encryptMnemonic, decryptMnemonic } from '@stacks/encryption';
-import * as triplesec from 'triplesec';
 
 export async function encryptBackupPhrase(
   plaintextBuffer: string,
@@ -13,14 +12,18 @@ export async function decryptBackupPhrase(
   password: string
 ): Promise<string> {
   const bytes = typeof dataBuffer === 'string' ? Buffer.from(dataBuffer, 'hex') : dataBuffer;
-  // TripleSec backups predate the current mnemonic encryption format.
-  if (bytes.length >= 8 && bytes.readUInt32BE(0) === 0x1c94d7de) {
-    return new Promise((resolve, reject) => {
-      triplesec.decrypt({ data: bytes, key: Buffer.from(password) }, (error, plaintext) => {
-        if (error || !plaintext) reject(error ?? new Error('TripleSec decryption failed'));
-        else resolve(plaintext.toString());
-      });
+  // Legacy triplesec encrypted payloads are also supported.
+  const TRIPLESEC_MAGIC = 0x1c94d7de; // first 4 bytes of every TripleSec ciphertext header
+  if (bytes.readUInt32BE(0) === TRIPLESEC_MAGIC) {
+    return new Promise<string>((resolve, reject) => {
+      require('triplesec').decrypt(
+        { key: Buffer.from(password), data: bytes },
+        (err: Error | null, plaintextBytes: Buffer | null) => {
+          if (!err && plaintextBytes) return resolve(plaintextBytes.toString());
+          reject(err ?? new Error('TripleSec decryption failed'));
+        }
+      );
     });
   }
-  return decryptMnemonic(dataBuffer, password);
+  return decryptMnemonic(bytes, password);
 }
