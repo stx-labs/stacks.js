@@ -1,0 +1,2 @@
+- Only the user can commit/pull/push, we're using security keys for signing.
+- Use conventional commits for commit messages, draft commit messages for the user.
