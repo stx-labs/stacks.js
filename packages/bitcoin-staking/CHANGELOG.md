@@ -1,5 +1,15 @@
 # @stacks/bitcoin-staking
 
+## 7.6.1
+
+### Patch Changes
+
+- Updated dependencies [[`dd6a2ff`](https://github.com/stx-labs/stacks.js/commit/dd6a2ff9b7aad667c88d874804fdf3d3d3d4d331), [`f95f2bb`](https://github.com/stx-labs/stacks.js/commit/f95f2bb726d34fa1f8e11eaae1c5288f4f86e481)]:
+  - @stacks/network@7.6.1
+  - @stacks/transactions@7.6.1
+  - @stacks/common@7.6.1
+  - @stacks/encryption@7.6.1
+
 ## 7.6.0
 
 ### Minor Changes
