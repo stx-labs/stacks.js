@@ -49,15 +49,7 @@
     "webpack-cli": "^5.1.4"
   },
   "overrides": {
-    "tmp": "^0.2.7",
-    "schema-inspector": "^2.0.2",
-    "cheerio": "^1.0.0",
-    "request": "npm:@cypress/request@^4.0.1",
-    "blockstack": {
-      "ajv": "^6.12.6",
-      "uuid": "^11.1.1",
-      "jsontokens": "^4.0.1"
-    }
+    "schema-inspector": "^2.0.2"
   },
   "repository": {
     "type": "git",
