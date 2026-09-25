@@ -3,6 +3,30 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [7.7.0](https://github.com/stx-labs/stacks.js/compare/v7.6.0...v7.7.0) (2026-09-25)
+
+### @stacks/api, @stacks/bitcoin-staking, @stacks/bns, @stacks/common, @stacks/encryption, @stacks/internal, @stacks/profile, @stacks/stacking, @stacks/storage, @stacks/wallet-sdk
+
+**Note:** Updated sibling dependencies only.
+
+### @stacks/auth, @stacks/network
+
+#### Patch Changes
+
+- [#1882](https://github.com/stx-labs/stacks.js/pull/1882) [`dd6a2ff`](https://github.com/stx-labs/stacks.js/commit/dd6a2ff9b7aad667c88d874804fdf3d3d3d4d331) - Remove unused `cross-fetch` dependency from `@stacks/network` and `@stacks/auth`. Neither package has imported it since v7; network calls rely on the global `fetch` via `@stacks/common`.
+
+### @stacks/cli
+
+#### Minor Changes
+
+- [#1890](https://github.com/stx-labs/stacks.js/pull/1890) [`d10d71d`](https://github.com/stx-labs/stacks.js/commit/d10d71dcdf2d642ab23e5c75921759f741a99089) - Replace the legacy `blockstack` dependency with Stacks packages.
+
+### @stacks/transactions
+
+#### Patch Changes
+
+- [#1857](https://github.com/stx-labs/stacks.js/pull/1857) [`f95f2bb`](https://github.com/stx-labs/stacks.js/commit/f95f2bb726d34fa1f8e11eaae1c5288f4f86e481) - Remove `lodash.clonedeep` dependency in favor of native `structuredClone`; fixes ESM bundling error "default is not exported by lodash.clonedeep" ([#1782](https://github.com/stx-labs/stacks.js/issues/1782)). Requires Node.js 17+ or a browser with `structuredClone`.
+
 ## [7.6.0](https://github.com/stx-labs/stacks.js/compare/v7.5.0...v7.6.0) (2026-07-29)
 
 ### @stacks/api, @stacks/auth, @stacks/bns, @stacks/cli, @stacks/encryption, @stacks/internal, @stacks/network, @stacks/profile, @stacks/stacking, @stacks/storage, @stacks/wallet-sdk
