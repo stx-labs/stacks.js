@@ -1,5 +1,14 @@
 # Change Log
 
+## 7.7.0
+
+### Patch Changes
+
+- Updated dependencies [[`dd6a2ff`](https://github.com/stx-labs/stacks.js/commit/dd6a2ff9b7aad667c88d874804fdf3d3d3d4d331)]:
+  - @stacks/auth@7.7.0
+  - @stacks/common@7.7.0
+  - @stacks/encryption@7.7.0
+
 ## 7.6.0
 
 ### Patch Changes
