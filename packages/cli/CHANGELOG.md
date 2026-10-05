@@ -1,5 +1,27 @@
 # Change Log
 
+## 7.7.0
+
+### Minor Changes
+
+- [#1890](https://github.com/stx-labs/stacks.js/pull/1890) [`d10d71d`](https://github.com/stx-labs/stacks.js/commit/d10d71dcdf2d642ab23e5c75921759f741a99089) - Replace the legacy `blockstack` dependency with Stacks packages.
+
+- [#1879](https://github.com/stx-labs/stacks.js/pull/1879) [`e6084a5`](https://github.com/stx-labs/stacks.js/commit/e6084a52140b2ad010a9d1a0f1b87d527c3a8870) - Use the `/extended/v3/principals/{principal}/balances/stx` endpoint for the stacking balance check instead of the deprecated `/extended/v1/address/{address}/balances`. The `stack` command now compares the stacking amount against the spendable (unlocked) balance rather than the total balance.
+
+### Patch Changes
+
+- Updated dependencies [[`dd6a2ff`](https://github.com/stx-labs/stacks.js/commit/dd6a2ff9b7aad667c88d874804fdf3d3d3d4d331), [`f95f2bb`](https://github.com/stx-labs/stacks.js/commit/f95f2bb726d34fa1f8e11eaae1c5288f4f86e481), [`e6084a5`](https://github.com/stx-labs/stacks.js/commit/e6084a52140b2ad010a9d1a0f1b87d527c3a8870)]:
+  - @stacks/network@7.7.0
+  - @stacks/auth@7.7.0
+  - @stacks/transactions@7.7.0
+  - @stacks/bns@7.7.0
+  - @stacks/common@7.7.0
+  - @stacks/encryption@7.7.0
+  - @stacks/profile@7.7.0
+  - @stacks/stacking@7.7.0
+  - @stacks/storage@7.7.0
+  - @stacks/wallet-sdk@7.7.0
+
 ## 7.6.0
 
 ### Patch Changes
