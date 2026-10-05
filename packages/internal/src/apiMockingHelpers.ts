@@ -1,4 +1,3 @@
-import { Configuration, TransactionsApi } from '@stacks/blockchain-api-client';
 import { STACKS_TESTNET } from '@stacks/network';
 import { MockResponseInitFunction } from 'jest-fetch-mock';
 import { StackingClient } from '@stacks/stacking';
@@ -67,21 +66,17 @@ const ITERATION_INTERVAL = 1000;
 export async function waitForTx(txId: string, apiUrl = 'http://localhost:3999') {
   if (isMocking()) return;
 
-  const txApi = new TransactionsApi(new Configuration({ basePath: apiUrl }));
-
   for (let i = 1; i <= MAX_ITERATIONS; i++) {
-    try {
-      const txInfo = (await txApi.getTransactionById({ txId })) as any;
-      console.log('txInfo', txInfo);
-      if (txInfo?.tx_status === 'success') {
-        console.log(`✓ ${JSON.stringify(txInfo?.tx_result)}`);
-        return txInfo;
-      } else if (txInfo?.tx_result) {
-        return console.log(`✕ ${JSON.stringify(txInfo.tx_result)}`);
-      }
-    } catch (e: any) {
-      if (e?.ok === false) throw Error(`✕ ${e?.status}: ${txId}`);
-      throw e;
+    const response = await fetch(`${apiUrl}/extended/v1/tx/${txId}`);
+    if (!response.ok) throw Error(`✕ ${response.status}: ${txId}`);
+
+    const txInfo = (await response.json()) as any;
+    console.log('txInfo', txInfo);
+    if (txInfo?.tx_status === 'success') {
+      console.log(`✓ ${JSON.stringify(txInfo?.tx_result)}`);
+      return txInfo;
+    } else if (txInfo?.tx_result) {
+      return console.log(`✕ ${JSON.stringify(txInfo.tx_result)}`);
     }
     console.log(`waiting (${i}x)`);
     await sleep(ITERATION_INTERVAL);

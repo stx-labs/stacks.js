@@ -1,6 +1,4 @@
 import { publicKeyToBtcAddress } from '@stacks/encryption';
-import * as bitcoinjs from 'bitcoinjs-lib';
-import { TransactionSigner } from 'blockstack';
 import { DEFAULT_MAX_ID_SEARCH_INDEX } from './argparse';
 import { CLINetworkAdapter } from './network';
 import { privateKeyToPublic } from '@stacks/transactions';
@@ -15,7 +13,7 @@ export function setMaxIDSearchIndex(index: number) {
   maxIDSearchIndex = index;
 }
 
-export class CLITransactionSigner implements TransactionSigner {
+export class CLITransactionSigner {
   address: string;
   isComplete: boolean;
 
@@ -26,10 +24,6 @@ export class CLITransactionSigner implements TransactionSigner {
 
   getAddress(): Promise<string> {
     return Promise.resolve().then(() => this.address);
-  }
-
-  signTransaction(_txIn: bitcoinjs.TransactionBuilder, _signingIndex: number): Promise<void> {
-    return Promise.resolve().then(() => {});
   }
 
   signerVersion(): number {

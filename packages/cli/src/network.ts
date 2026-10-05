@@ -1,7 +1,5 @@
-import { createFetchFn, FetchFn } from '@stacks/common';
+import { createFetchFn } from '@stacks/common';
 import * as bitcoin from 'bitcoinjs-lib';
-import blockstack from 'blockstack';
-import { BlockstackNetwork } from 'blockstack/lib/network';
 import { CLI_CONFIG_TYPE } from './argparse';
 import { STACKS_MAINNET, STACKS_TESTNET, StacksNetwork } from '@stacks/network';
 
@@ -22,6 +20,12 @@ export interface PriceType {
   units: 'BTC' | 'STACKS';
   amount: bigint;
 }
+
+export type AccountHistoryEntry = {
+  address: string;
+  credit_value: bigint;
+  debit_value: bigint;
+};
 
 export type NameInfoType = {
   address: string;
@@ -51,9 +55,9 @@ export class CLINetworkAdapter {
   receiveFeesPeriod: number | null;
   nodeAPIUrl: string;
   optAlwaysCoerceAddress: boolean;
-  legacyNetwork: BlockstackNetwork;
+  layer1: bitcoin.Network;
 
-  constructor(network: BlockstackNetwork, opts: CLI_NETWORK_OPTS) {
+  constructor(network: ReturnType<typeof getNetwork>, opts: CLI_NETWORK_OPTS) {
     const optsDefault: CLI_NETWORK_OPTS = {
       consensusHash: null,
       feeRate: null,
@@ -69,12 +73,7 @@ export class CLINetworkAdapter {
 
     opts = Object.assign({}, optsDefault, opts);
 
-    this.legacyNetwork = new BlockstackNetwork(
-      opts.nodeAPIUrl!,
-      opts.altTransactionBroadcasterUrl!,
-      network.btc,
-      network.layer1
-    );
+    this.layer1 = network.layer1;
     this.consensusHash = opts.consensusHash;
     this.feeRate = opts.feeRate;
     this.namespaceBurnAddress = opts.namespaceBurnAddress;
@@ -88,11 +87,11 @@ export class CLINetworkAdapter {
   }
 
   isMainnet(): boolean {
-    return this.legacyNetwork.layer1.pubKeyHash === bitcoin.networks.bitcoin.pubKeyHash;
+    return this.layer1.pubKeyHash === bitcoin.networks.bitcoin.pubKeyHash;
   }
 
   isTestnet(): boolean {
-    return this.legacyNetwork.layer1.pubKeyHash === bitcoin.networks.testnet.pubKeyHash;
+    return this.layer1.pubKeyHash === bitcoin.networks.testnet.pubKeyHash;
   }
 
   setCoerceMainnetAddress(value: boolean) {
@@ -105,127 +104,18 @@ export class CLINetworkAdapter {
     const addressVersion = addressInfo.version;
     let newVersion = 0;
 
-    if (addressVersion === this.legacyNetwork.layer1.pubKeyHash) {
+    if (addressVersion === this.layer1.pubKeyHash) {
       newVersion = 0;
-    } else if (addressVersion === this.legacyNetwork.layer1.scriptHash) {
+    } else if (addressVersion === this.layer1.scriptHash) {
       newVersion = 5;
     }
     return bitcoin.address.toBase58Check(addressHash, newVersion);
   }
 
-  getFeeRate(): Promise<number> {
-    if (this.feeRate) {
-      // override with CLI option
-      return Promise.resolve(this.feeRate);
-    }
-    return this.legacyNetwork.getFeeRate();
-  }
-
-  getConsensusHash(): Promise<string> {
-    // override with CLI option
-    if (this.consensusHash) {
-      return new Promise((resolve: any) => resolve(this.consensusHash));
-    }
-    return this.legacyNetwork.getConsensusHash().then((c: string) => c);
-  }
-
-  getGracePeriod(): Promise<number> {
-    if (this.gracePeriod) {
-      return new Promise((resolve: any) => resolve(this.gracePeriod));
-    }
-    return this.legacyNetwork.getGracePeriod().then((g: number) => g);
-  }
-
-  getNamePrice(name: string): Promise<PriceType> {
-    // override with CLI option
-    if (this.priceUnits && this.priceToPay) {
-      return new Promise((resolve: any) =>
-        resolve({
-          units: String(this.priceUnits),
-          amount: BigInt(this.priceToPay || 0),
-        } as PriceType)
-      );
-    }
-    // @ts-ignore
-    return this.legacyNetwork.getNamePrice(name).then((priceInfo: PriceType) => {
-      // use v2 scheme
-      if (!priceInfo.units) {
-        priceInfo = {
-          units: 'BTC',
-          amount: BigInt(priceInfo.amount),
-        };
-      }
-      return priceInfo;
-    });
-  }
-
-  getNamespacePrice(namespaceID: string): Promise<PriceType> {
-    // override with CLI option
-    if (this.priceUnits && this.priceToPay) {
-      return new Promise((resolve: any) =>
-        resolve({
-          units: String(this.priceUnits),
-          amount: BigInt(this.priceToPay || 0),
-        } as PriceType)
-      );
-    }
-    // @ts-ignore
-    return super.getNamespacePrice(namespaceID).then((priceInfo: PriceType) => {
-      // use v2 scheme
-      if (!priceInfo.units) {
-        priceInfo = {
-          units: 'BTC',
-          amount: BigInt(priceInfo.amount),
-        } as PriceType;
-      }
-      return priceInfo;
-    });
-  }
-
-  getNamespaceBurnAddress(
-    namespace: string,
-    useCLI: boolean = true,
-    receiveFeesPeriod: number = -1,
-    fetchFn: FetchFn = createFetchFn()
-  ): Promise<string> {
-    // override with CLI option
-    if (this.namespaceBurnAddress && useCLI) {
-      return new Promise((resolve: any) => resolve(this.namespaceBurnAddress));
-    }
-
-    return Promise.all([
-      fetchFn(`${this.legacyNetwork.blockstackAPIUrl}/v1/namespaces/${namespace}`),
-      this.legacyNetwork.getBlockHeight(),
-    ])
-      .then(([resp, blockHeight]: [any, number]) => {
-        if (resp.status === 404) {
-          throw new Error(`No such namespace '${namespace}'`);
-        } else if (resp.status !== 200) {
-          throw new Error(`Bad response status: ${resp.status}`);
-        } else {
-          return resp.json().then((namespaceJson: unknown) => [namespaceJson, blockHeight]);
-        }
-      })
-      .then(([namespaceInfo, blockHeight]: [any, number]) => {
-        let address = '1111111111111111111114oLvT2'; // default burn address
-        if (namespaceInfo.version === 2) {
-          // pay-to-namespace-creator if this namespace is less than $receiveFeesPeriod blocks old
-          if (receiveFeesPeriod < 0) {
-            receiveFeesPeriod = this.receiveFeesPeriod!;
-          }
-
-          if (namespaceInfo.reveal_block + receiveFeesPeriod > blockHeight) {
-            address = namespaceInfo.address;
-          }
-        }
-        return address;
-      })
-      .then((address: string) => this.legacyNetwork.coerceAddress(address));
-  }
-
   getNameInfo(name: string): Promise<NameInfoType> {
     // optionally coerce addresses
-    return this.legacyNetwork.getNameInfo(name).then((ni: any) => {
+    return this.fetchLegacy<NameInfoType>(`/v1/names/${name}`, 'Name not found').then(ni => {
+      if (ni.address) ni.address = this.coerceAddress(ni.address);
       const nameInfo: NameInfoType = {
         address: this.optAlwaysCoerceAddress ? this.coerceMainnetAddress(ni.address) : ni.address,
         blockchain: ni.blockchain,
@@ -243,110 +133,53 @@ export class CLINetworkAdapter {
     });
   }
 
-  getBlockchainNameRecord(name: string, fetchFn: FetchFn = createFetchFn()): Promise<any> {
-    // TODO: send to blockstack.js
-    const url = `${this.legacyNetwork.blockstackAPIUrl}/v1/blockchains/bitcoin/names/${name}`;
-    return fetchFn(url)
-      .then(resp => {
-        if (resp.status !== 200) {
-          throw new Error(`Bad response status: ${resp.status}`);
-        } else {
-          return resp.json();
-        }
-      })
-      .then(nameInfo => {
-        // coerce all addresses
-        const fixedAddresses: Record<string, any> = {};
-        for (const addrAttr of ['address', 'importer_address', 'recipient_address']) {
-          if (nameInfo.hasOwnProperty(addrAttr) && nameInfo[addrAttr]) {
-            fixedAddresses[addrAttr] = this.legacyNetwork.coerceAddress(nameInfo[addrAttr]);
-          }
-        }
-        return Object.assign(nameInfo, fixedAddresses);
-      });
+  coerceAddress(address: string): string {
+    const { hash, version } = bitcoin.address.fromBase58Check(address);
+    let coercedVersion: number;
+    if (
+      [bitcoin.networks.bitcoin.scriptHash, bitcoin.networks.testnet.scriptHash].includes(version)
+    ) {
+      coercedVersion = this.layer1.scriptHash;
+    } else if (
+      [bitcoin.networks.bitcoin.pubKeyHash, bitcoin.networks.testnet.pubKeyHash].includes(version)
+    ) {
+      coercedVersion = this.layer1.pubKeyHash;
+    } else {
+      throw new Error(`Unrecognized address version number ${version} in ${address}`);
+    }
+    return bitcoin.address.toBase58Check(hash, coercedVersion);
   }
 
-  getNameHistory(
-    name: string,
-    page: number,
-    fetchFn: FetchFn = createFetchFn()
-  ): Promise<Record<string, any[]>> {
-    // TODO: send to blockstack.js
-    const url = `${this.legacyNetwork.blockstackAPIUrl}/v1/names/${name}/history?page=${page}`;
-    return fetchFn(url)
-      .then(resp => {
-        if (resp.status !== 200) {
-          throw new Error(`Bad response status: ${resp.status}`);
-        }
-        return resp.json();
-      })
-      .then(historyInfo => {
-        // coerce all addresses
-        const fixedHistory: Record<string, any[]> = {};
-        for (const historyBlock of Object.keys(historyInfo)) {
-          const fixedHistoryList: any[] = [];
-          for (const historyEntry of historyInfo[historyBlock]) {
-            const fixedAddresses: Record<string, string> = {};
-            let fixedHistoryEntry: any = {};
-            for (const addrAttr of ['address', 'importer_address', 'recipient_address']) {
-              if (historyEntry.hasOwnProperty(addrAttr) && historyEntry[addrAttr]) {
-                fixedAddresses[addrAttr] = this.legacyNetwork.coerceAddress(historyEntry[addrAttr]);
-              }
-            }
-            fixedHistoryEntry = Object.assign(historyEntry, fixedAddresses);
-            fixedHistoryList.push(fixedHistoryEntry);
-          }
-          fixedHistory[historyBlock] = fixedHistoryList;
-        }
-        return fixedHistory;
-      });
+  private async fetchLegacy<T>(path: string, notFound: string): Promise<T> {
+    const response = await createFetchFn()(`${this.nodeAPIUrl}${path}`);
+    if (response.status === 404) throw new Error(notFound);
+    if (response.status !== 200) throw new Error(`Bad response status: ${response.status}`);
+    return response.json();
   }
 
-  coerceAddress(address: string) {
-    return this.legacyNetwork.coerceAddress(address);
-  }
-
-  getAccountHistoryPage(address: string, page: number) {
-    return this.legacyNetwork.getAccountHistoryPage(address, page);
-  }
-
-  broadcastTransaction(tx: string) {
-    return this.legacyNetwork.broadcastTransaction(tx);
-  }
-
-  broadcastZoneFile(zonefile: string, txid: string) {
-    return this.legacyNetwork.broadcastZoneFile(zonefile, txid);
-  }
-
-  getNamesOwned(address: string) {
-    return this.legacyNetwork.getNamesOwned(address);
+  async getAccountHistoryPage(address: string, page: number): Promise<AccountHistoryEntry[]> {
+    const history = await this.fetchLegacy<AccountHistoryEntry[] | { error: string }>(
+      `/v1/accounts/${address}/history?page=${page}`,
+      'Account not found'
+    );
+    if ('error' in history) throw new Error(`Unable to get account history page: ${history.error}`);
+    return history.map(entry => ({
+      ...entry,
+      address: this.coerceAddress(entry.address),
+      debit_value: BigInt(entry.debit_value),
+      credit_value: BigInt(entry.credit_value),
+    }));
   }
 }
 
 /*
  * Instantiate a network using settings from the config file.
  */
-export function getNetwork(configData: CLI_CONFIG_TYPE, testNet: boolean): BlockstackNetwork {
-  if (testNet) {
-    const network = new blockstack.network.LocalRegtest(
-      configData.blockstackAPIUrl,
-      configData.broadcastServiceUrl,
-      new blockstack.network.BitcoindAPI(configData.utxoServiceUrl, {
-        username: configData.bitcoindUsername || 'blockstack',
-        password: configData.bitcoindPassword || 'blockstacksystem',
-      })
-    );
-
-    return network;
-  } else {
-    const network = new BlockstackNetwork(
-      configData.blockstackAPIUrl,
-      configData.broadcastServiceUrl,
-      new blockstack.network.BlockchainInfoApi(configData.utxoServiceUrl)
-    );
-
-    return network;
-  }
+export function getNetwork(configData: CLI_CONFIG_TYPE, testNet: boolean) {
+  return {
+    layer1: testNet ? bitcoin.networks.testnet : bitcoin.networks.bitcoin,
+    broadcastServiceUrl: configData.broadcastServiceUrl,
+  };
 }
 
 /** @internal helper to convert a CLINetworkAdapter to a StacksNetwork */

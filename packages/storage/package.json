@@ -27,8 +27,8 @@
     "jsontokens": "^4.0.1"
   },
   "devDependencies": {
-    "@types/jsdom": "^16.2.10",
-    "jsdom": "^16.5.3",
+    "@types/jsdom": "^30.0.0",
+    "jsdom": "^26.1.0",
     "rimraf": "^3.0.2"
   },
   "sideEffects": false,

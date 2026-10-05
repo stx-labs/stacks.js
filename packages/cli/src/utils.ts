@@ -3,8 +3,10 @@ import * as bitcoinjs from 'bitcoinjs-lib';
 import * as readline from 'readline';
 import * as stream from 'stream';
 import * as fs from 'fs';
-import * as blockstack from 'blockstack';
+import { signProfileToken, wrapProfileToken } from '@stacks/profile';
 import {
+  privateKeyToPublic,
+  publicKeyToHex,
   getTypeString,
   ClarityAbiType,
   isClarityAbiPrimitive,
@@ -45,13 +47,6 @@ import { getOwnerKeyInfo, getApplicationKeyInfo, extractAppKey } from './keys';
 
 import { NameInfoType, CLINetworkAdapter } from './network';
 
-interface UTXO {
-  value?: number;
-  confirmations?: number;
-  tx_hash: string;
-  tx_output_n: number;
-}
-
 class NullSigner extends CLITransactionSigner {}
 
 class MultiSigKeySigner extends CLITransactionSigner {
@@ -71,7 +66,7 @@ class MultiSigKeySigner extends CLITransactionSigner {
       this.m = parseInt(bitcoinjs.script.toASM([firstOp]).slice(3), 10);
       this.address = bitcoinjs.address.toBase58Check(
         bitcoinjs.crypto.hash160(this.redeemScript),
-        blockstack.config.network.layer1.scriptHash
+        bitcoinjs.networks.bitcoin.scriptHash
       );
     } catch (e) {
       logger.error(e);
@@ -81,16 +76,6 @@ class MultiSigKeySigner extends CLITransactionSigner {
 
   getAddress(): Promise<string> {
     return Promise.resolve().then(() => this.address);
-  }
-
-  signTransaction(txIn: bitcoinjs.TransactionBuilder, signingIndex: number): Promise<void> {
-    return Promise.resolve().then(() => {
-      const keysToUse = this.privateKeys.slice(0, this.m);
-      keysToUse.forEach(keyHex => {
-        const ecPair = blockstack.hexStringToECPair(keyHex);
-        txIn.sign(signingIndex, ecPair, this.redeemScript);
-      });
-    });
   }
 
   signerVersion(): number {
@@ -110,7 +95,7 @@ class SegwitP2SHKeySigner extends CLITransactionSigner {
     this.witnessScript = Buffer.from(witnessScript, 'hex');
     this.address = bitcoinjs.address.toBase58Check(
       bitcoinjs.crypto.hash160(this.redeemScript),
-      blockstack.config.network.layer1.scriptHash
+      bitcoinjs.networks.bitcoin.scriptHash
     );
 
     this.privateKeys = privateKeys;
@@ -120,64 +105,6 @@ class SegwitP2SHKeySigner extends CLITransactionSigner {
 
   getAddress(): Promise<string> {
     return Promise.resolve().then(() => this.address);
-  }
-
-  findUTXO(txIn: bitcoinjs.TransactionBuilder, signingIndex: number, utxos: UTXO[]): UTXO {
-    // NOTE: this is O(n*2) complexity for n UTXOs when signing an n-input transaction
-    // NOTE: as of bitcoinjs-lib 4.x, the "tx" field is private
-    const private_tx = (txIn as any).__TX;
-    const txidBuf = new Buffer(private_tx.ins[signingIndex].hash.slice());
-    const outpoint = private_tx.ins[signingIndex].index;
-
-    txidBuf.reverse(); // NOTE: bitcoinjs encodes txid as big-endian
-    const txid = txidBuf.toString('hex');
-
-    for (let i = 0; i < utxos.length; i++) {
-      if (utxos[i].tx_hash === txid && utxos[i].tx_output_n === outpoint) {
-        if (!utxos[i].value) {
-          throw new Error(`UTXO for hash=${txid} vout=${outpoint} has no value`);
-        }
-        return utxos[i];
-      }
-    }
-    throw new Error(`No UTXO for input hash=${txid} vout=${outpoint}`);
-  }
-
-  signTransaction(txIn: bitcoinjs.TransactionBuilder, signingIndex: number): Promise<void> {
-    // This is an interface issue more than anything else.  Basically, in order to
-    // form the segwit sighash, we need the UTXOs.  If we knew better, we would have
-    // blockstack.js simply pass the consumed UTXO into this method.  But alas, we do
-    // not.  Therefore, we need to re-query them.  This is probably fine, since we're
-    // not pressured for time when it comes to generating transactions.
-    return Promise.resolve()
-      .then(() => {
-        return this.getAddress();
-      })
-      .then(address => {
-        return blockstack.config.network.getUTXOs(address);
-      })
-      .then(utxos => {
-        const utxo = this.findUTXO(txIn, signingIndex, utxos);
-        if (this.m === 1) {
-          // p2sh-p2wpkh
-          const ecPair = blockstack.hexStringToECPair(this.privateKeys[0]);
-          txIn.sign(signingIndex, ecPair, this.redeemScript, undefined, utxo.value);
-        } else {
-          // p2sh-p2wsh
-          const keysToUse = this.privateKeys.slice(0, this.m);
-          keysToUse.forEach(keyHex => {
-            const ecPair = blockstack.hexStringToECPair(keyHex);
-            txIn.sign(
-              signingIndex,
-              ecPair,
-              this.redeemScript,
-              undefined,
-              utxo.value,
-              this.witnessScript
-            );
-          });
-        }
-      });
   }
 
   signerVersion(): number {
@@ -346,8 +273,12 @@ export function JSONStringify(obj: AnyJson, stderr: boolean = false): string {
  * @privateKey (string) the hex-encoded private key
  */
 export function getPublicKeyFromPrivateKey(privateKey: string): string {
-  const ecKeyPair = blockstack.hexStringToECPair(privateKey);
-  return ecKeyPair.publicKey.toString('hex');
+  if (!/^[0-9a-fA-F]{64}(01)?$/.test(privateKey)) {
+    throw new Error(
+      'Improperly formatted private-key hex string: expected 64 hex characters, optionally followed by 01.'
+    );
+  }
+  return publicKeyToHex(privateKeyToPublic(privateKey));
 }
 
 /*
@@ -365,8 +296,8 @@ export function canonicalPrivateKey(privkey: string): string {
  * Sign a profile into a JWT
  */
 export function makeProfileJWT(profileData: object, privateKey: string): string {
-  const signedToken = blockstack.signProfileToken(profileData, privateKey);
-  const wrappedToken = blockstack.wrapProfileToken(signedToken);
+  const signedToken = signProfileToken(profileData, privateKey);
+  const wrappedToken = wrapProfileToken(signedToken);
   const tokenRecords = [wrappedToken];
   return JSONStringify(tokenRecords as unknown as AnyJson);
 }

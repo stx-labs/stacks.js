@@ -7,10 +7,13 @@ import { HDKey } from '@scure/bip32';
 import * as scureBip39 from '@scure/bip39';
 
 import { getPublicKeyFromPrivate, publicKeyToBtcAddress } from '@stacks/encryption';
-import { DerivationType, deriveAccount, generateWallet, getRootNode } from '@stacks/wallet-sdk';
-import * as bip32 from 'bip32';
-import * as bip39 from 'bip39';
-import * as blockstack from 'blockstack';
+import {
+  DerivationType,
+  deriveAccount,
+  generateWallet,
+  getRootNode,
+  getAppPrivateKey,
+} from '@stacks/wallet-sdk';
 import * as wif from 'wif';
 
 import { getMaxIDSearchIndex, getPrivateKeyAddress } from './common';
@@ -24,6 +27,8 @@ const BITCOIN_WIF_TESTNET = 239;
 
 export const STX_WALLET_COMPATIBLE_SEED_STRENGTH = 256;
 const DERIVATION_PATH = "m/44'/5757'/0'/0/0";
+// Legacy Blockstack Bitcoin payment key path (BIP44 coin 0), as used by blockstack.js
+const BITCOIN_DERIVATION_PATH = "m/44'/0'/0'/0/0";
 
 export type OwnerKeyInfoType = {
   privateKey: string;
@@ -60,11 +65,6 @@ export type AppKeyInfoType = {
   };
   ownerKeyIndex: number;
 };
-
-async function walletFromMnemonic(mnemonic: string): Promise<blockstack.BlockstackWallet> {
-  const seed = await bip39.mnemonicToSeed(mnemonic);
-  return new blockstack.BlockstackWallet(bip32.fromSeed(seed));
-}
 
 /*
  * Get the owner key information for a 12-word phrase, at a specific index.
@@ -114,8 +114,9 @@ export async function getPaymentKeyInfo(
   network: CLINetworkAdapter,
   mnemonic: string
 ): Promise<PaymentKeyInfoType> {
-  const wallet = await walletFromMnemonic(mnemonic);
-  const privkey = wallet.getBitcoinPrivateKey(0);
+  const seed = await scureBip39.mnemonicToSeed(mnemonic);
+  const node = HDKey.fromMasterSeed(seed).derive(BITCOIN_DERIVATION_PATH);
+  const privkey = compressPrivateKey(node.privateKey!);
   const addr = getPrivateKeyAddress(network, privkey);
   const result: PaymentKeyInfoType = {
     privateKey: privkey,
@@ -238,17 +239,14 @@ export async function getApplicationKeyInfo(
     }
   }
 
-  const wallet = await walletFromMnemonic(mnemonic);
-  const identityOwnerAddressNode = wallet.getIdentityAddressNode(idIndex);
-  const appsNode = blockstack.BlockstackWallet.getAppsNode(identityOwnerAddressNode);
-
-  //const appPrivateKey = blockstack.BlockstackWallet.getAppPrivateKey(
-  //  appsNode.toBase58(), wallet.getIdentitySalt(), appDomain);
-  const legacyAppPrivateKey = blockstack.BlockstackWallet.getLegacyAppPrivateKey(
-    appsNode.toBase58(),
-    wallet.getIdentitySalt(),
-    appDomain
-  );
+  const wallet = await generateWallet({ secretKey: mnemonic, password: '' });
+  const account = deriveAccount({
+    rootNode: getRootNode(wallet),
+    salt: wallet.salt,
+    stxDerivationType: DerivationType.Wallet,
+    index: idIndex,
+  });
+  const legacyAppPrivateKey = getAppPrivateKey({ account, appDomain });
 
   // TODO: figure out when we can start using the new derivation path
   const res: AppKeyInfoType = {
