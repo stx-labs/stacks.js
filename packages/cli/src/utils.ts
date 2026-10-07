@@ -3,8 +3,10 @@ import * as bitcoinjs from 'bitcoinjs-lib';
 import * as readline from 'readline';
 import * as stream from 'stream';
 import * as fs from 'fs';
-import * as blockstack from 'blockstack';
+import { signProfileToken, wrapProfileToken } from '@stacks/profile';
 import {
+  privateKeyToPublic,
+  publicKeyToHex,
   getTypeString,
   ClarityAbiType,
   isClarityAbiPrimitive,
@@ -29,9 +31,6 @@ import {
 
 import { StacksNetwork, TransactionVersion } from '@stacks/network';
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const ZoneFile = require('zone-file');
-
 import {
   PRIVATE_KEY_NOSIGN_PATTERN,
   PRIVATE_KEY_PATTERN,
@@ -40,7 +39,7 @@ import {
   ID_ADDRESS_PATTERN,
 } from './argparse';
 
-import { CLITransactionSigner, isCLITransactionSigner } from './common';
+import { CLITransactionSigner } from './common';
 
 import { decryptBackupPhrase } from './encrypt';
 
@@ -48,16 +47,9 @@ import { getOwnerKeyInfo, getApplicationKeyInfo, extractAppKey } from './keys';
 
 import { NameInfoType, CLINetworkAdapter } from './network';
 
-export interface UTXO {
-  value?: number;
-  confirmations?: number;
-  tx_hash: string;
-  tx_output_n: number;
-}
+class NullSigner extends CLITransactionSigner {}
 
-export class NullSigner extends CLITransactionSigner {}
-
-export class MultiSigKeySigner extends CLITransactionSigner {
+class MultiSigKeySigner extends CLITransactionSigner {
   redeemScript: Buffer;
   privateKeys: string[];
   m: number;
@@ -74,7 +66,7 @@ export class MultiSigKeySigner extends CLITransactionSigner {
       this.m = parseInt(bitcoinjs.script.toASM([firstOp]).slice(3), 10);
       this.address = bitcoinjs.address.toBase58Check(
         bitcoinjs.crypto.hash160(this.redeemScript),
-        blockstack.config.network.layer1.scriptHash
+        bitcoinjs.networks.bitcoin.scriptHash
       );
     } catch (e) {
       logger.error(e);
@@ -86,22 +78,12 @@ export class MultiSigKeySigner extends CLITransactionSigner {
     return Promise.resolve().then(() => this.address);
   }
 
-  signTransaction(txIn: bitcoinjs.TransactionBuilder, signingIndex: number): Promise<void> {
-    return Promise.resolve().then(() => {
-      const keysToUse = this.privateKeys.slice(0, this.m);
-      keysToUse.forEach(keyHex => {
-        const ecPair = blockstack.hexStringToECPair(keyHex);
-        txIn.sign(signingIndex, ecPair, this.redeemScript);
-      });
-    });
-  }
-
   signerVersion(): number {
     return 0;
   }
 }
 
-export class SegwitP2SHKeySigner extends CLITransactionSigner {
+class SegwitP2SHKeySigner extends CLITransactionSigner {
   redeemScript: Buffer;
   witnessScript: Buffer;
   privateKeys: string[];
@@ -113,7 +95,7 @@ export class SegwitP2SHKeySigner extends CLITransactionSigner {
     this.witnessScript = Buffer.from(witnessScript, 'hex');
     this.address = bitcoinjs.address.toBase58Check(
       bitcoinjs.crypto.hash160(this.redeemScript),
-      blockstack.config.network.layer1.scriptHash
+      bitcoinjs.networks.bitcoin.scriptHash
     );
 
     this.privateKeys = privateKeys;
@@ -125,75 +107,8 @@ export class SegwitP2SHKeySigner extends CLITransactionSigner {
     return Promise.resolve().then(() => this.address);
   }
 
-  findUTXO(txIn: bitcoinjs.TransactionBuilder, signingIndex: number, utxos: UTXO[]): UTXO {
-    // NOTE: this is O(n*2) complexity for n UTXOs when signing an n-input transaction
-    // NOTE: as of bitcoinjs-lib 4.x, the "tx" field is private
-    const private_tx = (txIn as any).__TX;
-    const txidBuf = new Buffer(private_tx.ins[signingIndex].hash.slice());
-    const outpoint = private_tx.ins[signingIndex].index;
-
-    txidBuf.reverse(); // NOTE: bitcoinjs encodes txid as big-endian
-    const txid = txidBuf.toString('hex');
-
-    for (let i = 0; i < utxos.length; i++) {
-      if (utxos[i].tx_hash === txid && utxos[i].tx_output_n === outpoint) {
-        if (!utxos[i].value) {
-          throw new Error(`UTXO for hash=${txid} vout=${outpoint} has no value`);
-        }
-        return utxos[i];
-      }
-    }
-    throw new Error(`No UTXO for input hash=${txid} vout=${outpoint}`);
-  }
-
-  signTransaction(txIn: bitcoinjs.TransactionBuilder, signingIndex: number): Promise<void> {
-    // This is an interface issue more than anything else.  Basically, in order to
-    // form the segwit sighash, we need the UTXOs.  If we knew better, we would have
-    // blockstack.js simply pass the consumed UTXO into this method.  But alas, we do
-    // not.  Therefore, we need to re-query them.  This is probably fine, since we're
-    // not pressured for time when it comes to generating transactions.
-    return Promise.resolve()
-      .then(() => {
-        return this.getAddress();
-      })
-      .then(address => {
-        return blockstack.config.network.getUTXOs(address);
-      })
-      .then(utxos => {
-        const utxo = this.findUTXO(txIn, signingIndex, utxos);
-        if (this.m === 1) {
-          // p2sh-p2wpkh
-          const ecPair = blockstack.hexStringToECPair(this.privateKeys[0]);
-          txIn.sign(signingIndex, ecPair, this.redeemScript, undefined, utxo.value);
-        } else {
-          // p2sh-p2wsh
-          const keysToUse = this.privateKeys.slice(0, this.m);
-          keysToUse.forEach(keyHex => {
-            const ecPair = blockstack.hexStringToECPair(keyHex);
-            txIn.sign(
-              signingIndex,
-              ecPair,
-              this.redeemScript,
-              undefined,
-              utxo.value,
-              this.witnessScript
-            );
-          });
-        }
-      });
-  }
-
   signerVersion(): number {
     return 0;
-  }
-}
-
-export function hasKeys(signer: string | CLITransactionSigner): boolean {
-  if (isCLITransactionSigner(signer)) {
-    const s = signer;
-    return s.isComplete;
-  } else {
-    return true;
   }
 }
 
@@ -202,7 +117,7 @@ export function hasKeys(signer: string | CLITransactionSigner): boolean {
  * The string has the format "nosign:address"
  * @return a NullSigner instance
  */
-export function parseNullSigner(addrString: string): NullSigner {
+function parseNullSigner(addrString: string): NullSigner {
   if (!addrString.startsWith('nosign:')) {
     throw new Error('Invalid nosign string');
   }
@@ -217,7 +132,7 @@ export function parseNullSigner(addrString: string): NullSigner {
  * @serializedPrivateKeys (string) the above string
  * @return a MultiSigKeySigner instance
  */
-export function parseMultiSigKeys(serializedPrivateKeys: string): MultiSigKeySigner {
+function parseMultiSigKeys(serializedPrivateKeys: string): MultiSigKeySigner {
   const matches = serializedPrivateKeys.match(PRIVATE_KEY_MULTISIG_PATTERN);
   if (!matches) {
     throw new Error('Invalid multisig private key string');
@@ -255,7 +170,7 @@ export function parseMultiSigKeys(serializedPrivateKeys: string): MultiSigKeySig
  * @serializedPrivateKeys (string) the above string
  * @return a MultiSigKeySigner instance
  */
-export function parseSegwitP2SHKeys(serializedPrivateKeys: string): SegwitP2SHKeySigner {
+function parseSegwitP2SHKeys(serializedPrivateKeys: string): SegwitP2SHKeySigner {
   const matches = serializedPrivateKeys.match(PRIVATE_KEY_SEGWIT_P2SH_PATTERN);
   if (!matches) {
     throw new Error('Invalid segwit p2sh private key string');
@@ -313,25 +228,25 @@ export function parseSegwitP2SHKeys(serializedPrivateKeys: string): SegwitP2SHKe
  */
 export function decodePrivateKey(serializedPrivateKey: string): string | CLITransactionSigner {
   const nosignMatches = serializedPrivateKey.match(PRIVATE_KEY_NOSIGN_PATTERN);
-  if (!!nosignMatches) {
+  if (nosignMatches) {
     // no private key
     return parseNullSigner(serializedPrivateKey);
   }
 
   const singleKeyMatches = serializedPrivateKey.match(PRIVATE_KEY_PATTERN);
-  if (!!singleKeyMatches) {
+  if (singleKeyMatches) {
     // one private key
     return serializedPrivateKey;
   }
 
   const multiKeyMatches = serializedPrivateKey.match(PRIVATE_KEY_MULTISIG_PATTERN);
-  if (!!multiKeyMatches) {
+  if (multiKeyMatches) {
     // multisig bundle
     return parseMultiSigKeys(serializedPrivateKey);
   }
 
   const segwitP2SHMatches = serializedPrivateKey.match(PRIVATE_KEY_SEGWIT_P2SH_PATTERN);
-  if (!!segwitP2SHMatches) {
+  if (segwitP2SHMatches) {
     // segwit p2sh bundle
     return parseSegwitP2SHKeys(serializedPrivateKey);
   }
@@ -358,8 +273,12 @@ export function JSONStringify(obj: AnyJson, stderr: boolean = false): string {
  * @privateKey (string) the hex-encoded private key
  */
 export function getPublicKeyFromPrivateKey(privateKey: string): string {
-  const ecKeyPair = blockstack.hexStringToECPair(privateKey);
-  return ecKeyPair.publicKey.toString('hex');
+  if (!/^[0-9a-fA-F]{64}(01)?$/.test(privateKey)) {
+    throw new Error(
+      'Improperly formatted private-key hex string: expected 64 hex characters, optionally followed by 01.'
+    );
+  }
+  return publicKeyToHex(privateKeyToPublic(privateKey));
 }
 
 /*
@@ -374,19 +293,11 @@ export function canonicalPrivateKey(privkey: string): string {
 }
 
 /*
- * Hash160 function for zone files
- */
-export function hash160(buff: Buffer): Buffer {
-  return bitcoinjs.crypto.hash160(buff);
-}
-
-/*
  * Sign a profile into a JWT
  */
-// eslint-disable-next-line @typescript-eslint/ban-types
-export function makeProfileJWT(profileData: Object, privateKey: string): string {
-  const signedToken = blockstack.signProfileToken(profileData, privateKey);
-  const wrappedToken = blockstack.wrapProfileToken(signedToken);
+export function makeProfileJWT(profileData: object, privateKey: string): string {
+  const signedToken = signProfileToken(profileData, privateKey);
+  const wrappedToken = wrapProfileToken(signedToken);
   const tokenRecords = [wrappedToken];
   return JSONStringify(tokenRecords as unknown as AnyJson);
 }
@@ -410,60 +321,6 @@ export function getNameInfoEasy(
     });
 
   return nameInfoPromise;
-}
-
-/*
- * Look up a name's zone file, profile URL, and profile
- * Returns a Promise to the above, or throws an error.
- */
-export async function nameLookup(
-  network: CLINetworkAdapter,
-  name: string,
-  includeProfile: boolean = true
-): Promise<{ profile: any; profileUrl?: string; zonefile?: string }> {
-  const nameInfoPromise = getNameInfoEasy(network, name);
-  const profilePromise = includeProfile
-    ? blockstack.lookupProfile(name).catch(() => null)
-    : Promise.resolve().then(() => null);
-
-  const zonefilePromise = nameInfoPromise.then((nameInfo: NameInfoType | null) =>
-    nameInfo ? nameInfo.zonefile : null
-  );
-
-  const [profile, zonefile, nameInfo] = await Promise.all([
-    profilePromise,
-    zonefilePromise,
-    nameInfoPromise,
-  ]);
-  let profileObj = profile;
-
-  if (!nameInfo) {
-    throw new Error('Name not found');
-  }
-  if (nameInfo.hasOwnProperty('grace_period') && nameInfo.grace_period) {
-    throw new Error(
-      `Name is expired at block ${nameInfo.expire_block} ` +
-        `and must be renewed by block ${nameInfo.renewal_deadline}`
-    );
-  }
-
-  let profileUrl = null;
-  try {
-    const zonefileJSON = ZoneFile.parseZoneFile(zonefile);
-    if (zonefileJSON.uri && zonefileJSON.hasOwnProperty('$origin')) {
-      profileUrl = blockstack.getTokenFileUrl(zonefileJSON);
-    }
-  } catch (e) {
-    profileObj = null;
-  }
-
-  const ret = {
-    zonefile: zonefile,
-    profile: profileObj,
-    profileUrl: profileUrl,
-  };
-  // @ts-ignore
-  return ret;
 }
 
 /*
@@ -560,10 +417,7 @@ export function mkdirs(path: string): void {
 /*
  * Given a name or ID address, return a promise to the ID Address
  */
-export async function getIDAddress(
-  network: CLINetworkAdapter,
-  nameOrIDAddress: string
-): Promise<string> {
+async function getIDAddress(network: CLINetworkAdapter, nameOrIDAddress: string): Promise<string> {
   if (nameOrIDAddress.match(ID_ADDRESS_PATTERN)) {
     return nameOrIDAddress;
   } else {
@@ -577,7 +431,7 @@ export async function getIDAddress(
  * Find all identity addresses until we have one that matches the given one.
  * Loops forever if not found
  */
-export async function getOwnerKeyFromIDAddress(
+async function getOwnerKeyFromIDAddress(
   network: CLINetworkAdapter,
   mnemonic: string,
   idAddress: string
@@ -642,7 +496,7 @@ export interface ClarityFunctionArg {
   type: ClarityAbiType;
 }
 
-export function argToPrompt(arg: ClarityFunctionArg): InquirerPrompt {
+function argToPrompt(arg: ClarityFunctionArg): InquirerPrompt {
   const name = arg.name;
   const type = arg.type;
   const typeString = getTypeString(type);
@@ -723,7 +577,7 @@ export function parseClarityFunctionArgAnswers(
   return functionArgs;
 }
 
-export function answerToClarityValue(answer: any, arg: ClarityFunctionArg): ClarityValue {
+function answerToClarityValue(answer: any, arg: ClarityFunctionArg): ClarityValue {
   const type = arg.type;
   const typeString = getTypeString(type);
   if (isClarityAbiPrimitive(type)) {

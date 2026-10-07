@@ -1,4 +1,4 @@
-# Stacks.js [![Test Action Badge](https://github.com/hirosystems/stacks.js/actions/workflows/tests.yml/badge.svg)](https://github.com/hirosystems/stacks.js/actions/workflows/tests.yml) [![Monorepo Version Label](https://img.shields.io/github/lerna-json/v/hirosystems/stacks.js?label=monorepo)](https://github.com/hirosystems/stacks.js/tree/main/packages)
+# Stacks.js [![Test Action Badge](https://github.com/stx-labs/stacks.js/actions/workflows/tests.yml/badge.svg)](https://github.com/stx-labs/stacks.js/actions/workflows/tests.yml) [![Monorepo Version Label](https://img.shields.io/github/package-json/v/stx-labs/stacks.js?filename=packages%2Fcommon%2Fpackage.json&label=monorepo)](https://github.com/stx-labs/stacks.js/tree/main/packages)
 
 > [!IMPORTANT]
 > Looking for Nakamoto updates?

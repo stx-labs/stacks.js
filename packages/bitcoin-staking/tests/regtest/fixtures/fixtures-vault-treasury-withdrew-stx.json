@@ -1,0 +1,10 @@
+{
+  "/v2/accounts/ST11NJTTKGVT6D1HY4NJRVQWMQM7TVAR091EJ8P2Y.staker-vault?proof=0": {
+    "status": 200,
+    "body": "{\"balance\":\"0x00000000000000000000000011e1a300\",\"locked\":\"0x00000000000000000000000000000000\",\"unlock_height\":0,\"nonce\":0}"
+  },
+  "/v2/accounts/ST1WGNQQYDTFJ9NA8HR077WJD7QZ1EH3DZQZPTWS0?proof=0": {
+    "status": 200,
+    "body": "{\"balance\":\"0x0000000000000000000000000bebc200\",\"locked\":\"0x00000000000000000000000000000000\",\"unlock_height\":0,\"nonce\":0}"
+  }
+}

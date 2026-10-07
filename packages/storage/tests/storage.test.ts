@@ -58,7 +58,7 @@ test('deleteFile', async () => {
     deleteFromGaiaHub,
   }));
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const { Storage } = require('../src');
   const storage = new Storage({ userSession });
 
@@ -97,7 +97,7 @@ test('deleteFile gets a new gaia config and tries again', async () => {
     deleteFromGaiaHub: jest.requireActual('../src/hub').deleteFromGaiaHub,
   }));
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const { Storage } = require('../src');
   const storage = new Storage({ userSession });
 
@@ -216,7 +216,7 @@ test('deleteFile removes etag from map', async () => {
     deleteFromGaiaHub,
   }));
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const { Storage } = require('../src');
   const storage = new Storage({ userSession });
 
@@ -282,7 +282,7 @@ test('Concurrent calls to deleteFile should delete etags in localStorage', async
     deleteFromGaiaHub,
   }));
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const { Storage } = require('../src');
   const storage = new Storage({ userSession });
 
@@ -364,7 +364,6 @@ test('getFile without user session', async () => {
 
   // const profileUrl = 'https://gaia.blockstack.org/hub/16zVUoP7f15nfTiHw2UNiX8NT5SWYqwNv3/0/profile.json'
 
-  /* eslint-disable */
   const profileContent = [
     {
       token:
@@ -543,7 +542,6 @@ test('getFile unencrypted, unsigned - multi-reader', async () => {
 
   // const profileUrl = 'https://gaia.blockstack.org/hub/16zVUoP7f15nfTiHw2UNiX8NT5SWYqwNv3/0/profile.json'
 
-  /* eslint-disable */
   const profileContent = [
     {
       token:
@@ -731,7 +729,7 @@ test('putFile unencrypted, using Blob content', async () => {
       uploadToGaiaHub,
     }));
 
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+  
     const { Storage } = require('../src');
     const storage = new Storage({ userSession });
 
@@ -790,7 +788,7 @@ test('putFile encrypted, using Blob content, encrypted', async () => {
       getFullReadUrl,
     }));
 
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+  
     const { Storage } = require('../src');
     const storage = new Storage({ userSession });
 
@@ -846,7 +844,7 @@ test('putFile unencrypted, using TypedArray content, encrypted', async () => {
       getFullReadUrl,
     }));
 
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+  
     const { Storage } = require('../src');
     const storage = new Storage({ userSession });
 
@@ -903,7 +901,7 @@ test('putFile encrypted, using TypedArray content, encrypted', async () => {
       getFullReadUrl,
     }));
 
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+  
     const { Storage } = require('../src');
     const storage = new Storage({ userSession });
 
@@ -946,7 +944,7 @@ test('putFile unencrypted, not signed', async () => {
     uploadToGaiaHub,
   }));
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const { Storage } = require('../src');
   const storage = new Storage({ userSession });
   const options = { encrypt: false };
@@ -983,7 +981,7 @@ test('putFile passes etag to upload function', async () => {
     uploadToGaiaHub,
   }));
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const { Storage } = require('../src');
   const storage = new Storage({ userSession });
 
@@ -1099,7 +1097,7 @@ test('putFile & getFile unencrypted, not signed, with contentType', async () => 
     headers: { 'Content-Type': 'text/html' },
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const { Storage } = require('../src');
   const storage = new Storage({ userSession });
 
@@ -1151,7 +1149,7 @@ test('putFile & getFile encrypted, not signed', async () => {
 
   fetchMock.once(await userSession.encryptContent(fileContent));
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const { Storage } = require('../src');
   const storage = new Storage({ userSession });
 
@@ -1207,7 +1205,7 @@ test('putFile encrypt/no-sign using specifying public key & getFile decrypt', as
 
   fetchMock.once(await userSession.encryptContent(fileContent));
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const { Storage } = require('../src');
   const storage = new Storage({ userSession });
 
@@ -1273,7 +1271,7 @@ test('putFile & getFile encrypted, signed', () => {
     lookupProfile,
   }));
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const { Storage } = require('../src');
   const storage = new Storage({ userSession });
 
@@ -1419,7 +1417,7 @@ test('putFile & getFile unencrypted, signed', async () => {
     lookupProfile,
   }));
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const { Storage } = require('../src');
   const storage = new Storage({ userSession });
 
@@ -1564,7 +1562,7 @@ test('putFile oversized -- unencrypted, signed', async () => {
     uploadToGaiaHub,
   }));
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const { Storage } = require('../src');
   const storage = new Storage({ userSession });
 
@@ -1615,7 +1613,7 @@ test('putFile oversized -- encrypted, signed', async () => {
     uploadToGaiaHub,
   }));
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const { Storage } = require('../src');
   const storage = new Storage({ userSession });
 
@@ -1666,7 +1664,7 @@ test('putFile oversized -- unencrypted', async () => {
     uploadToGaiaHub,
   }));
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const { Storage } = require('../src');
   const storage = new Storage({ userSession });
 
@@ -1717,7 +1715,7 @@ test('putFile oversized -- encrypted', async () => {
     uploadToGaiaHub,
   }));
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const { Storage } = require('../src');
   const storage = new Storage({ userSession });
 
@@ -1908,7 +1906,7 @@ test('putFile gets a new gaia config and tries again', async () => {
     uploadToGaiaHub: jest.requireActual('../src/hub').uploadToGaiaHub,
   }));
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const { Storage } = require('../src');
   const storage = new Storage({ userSession });
 
@@ -2255,7 +2253,7 @@ test('getUserAppFileUrl', async () => {
     lookupProfile,
   }));
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const { Storage } = require('../src');
   const storage = new Storage({ userSession });
 
@@ -2281,7 +2279,6 @@ test('getUserAppFileUrl without user session', async () => {
     address: 'SP10VG75GE4PE0VBA3KD3NVKSYEMM3YV9V17HJ32N',
     zonefile_hash: '98f42e11026d42d394b3424d4d7f0cccd6f376e2',
   };
-  /* eslint-disable */
   const profileContent = [
     {
       token:
@@ -2511,7 +2508,7 @@ test('listFiles gets a new gaia config and tries again', async () => {
     }
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const { Storage } = require('../src');
   const storage = new Storage({ userSession });
 

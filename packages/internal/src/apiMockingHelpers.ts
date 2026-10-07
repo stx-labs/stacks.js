@@ -1,4 +1,3 @@
-import { Configuration, TransactionsApi } from '@stacks/blockchain-api-client';
 import { STACKS_TESTNET } from '@stacks/network';
 import { MockResponseInitFunction } from 'jest-fetch-mock';
 import { StackingClient } from '@stacks/stacking';
@@ -34,7 +33,6 @@ export function setApiMocks(responseMap: { [key: string]: any }, mockTxBroadcast
       ...responseMap,
     };
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   fetchMock.mockIf(MATCHER.ALL, (async (request: Request) => {
     const { path } = (request as any)[Object.getOwnPropertySymbols(request)[1]].parsedURL; // may depend on js runtime
 
@@ -68,21 +66,17 @@ const ITERATION_INTERVAL = 1000;
 export async function waitForTx(txId: string, apiUrl = 'http://localhost:3999') {
   if (isMocking()) return;
 
-  const txApi = new TransactionsApi(new Configuration({ basePath: apiUrl }));
-
   for (let i = 1; i <= MAX_ITERATIONS; i++) {
-    try {
-      const txInfo = (await txApi.getTransactionById({ txId })) as any;
-      console.log('txInfo', txInfo);
-      if (txInfo?.tx_status === 'success') {
-        console.log(`✓ ${JSON.stringify(txInfo?.tx_result)}`);
-        return txInfo;
-      } else if (txInfo?.tx_result) {
-        return console.log(`✕ ${JSON.stringify(txInfo.tx_result)}`);
-      }
-    } catch (e: any) {
-      if (e?.ok === false) throw Error(`✕ ${e?.status}: ${txId}`);
-      throw e;
+    const response = await fetch(`${apiUrl}/extended/v1/tx/${txId}`);
+    if (!response.ok) throw Error(`✕ ${response.status}: ${txId}`);
+
+    const txInfo = (await response.json()) as any;
+    console.log('txInfo', txInfo);
+    if (txInfo?.tx_status === 'success') {
+      console.log(`✓ ${JSON.stringify(txInfo?.tx_result)}`);
+      return txInfo;
+    } else if (txInfo?.tx_result) {
+      return console.log(`✕ ${JSON.stringify(txInfo.tx_result)}`);
     }
     console.log(`waiting (${i}x)`);
     await sleep(ITERATION_INTERVAL);
@@ -102,15 +96,11 @@ export async function waitForBlock(burnBlockId: number, client?: StackingClient)
 
   let current: number;
   for (let i = 1; i <= MAX_ITERATIONS; i++) {
-    try {
-      const poxInfo = await client.getPoxInfo();
-      current = poxInfo?.current_burnchain_block_height as number;
-      if (current && current >= burnBlockId) {
-        console.log(`→ block ${current} reached`);
-        return;
-      }
-    } catch (e: any) {
-      throw e;
+    const poxInfo = await client.getPoxInfo();
+    current = poxInfo?.current_burnchain_block_height as number;
+    if (current && current >= burnBlockId) {
+      console.log(`→ block ${current} reached`);
+      return;
     }
     console.log(`waiting (${i}x) for block ${burnBlockId} (current block: ${current})`);
     await sleep(ITERATION_INTERVAL);
@@ -131,15 +121,11 @@ export async function waitForCycle(cycleId: number, client?: StackingClient) {
 
   let current: number;
   for (let i = 1; i <= MAX_ITERATIONS; i++) {
-    try {
-      const poxInfo = await client.getPoxInfo();
-      current = poxInfo?.reward_cycle_id;
-      if (current && current >= cycleId) {
-        console.log(`→ cycle ${current} reached`);
-        return;
-      }
-    } catch (e: any) {
-      throw e;
+    const poxInfo = await client.getPoxInfo();
+    current = poxInfo?.reward_cycle_id;
+    if (current && current >= cycleId) {
+      console.log(`→ cycle ${current} reached`);
+      return;
     }
     console.log(`waiting (${i}x) for cycle ${cycleId} (current cycle: ${current})`);
     await sleep(ITERATION_INTERVAL);

@@ -29,7 +29,7 @@ const enumCheckFunctions = new Map<object, (value: number) => boolean>();
  * }
  * ```
  */
-export function isEnum<T extends string, TEnumValue extends number>(
+function isEnum<T extends string, TEnumValue extends number>(
   enumVariable: { [key in T]: TEnumValue },
   value: number
 ): value is TEnumValue {

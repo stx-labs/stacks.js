@@ -1,0 +1,106 @@
+/**
+ * Privatenet STX-only stake action — empirical amount-floor probe.
+ *
+ * We proved from pox-5 SOURCE that `stake` has NO `min-amount-ustx` check;
+ * the only amount guard is `ERR_INSUFFICIENT_STX (err u8)` (account balance).
+ * This action CONFIRMS that on-chain by staking BELOW the API-advertised min
+ * (10000.034 STX) and showing the tx is ACCEPTED.
+ *
+ * STAKER tx only (account6 by default). Does NOT touch bond-admin / setup-bond.
+ *
+ * Env overrides (all optional):
+ *   STAKER      — REGTEST_KEYS account name        (default: "account6")
+ *   AMOUNT_USTX — uSTX to lock                      (default: 1_000_000_000 = 1000 STX)
+ *   NUM_CYCLES  — cycles to lock                    (default: 1)
+ *
+ * Run with:
+ *   NETWORK=testnet NETWORK_ID=256 STACKS_API=https://api.private-1.hiro.so \
+ *     npx jest tests/privatenet/actions/stx-stake.test.ts --runInBand --collectCoverage=false --verbose
+ */
+import { SIGNER_MANAGER } from '../constants';
+import { buildStake, Pox5ErrorCode } from '../../../src';
+import { REGTEST_KEYS, getAccount } from '../../regtest/regtest';
+import { getNetwork } from '../../helpers/utils';
+import { broadcastAndWaitForTransaction, getNextNonce, getPoxInfo } from '../../helpers/wait';
+import { signTransaction } from '../../helpers/sign';
+import { useFixtures } from '../../helpers/mock';
+
+jest.setTimeout(60 * 60_000);
+
+const network = getNetwork();
+
+const FEE = 10_000n;
+const STAKER = process.env.STAKER ?? 'account6';
+const AMOUNT_USTX = BigInt(process.env.AMOUNT_USTX ?? 1_000_000_000); // 1000 STX
+const NUM_CYCLES = Number(process.env.NUM_CYCLES ?? 1);
+
+// The daemon-registered signer-manager on the private testnet.
+const signerManager = SIGNER_MANAGER;
+
+const staker = getAccount(REGTEST_KEYS[STAKER as keyof typeof REGTEST_KEYS]);
+
+beforeAll(async () => {
+  useFixtures('stx-stake');
+}, 60 * 60_000);
+
+test('stake below API min is accepted on-chain (no contract amount floor)', async () => {
+  const poxInfo = await getPoxInfo();
+
+  // The contract's `stake` replay guard requires
+  // `burn-height-to-reward-cycle(start-burn-ht) == current-cycle`, i.e.
+  // start-burn-ht must fall in the CURRENT cycle (the contract then derives
+  // first-reward-cycle = current + 1). A start height at the *next* cycle's
+  // boundary is rejected with ERR_INVALID_START_BURN_HEIGHT (err u24).
+  const startBurnHt = poxInfo.currentBurnchainBlockHeight;
+  const targetCycle = poxInfo.rewardCycleId + 1;
+
+  console.log('stx-stake params', {
+    staker: staker.address,
+    amountUstx: AMOUNT_USTX.toString(),
+    amountStx: (Number(AMOUNT_USTX) / 1e6).toString(),
+    apiMinStx: '10000.034',
+    numCycles: NUM_CYCLES,
+    currentCycle: poxInfo.rewardCycleId,
+    targetCycle,
+    currentBurnHt: poxInfo.currentBurnchainBlockHeight,
+    startBurnHt,
+    signerManager,
+  });
+
+  // No `signerCalldata`: the daemon signer-manager's `validate-stake!` accepts
+  // an empty/none calldata (mirrors the regtest stx-staking action).
+  const unsigned = await buildStake({
+    signerManager,
+    amountUstx: AMOUNT_USTX,
+    numCycles: NUM_CYCLES,
+    startBurnHt,
+    publicKey: staker.publicKey,
+    fee: FEE,
+    nonce: await getNextNonce(staker.address),
+    network,
+    // stake LOCKS amountUstx — an asset movement default Deny mode reverts
+    // (abort_by_post_condition). Allow transfers so the stake persists.
+    postConditionMode: 'allow',
+  });
+
+  const transaction = signTransaction(unsigned, staker.key);
+  const tx = await broadcastAndWaitForTransaction(transaction, network);
+
+  console.log('stx-stake on-chain result', {
+    txid: tx.tx_id,
+    tx_status: tx.tx_status,
+    result_repr: tx.tx_result?.repr,
+    burn_block_height: tx.burn_block_height,
+  });
+
+  // The account may already be staked from a prior run against this chain
+  // state — the contract then rejects with ERR_ALREADY_STAKED (err u19),
+  // which is a legitimate terminal outcome that says nothing about the
+  // amount floor. Any OTHER abort (in particular anything that looks like an
+  // amount-floor rejection) is a genuine SDK/contract regression and must
+  // still fail the test.
+  if (tx.tx_status !== 'success') {
+    expect(tx.tx_status).toBe('abort_by_response');
+    expect(tx.tx_result?.repr).toBe(`(err u${Pox5ErrorCode.AlreadyStaked})`);
+  }
+});

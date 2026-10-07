@@ -166,7 +166,7 @@ function capture(combinator: Combinator, map?: (value: string) => Capture): Comb
 
 // CLARITY VALUE PARSERS
 function clInt(): Combinator {
-  return capture(regex(/\-?[0-9]+/), v => Cl.int(parseInt(v)));
+  return capture(regex(/-?[0-9]+/), v => Cl.int(parseInt(v)));
 }
 
 function clUint(): Combinator {
@@ -179,9 +179,9 @@ function clBool(): Combinator {
 
 function clPrincipal(): Combinator {
   return sequence([
-    regex(/\'/),
+    regex(/'/),
     capture(
-      sequence([regex(/[A-Z0-9]+/), optional(sequence([regex(/\./), regex(/[a-zA-Z0-9\-]+/)]))]),
+      sequence([regex(/[A-Z0-9]+/), optional(sequence([regex(/\./), regex(/[a-zA-Z0-9-]+/)]))]),
       Cl.address
     ),
   ]);
@@ -240,14 +240,14 @@ function clTuple(): Combinator {
       sequence(
         [
           capture(regex(/[a-zA-Z][a-zA-Z0-9_]*/)), // key
-          regex(/\s*\:/),
+          regex(/\s*:/),
           whitespace(), // todo: can this be optional?
           clValue(), // value
         ],
         ([k, v]) => Cl.tuple({ [k as string]: v as ClarityValue })
       ),
       c => Cl.tuple(Object.assign({}, ...c.map(t => (t as TupleCV).value))),
-      regex(/\s*\,\s*/)
+      regex(/\s*,\s*/)
     ),
     regex(/\}/),
   ]);

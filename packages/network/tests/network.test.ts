@@ -8,7 +8,6 @@ import {
   networkFromName,
 } from '../src';
 
-// eslint-disable-next-line
 import fetchMock from 'jest-fetch-mock';
 
 test(networkFromName.name, () => {

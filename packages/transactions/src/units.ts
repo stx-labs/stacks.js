@@ -1,4 +1,4 @@
-export const MICROSTX_IN_STX = 1_000_000;
+const MICROSTX_IN_STX = 1_000_000;
 
 /**
  * Convert μSTX (micro-STX) to STX denomination.

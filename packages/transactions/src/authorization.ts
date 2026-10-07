@@ -57,8 +57,10 @@ export interface SingleSigSpendingCondition {
   signature: MessageSignatureWire;
 }
 
-export interface SingleSigSpendingConditionOpts
-  extends Omit<SingleSigSpendingCondition, 'nonce' | 'fee'> {
+export interface SingleSigSpendingConditionOpts extends Omit<
+  SingleSigSpendingCondition,
+  'nonce' | 'fee'
+> {
   nonce: IntegerType;
   fee: IntegerType;
 }
@@ -72,8 +74,10 @@ export interface MultiSigSpendingCondition {
   signaturesRequired: number;
 }
 
-export interface MultiSigSpendingConditionOpts
-  extends Omit<MultiSigSpendingCondition, 'nonce' | 'fee'> {
+export interface MultiSigSpendingConditionOpts extends Omit<
+  MultiSigSpendingCondition,
+  'nonce' | 'fee'
+> {
   nonce: IntegerType;
   fee: IntegerType;
 }

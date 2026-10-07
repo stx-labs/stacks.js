@@ -168,19 +168,19 @@ export function isRedirectUriValid(token: string) {
  * @private
  * @ignore
  */
-export async function verifyAuthRequest(token: string): Promise<boolean> {
+export function verifyAuthRequest(token: string): Promise<boolean> {
   if (decodeToken(token).header.alg === 'none') {
     throw new Error('Token must be signed in order to be verified');
   }
-  const values = await Promise.all([
+  const values = [
     isExpirationDateValid(token),
     isIssuanceDateValid(token),
     doSignaturesMatchPublicKeys(token),
     doPublicKeysMatchIssuer(token),
     isManifestUriValid(token),
     isRedirectUriValid(token),
-  ]);
-  return values.every(val => val);
+  ];
+  return Promise.resolve(values.every(val => val));
 }
 
 /**
@@ -208,12 +208,12 @@ export async function verifyAuthRequestAndLoadManifest(token: string): Promise<a
  * @private
  * @ignore
  */
-export async function verifyAuthResponse(token: string): Promise<boolean> {
-  const conditions = await Promise.all([
+export function verifyAuthResponse(token: string): Promise<boolean> {
+  const conditions = [
     isExpirationDateValid(token),
     isIssuanceDateValid(token),
     doSignaturesMatchPublicKeys(token),
     doPublicKeysMatchIssuer(token),
-  ]);
-  return conditions.every(val => val);
+  ];
+  return Promise.resolve(conditions.every(val => val));
 }

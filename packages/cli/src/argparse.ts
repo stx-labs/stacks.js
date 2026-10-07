@@ -5,15 +5,15 @@ import * as os from 'os';
 
 import * as fs from 'fs';
 
-export const NAME_PATTERN = '^([0-9a-z_.+-]{3,37})$';
+const NAME_PATTERN = '^([0-9a-z_.+-]{3,37})$';
 
-export const NAMESPACE_PATTERN = '^([0-9a-z_-]{1,19})$';
+const NAMESPACE_PATTERN = '^([0-9a-z_-]{1,19})$';
 
-export const ADDRESS_CHARS = '[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{1,35}';
+const ADDRESS_CHARS = '[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{1,35}';
 
-export const C32_ADDRESS_CHARS = '[0123456789ABCDEFGHJKMNPQRSTVWXYZ]+';
+const C32_ADDRESS_CHARS = '[0123456789ABCDEFGHJKMNPQRSTVWXYZ]+';
 
-export const ADDRESS_PATTERN = `^(${ADDRESS_CHARS})$`;
+const ADDRESS_PATTERN = `^(${ADDRESS_CHARS})$`;
 
 export const ID_ADDRESS_PATTERN = `^ID-${ADDRESS_CHARS}$`;
 
@@ -23,7 +23,7 @@ export const STACKS_ADDRESS_PATTERN = `^(${C32_ADDRESS_CHARS})$`;
 export const PRIVATE_KEY_PATTERN = '^([0-9a-f]{64,66})$';
 
 // hex private key, no compression
-export const PRIVATE_KEY_UNCOMPRESSED_PATTERN = '^([0-9a-f]{64})$';
+const PRIVATE_KEY_UNCOMPRESSED_PATTERN = '^([0-9a-f]{64})$';
 
 // nosign:addr
 export const PRIVATE_KEY_NOSIGN_PATTERN = `^nosign:${ADDRESS_CHARS}$`;
@@ -36,23 +36,23 @@ export const PRIVATE_KEY_SEGWIT_P2SH_PATTERN =
   '^segwit:p2sh:([0-9]+),([0-9a-f]{64,66},)*([0-9a-f]{64,66})$';
 
 // any private key pattern we support
-export const PRIVATE_KEY_PATTERN_ANY = `${PRIVATE_KEY_PATTERN}|${PRIVATE_KEY_MULTISIG_PATTERN}|${PRIVATE_KEY_SEGWIT_P2SH_PATTERN}|${PRIVATE_KEY_NOSIGN_PATTERN}`;
+const PRIVATE_KEY_PATTERN_ANY = `${PRIVATE_KEY_PATTERN}|${PRIVATE_KEY_MULTISIG_PATTERN}|${PRIVATE_KEY_SEGWIT_P2SH_PATTERN}|${PRIVATE_KEY_NOSIGN_PATTERN}`;
 
-export const PUBLIC_KEY_PATTERN = '^([0-9a-f]{66,130})$';
+const PUBLIC_KEY_PATTERN = '^([0-9a-f]{66,130})$';
 
-export const INT_PATTERN = '^-?[0-9]+$';
+const INT_PATTERN = '^-?[0-9]+$';
 
-export const ZONEFILE_HASH_PATTERN = '^([0-9a-f]{40})$';
+const ZONEFILE_HASH_PATTERN = '^([0-9a-f]{40})$';
 
-export const URL_PATTERN = '^http[s]?://.+$';
+const URL_PATTERN = '^http[s]?://.+$';
 
-export const SUBDOMAIN_PATTERN = '^([0-9a-z_+-]{1,37}).([0-9a-z_.+-]{3,37})$';
+const SUBDOMAIN_PATTERN = '^([0-9a-z_+-]{1,37}).([0-9a-z_.+-]{3,37})$';
 
-export const TXID_PATTERN = '^([0-9a-f]{64})$';
+const TXID_PATTERN = '^([0-9a-f]{64})$';
 
-export const BOOLEAN_PATTERN = '^(0|1|true|false)$';
+const BOOLEAN_PATTERN = '^(0|1|true|false)$';
 
-export interface CLI_LOG_CONFIG_TYPE {
+interface CLI_LOG_CONFIG_TYPE {
   level: string;
   handleExceptions: boolean;
   timestamp: boolean;
@@ -3173,7 +3173,7 @@ export function makeAllCommandsList(): string {
 /*
  * Make help for all commands
  */
-export function makeAllCommandsHelp(): string {
+function makeAllCommandsHelp(): string {
   const groups = getCommandGroups();
   const groupNames = Object.keys(groups).sort();
 
@@ -3222,48 +3222,6 @@ export function makeCommandUsageString(command?: string): string {
   res += `${cmdFormat.kw}\n`;
   res += formattedHelp;
   return res.trim() + '\n';
-}
-
-/*
- * Make the usage documentation
- */
-export function makeUsageString(): string {
-  let res = `${USAGE}\n\nCommand reference\n`;
-  const groups = getCommandGroups();
-  const groupNames = Object.keys(groups).sort();
-
-  for (let i = 0; i < groupNames.length; i++) {
-    const groupName = groupNames[i];
-    const groupCommands = groups[groupName];
-
-    res += `Command group: ${groupName}\n\n`;
-    for (let j = 0; j < groupCommands.length; j++) {
-      const command = groupCommands[j].command;
-      const help = groupCommands[j].help;
-
-      const commandInfo = CLI_ARGS.properties[command];
-
-      const cmdFormat = formatCommandHelpLines(command, commandInfo.items);
-      const formattedHelp = formatHelpString(4, 76, help);
-
-      res += cmdFormat.raw;
-      res += '\n';
-      res += cmdFormat.kw;
-      res += '\n';
-      res += formattedHelp;
-      res += '\n';
-    }
-    res += '\n';
-  }
-
-  return res;
-}
-
-/*
- * Print usage
- */
-export function printUsage() {
-  console.error(makeUsageString());
 }
 
 /*
@@ -3377,7 +3335,7 @@ export function CLIOptAsStringArray(opts: CLI_OPTS, key: string): string[] | nul
  * Use the CLI schema to get all positional and keyword args
  * for a given command.
  */
-export function getCommandArgs(command: string, argsList: string[]) {
+function getCommandArgs(command: string, argsList: string[]) {
   let commandProps = CLI_ARGS.properties[command].items;
   if (!Array.isArray(commandProps)) {
     commandProps = [commandProps];

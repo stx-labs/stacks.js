@@ -170,9 +170,9 @@ const blocktimeInfo = {
   },
 };
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+
 const poxAbi = require('./poxAbi.json');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+
 const { createContractCallPayload } = require('../../transactions/src/wire/create.ts');
 
 // testing helper method
@@ -205,7 +205,7 @@ test('check stacking eligibility true', async () => {
     ...jest.requireActual('@stacks/transactions'),
     fetchCallReadOnlyFunction,
   }));
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  
   const { StackingClient } = require('../src'); // needed for jest.mock module
   const client = new StackingClient({ address, network });
 
@@ -246,7 +246,7 @@ test('check stacking eligibility false bad cycles', async () => {
     ...jest.requireActual('@stacks/transactions'),
     fetchCallReadOnlyFunction,
   }));
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  
   const { StackingClient } = require('../src'); // needed for jest.mock module
   const client = new StackingClient({ address, network });
 
@@ -302,7 +302,7 @@ test('stack stx', async () => {
     });
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  
   const { StackingClient } = require('../src'); // needed for jest.mock module
   const client = new StackingClient({ address, network });
 
@@ -385,7 +385,7 @@ test('delegate stx', async () => {
     });
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  
   const { StackingClient } = require('../src'); // needed for jest.mock module
   const client = new StackingClient({ address, network });
 
@@ -466,7 +466,7 @@ test('delegate stx with empty optional parameters', async () => {
     });
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  
   const { StackingClient } = require('../src'); // needed for jest.mock module
   const client = new StackingClient({ address, network });
 
@@ -552,7 +552,7 @@ test('delegate stack stx with one delegator', async () => {
     }
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  
   const { StackingClient } = require('../src'); // needed for jest.mock module // needed for jest.mock module
   const client = new StackingClient({ address, network });
 
@@ -647,7 +647,7 @@ test('delegate stack stx with set nonce', async () => {
     }
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  
   const { StackingClient } = require('../src'); // needed for jest.mock module
   const client = new StackingClient({ address, network });
 
@@ -732,7 +732,7 @@ test('delegator commit', async () => {
     });
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  
   const { StackingClient } = require('../src'); // needed for jest.mock module
   const client = new StackingClient({ address, network });
 
@@ -804,7 +804,7 @@ test('revoke delegate stx', async () => {
     });
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  
   const { StackingClient } = require('../src'); // needed for jest.mock module
   const client = new StackingClient({ address, network });
 
@@ -884,7 +884,7 @@ test('get stacking status', async () => {
     }
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  
   const { StackingClient } = require('../src'); // needed for jest.mock module
   const client = new StackingClient({ address, network });
 
@@ -925,7 +925,7 @@ test('get core info', async () => {
     });
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  
   const { StackingClient } = require('../src'); // needed for jest.mock module
   const client = new StackingClient({ address, network });
 
@@ -946,7 +946,7 @@ test('get pox info', async () => {
     });
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  
   const { StackingClient } = require('../src'); // needed for jest.mock module
   const client = new StackingClient({ address, network });
 
@@ -967,7 +967,7 @@ test('get a list of burnchain rewards for the set address', async () => {
     });
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  
   const { StackingClient } = require('../src'); // needed for jest.mock module
   const client = new StackingClient({ address, network });
   const options = { limit: 2, offset: 0 };
@@ -990,7 +990,7 @@ test('get the burnchain rewards total for the set address', async () => {
     });
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  
   const { StackingClient } = require('../src'); // needed for jest.mock module
   const client = new StackingClient({ address, network });
   const response = await client.getRewardsTotalForBtcAddress();
@@ -1013,7 +1013,7 @@ test('get a list of burnchain reward holders for the set address ', async () => 
     });
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  
   const { StackingClient } = require('../src'); // needed for jest.mock module
   const client = new StackingClient({ address, network });
   const options = { limit: 2, offset: 0 };
@@ -1036,7 +1036,7 @@ test('get target block time info', async () => {
     });
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  
   const { StackingClient } = require('../src'); // needed for jest.mock module
   const client = new StackingClient({ address, network });
 
@@ -1059,7 +1059,7 @@ test('get account balance', async () => {
     });
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  
   const { StackingClient } = require('../src'); // needed for jest.mock module
   const client = new StackingClient({ address, network });
 
@@ -1093,7 +1093,7 @@ test('get seconds until next cycle', async () => {
       });
     });
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  
   const { StackingClient } = require('../src'); // needed for jest.mock module
   const client = new StackingClient({ address, network });
 
@@ -1216,7 +1216,7 @@ test('client operations with contract principal stacker', () => {
   );
   fetchMock.mockOnce(`{"okay":true,"result":"0x09"}`);
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  
   const { StackingClient } = require('../src'); // needed for jest.mock module
   const client = new StackingClient({
     address: 'SP2HNY1HNF5X25VC7GZ3Y48JC4762AYFHKS061BM0.stacking-contract',

@@ -34,7 +34,7 @@ export function getStxAddress(
 ): string;
 export function getStxAddress({
   account,
-  network = 'mainnet',
+  network,
 }: {
   account: Account;
 } & NetworkParam): string;

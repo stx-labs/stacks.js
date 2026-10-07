@@ -437,7 +437,9 @@ export async function decryptECIES(
   if (!cipherObject.cipherTextEncoding || cipherObject.cipherTextEncoding === 'hex') {
     cipherTextBytes = hexToBytes(cipherObject.cipherText);
   } else if (cipherObject.cipherTextEncoding === 'base64') {
-    cipherTextBytes = base64.decode(cipherObject.cipherText);
+    cipherTextBytes = base64.decode(
+      cipherObject.cipherText.replace(/-/g, '+').replace(/_/g, '/')
+    );
   } else {
     throw new Error(`Unexpected cipherTextEncoding "${cipherObject.cipherText}"`);
   }

@@ -1,0 +1,6 @@
+{
+  "/v2/contracts/call-read/ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP/sbtc-token/get-balance-available#ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.signer-manager:[\"0x061aeabc65f3e890fb8bf20d153e95119c72d85765a90e7369676e65722d6d616e61676572\"]": {
+    "status": 200,
+    "body": "{\"okay\":true,\"result\":\"0x070100000000000000000000000005e929e3\"}"
+  }
+}

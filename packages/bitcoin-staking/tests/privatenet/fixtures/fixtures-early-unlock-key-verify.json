@@ -1,0 +1,4 @@
+{
+  "/v1/v1/public-key": "{\"key_id\":1,\"xpub\":\"tpubDF2dNLm8vgwf7xFNKn71bgcHWRwFN5AvTcWDiRYAUjTxibUNhEsmuVT7PP9GWaddDe8kfwN4yQ5gJPkSQ4Msf7oY9feFu5EFX9gy52zAmV7\",\"derivation_path\":\"48'/1'/0'/2'\",\"fingerprint\":\"f6e7c7e7\",\"network\":\"testnet\"}",
+  "/v1/v1/sign": "{\"signature\":\"3044022026b4a5d015b15106affa03e3be26bde425e4c9f7dcf4c212a292f4591937fbc402206ab40da02fc2dcce48f5610a06dfaad4dde20f4a82796ced217f8ab472f218ca\",\"sighash_type\":\"01\",\"sighash\":\"7ec6cade0ccc49c5725bcc0a2fa50d1172c8493a627e9f1c79c15317e5b8ee36\",\"public_key\":\"032853a683729ff79dc33bce675d83892cf0bad4fc15462225de42d7b88ed89292\"}"
+}

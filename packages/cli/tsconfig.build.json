@@ -9,6 +9,9 @@
   },
   "references": [
     {
+      "path": "../profile/tsconfig.build.json"
+    },
+    {
       "path": "../auth/tsconfig.build.json"
     },
     {

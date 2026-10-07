@@ -33,18 +33,15 @@ export type AddressRepr = { hash160: string; contractName?: string } & (
  * ```
  */
 export function parse(
-  address:
-    | AddressString
-    // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
-    | ContractIdString
-): AddressRepr {
+  address: AddressString | ContractIdString
+): AddressRepr & { version: AddressVersion; versionChar: string; contractName?: string } {
   const [addr, contractName] = address.split('.');
   const parsed = c32addressDecode(addr);
   return {
     version: parsed[0],
     versionChar: C32[parsed[0]],
     hash160: parsed[1],
-    contractName: contractName,
+    contractName,
   };
 }
 
