@@ -1,5 +1,8 @@
 # Stacks.js [![Test Action Badge](https://github.com/stx-labs/stacks.js/actions/workflows/tests.yml/badge.svg)](https://github.com/stx-labs/stacks.js/actions/workflows/tests.yml) [![Monorepo Version Label](https://img.shields.io/npm/v/%40stacks%2Fcommon?label=monorepo)](./packages)
 
+> [!WARNING]
+> Upgrade to Stacks.js **7.7.0 or later**. Public API nodes may soon stop supporting the v1 nonce endpoint used by older versions, which could prevent transactions from being built. Version 7.7.0 switches nonce lookups to the v3 endpoint.
+
 Welcome to the Stacks.js repository, your one-stop solution for working with the Stacks blockchain using JavaScript/TypeScript. This repository nests a collection of packages designed to provide you with the essential building blocks to work with the [Stacks blockchain](https://www.stacks.co/learn/introduction) from JavaScript/TypeScript.
 
 ## Packages
