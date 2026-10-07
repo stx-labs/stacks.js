@@ -22,20 +22,17 @@
   "dependencies": {
     "@noble/hashes": "1.1.5",
     "@noble/secp256k1": "1.7.1",
+    "@scure/base": "1.2.6",
     "@scure/bip39": "1.1.0",
-    "@stacks/common": "^7.6.0",
-    "base64-js": "^1.5.1",
-    "bs58": "^5.0.0"
+    "@stacks/common": "^7.6.0"
   },
   "devDependencies": {
     "@peculiar/webcrypto": "^1.1.6",
     "@stacks/network": "^7.6.0",
     "@stacks/transactions": "^7.6.0",
-    "@types/bs58check": "^2.1.0",
     "@types/elliptic": "^6.4.12",
     "@types/node": "^18.0.4",
     "bitcoinjs-lib": "^5.2.0",
-    "bs58check": "^2.1.2",
     "elliptic": "^6.5.4",
     "jsontokens": "^4.0.1",
     "rimraf": "^3.0.2"

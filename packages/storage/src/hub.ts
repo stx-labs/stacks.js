@@ -22,7 +22,7 @@ import {
   Signature,
 } from '@stacks/encryption';
 import { createFetchFn, FetchFn } from '@stacks/common';
-import { fromByteArray } from 'base64-js';
+import { base64 } from '@scure/base';
 import { TokenSigner } from 'jsontokens';
 
 /**
@@ -158,7 +158,7 @@ function makeLegacyAuthToken(challengeText: string, signerKeyHex: string): strin
     const signature = Signature.fromCompact(bytesToHex(signatureBytes)).toDERHex();
 
     const publickey = getPublicKeyFromPrivate(signerKeyHex);
-    const token = fromByteArray(utf8ToBytes(JSON.stringify({ publickey, signature })));
+    const token = base64.encode(utf8ToBytes(JSON.stringify({ publickey, signature })));
     return token;
   }
   throw new Error('Failed to connect to legacy gaia hub. If you operate this hub, please update.');
