@@ -1,6 +1,6 @@
 import * as btc from '@scure/btc-signer';
 import { sha256 } from '@noble/hashes/sha2.js';
-import { bytesToHex, concatBytes, equals, hexToBytes } from '@stacks/common';
+import { bytesToHex, concatBytes, equals, hexToBytes, intToBigInt } from '@stacks/common';
 import type { IntegerType } from '@stacks/common';
 import { scriptToWshOutput } from './script';
 import type { BondL1LockupOutput } from './types';
@@ -305,6 +305,14 @@ export function buildLockProof(
     throw new Error('buildLockProof: matched output has no decodable amount');
   }
 
+  // `unlockBurnHeight` is a `number`; a bigint/string above 2^53 would round silently.
+  const unlockBurnHeight = intToBigInt(input.unlockHeight);
+  if (unlockBurnHeight > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error(
+      `buildLockProof: unlockHeight ${unlockBurnHeight} exceeds Number.MAX_SAFE_INTEGER`
+    );
+  }
+
   return {
     height: input.merkleProof.block_height,
     tx: serializeBitcoinTx(legacy),
@@ -314,7 +322,7 @@ export function buildLockProof(
     txCount: input.txCount,
     txIndex: input.merkleProof.pos,
     amount,
-    unlockBurnHeight: Number(input.unlockHeight),
+    unlockBurnHeight: Number(unlockBurnHeight),
   };
 }
 

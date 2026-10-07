@@ -204,7 +204,7 @@ export interface Bond {
 }
 
 /**
- * Earned-rewards amount in micro-STX. Mirrors `pox-5.get-earned -> uint`.
+ * Earned-rewards amount in sBTC sats. Mirrors `pox-5.get-earned -> uint`.
  */
 export type EarnedRewards = bigint;
 
