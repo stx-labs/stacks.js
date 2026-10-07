@@ -17,7 +17,6 @@ For installation instructions and usage guidelines, refer to the respective `REA
 - [`@stacks/encryption`](./packages/encryption) Encryption functions used by stacks.js packages.
 - [`@stacks/network`](./packages/network) Network configuration for Stacks.js.
 - [`@stacks/common`](./packages/common) Shared low-level primitives for Stacks.js.
-- [`@stacks/api`](./packages/api) Javascript library for interacting with the Stacks Blockchain Node and API.
 
 ### Bitcoin Staking
 
