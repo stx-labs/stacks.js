@@ -57,6 +57,11 @@ const testnetNetwork = new CLINetworkAdapter(
   {} as CLI_NETWORK_OPTS
 );
 
+// testnet adapter with an explicit node API URL, for tests that assert exact request URLs
+const testnetUrlNetwork = new CLINetworkAdapter(getNetwork({} as CLI_CONFIG_TYPE, true), {
+  nodeAPIUrl: 'https://api.testnet.hiro.so',
+} as CLI_NETWORK_OPTS);
+
 describe('decode_cv', () => {
   test('Should decode from hex arg', async () => {
     const result = await decodeCV(mainnetNetwork, [
@@ -434,8 +439,9 @@ describe('Subdomain Migration', () => {
 
 test('can_stack', async () => {
   fetchMock.resetMocks();
+  // total `balance` is higher than spendable `available` to ensure the CLI compares against the latter
   fetchMock.mockOnce(
-    `{"stx":{"balance":"16216000000000","total_sent":"0","total_received":"0","total_fees_sent":"0","total_miner_rewards_received":"0","lock_tx_id":"","locked":"0","lock_height":0,"burnchain_lock_height":0,"burnchain_unlock_height":0},"fungible_tokens":{},"non_fungible_tokens":{}}`
+    `{"balance":"26216000000000","available":"16216000000000","locked":{"amount":"10000000000000","pox_version":4,"lock_tx_id":"0xec94e7d20af8979b44d17a0520c126bf742b999a0fc7ddbcbe0ab21b228ecc8c","stacks_lock_height":100,"burn_lock_height":100,"burn_unlock_height":200},"mempool":null}`
   );
   fetchMock.mockOnce(
     '{"contract_id":"ST000000000000000000002AMW42H.pox","pox_activation_threshold_ustx":827381723155441,"first_burnchain_block_height":2000000,"prepare_phase_block_length":50,"reward_phase_block_length":1000,"reward_slots":2000,"rejection_fraction":12,"total_liquid_supply_ustx":41369086157772050,"current_cycle":{"id":269,"min_threshold_ustx":5180000000000,"stacked_ustx":0,"is_pox_active":false},"next_cycle":{"id":270,"min_threshold_ustx":5180000000000,"min_increment_ustx":5171135769721,"stacked_ustx":5600000000000,"prepare_phase_start_block_height":2283450,"blocks_until_prepare_phase":146,"reward_phase_start_block_height":2283500,"blocks_until_reward_phase":196,"ustx_until_pox_rejection":4964290338932640},"min_amount_ustx":5180000000000,"prepare_cycle_length":50,"reward_cycle_id":269,"reward_cycle_length":1050,"rejection_votes_left_required":4964290338932640,"next_reward_cycle_in":196}'
@@ -451,13 +457,47 @@ test('can_stack', async () => {
 
   const params =
     '6216000000000 10 mqkccNX5h7Xy1YUku3X2fCFCC54x6HEiHk ST3VJVZ265JZMG1N61YE3EQ7GNTQHF6PXP0E7YACV';
-  const response = await canStack(testnetNetwork, params.split(' '));
+  const response = await canStack(testnetUrlNetwork, params.split(' '));
   expect(response.eligible).toBe(true);
 
   expect(fetchMock.mock.calls).toHaveLength(5);
+  expect(fetchMock.mock.calls[0][0]).toEqual(
+    'https://api.testnet.hiro.so/extended/v3/principals/ST3VJVZ265JZMG1N61YE3EQ7GNTQHF6PXP0E7YACV/balances/stx'
+  );
   expect(fetchMock.mock.calls[4][0]).toContain('/pox/can-stack-stx');
   expect(fetchMock.mock.calls[4][1]?.body).toBe(
     '{"sender":"ST3VJVZ265JZMG1N61YE3EQ7GNTQHF6PXP0E7YACV","arguments":["0x0c000000020968617368627974657302000000147046a658021260485e1ba9eb6c3e4c26b60953290776657273696f6e020000000100","0x010000000000000000000005a74678d000","0x010000000000000000000000000000010d","0x010000000000000000000000000000000a"]}'
+  );
+});
+
+test('can_stack rejects an amount above the spendable balance', async () => {
+  fetchMock.resetMocks();
+  // total `balance` covers the stacking amount, but spendable `available` does not
+  fetchMock.mockOnce(
+    `{"balance":"16216000000000","available":"5200000000000","locked":{"amount":"11016000000000","pox_version":4,"lock_tx_id":"0xec94e7d20af8979b44d17a0520c126bf742b999a0fc7ddbcbe0ab21b228ecc8c","stacks_lock_height":100,"burn_lock_height":100,"burn_unlock_height":200},"mempool":null}`
+  );
+  fetchMock.mockOnce(
+    '{"contract_id":"ST000000000000000000002AMW42H.pox","pox_activation_threshold_ustx":827381723155441,"first_burnchain_block_height":2000000,"prepare_phase_block_length":50,"reward_phase_block_length":1000,"reward_slots":2000,"rejection_fraction":12,"total_liquid_supply_ustx":41369086157772050,"current_cycle":{"id":269,"min_threshold_ustx":5180000000000,"stacked_ustx":0,"is_pox_active":false},"next_cycle":{"id":270,"min_threshold_ustx":5180000000000,"min_increment_ustx":5171135769721,"stacked_ustx":5600000000000,"prepare_phase_start_block_height":2283450,"blocks_until_prepare_phase":146,"reward_phase_start_block_height":2283500,"blocks_until_reward_phase":196,"ustx_until_pox_rejection":4964290338932640},"min_amount_ustx":5180000000000,"prepare_cycle_length":50,"reward_cycle_id":269,"reward_cycle_length":1050,"rejection_votes_left_required":4964290338932640,"next_reward_cycle_in":196}'
+  );
+  fetchMock.mockOnce(
+    '{ "balance": "0x0000000000000000000005a74678d000", "locked": "0x00000000000000000000000000000000", "unlock_height": 0, "nonce": 0 }'
+  );
+  fetchMock.mockOnce(
+    '{"contract_id":"ST000000000000000000002AMW42H.pox","pox_activation_threshold_ustx":827381723155441,"first_burnchain_block_height":2000000,"prepare_phase_block_length":50,"reward_phase_block_length":1000,"reward_slots":2000,"rejection_fraction":12,"total_liquid_supply_ustx":41369086157772050,"current_cycle":{"id":269,"min_threshold_ustx":5180000000000,"stacked_ustx":0,"is_pox_active":false},"next_cycle":{"id":270,"min_threshold_ustx":5180000000000,"min_increment_ustx":5171135769721,"stacked_ustx":5600000000000,"prepare_phase_start_block_height":2283450,"blocks_until_prepare_phase":146,"reward_phase_start_block_height":2283500,"blocks_until_reward_phase":196,"ustx_until_pox_rejection":4964290338932640},"min_amount_ustx":5180000000000,"prepare_cycle_length":50,"reward_cycle_id":269,"reward_cycle_length":1050,"rejection_votes_left_required":4964290338932640,"next_reward_cycle_in":196}'
+  );
+  fetchMock.mockOnce('{"okay":true,"result":"0x0703"}');
+  fetchMock.mockOnce('{"eligible":true}');
+
+  const params =
+    '6216000000000 10 mqkccNX5h7Xy1YUku3X2fCFCC54x6HEiHk ST3VJVZ265JZMG1N61YE3EQ7GNTQHF6PXP0E7YACV';
+  const response = await canStack(testnetUrlNetwork, params.split(' '));
+
+  expect(fetchMock.mock.calls[0][0]).toEqual(
+    'https://api.testnet.hiro.so/extended/v3/principals/ST3VJVZ265JZMG1N61YE3EQ7GNTQHF6PXP0E7YACV/balances/stx'
+  );
+  expect(response).toBeInstanceOf(Error);
+  expect(String(response)).toContain(
+    'Stacking amount greater than spendable account balance of 5200000000000 microstacks'
   );
 });
 
