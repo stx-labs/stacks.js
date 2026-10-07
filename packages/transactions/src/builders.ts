@@ -256,12 +256,6 @@ type PreferredContractDeployOptions = {
   sponsored?: boolean;
 } & NetworkClientParam;
 
-type PreferredUnsignedContractDeployOptions = PreferredContractDeployOptions &
-  ({ publicKey: PublicKey } | UnsignedMultiSigOptions);
-
-type PreferredSignedContractDeployOptions = PreferredContractDeployOptions &
-  ({ senderKey: PrivateKey } | SignedMultiSigOptions);
-
 /**
  * Contract deploy transaction options (legacy shape).
  * @deprecated Use {@link ContractDeployOptions} with `name` and `clarityCode` fields instead.
@@ -283,12 +277,6 @@ type LegacyContractDeployOptions = {
   /** set to true if another account is sponsoring the transaction (covering the transaction fee) */
   sponsored?: boolean;
 } & NetworkClientParam;
-
-type LegacyUnsignedContractDeployOptions = LegacyContractDeployOptions &
-  ({ publicKey: PublicKey } | UnsignedMultiSigOptions);
-
-type LegacySignedContractDeployOptions = LegacyContractDeployOptions &
-  ({ senderKey: PrivateKey } | SignedMultiSigOptions);
 
 type PreferredUnsignedMultiSigContractDeployOptions = PreferredContractDeployOptions &
   UnsignedMultiSigOptions;
@@ -352,10 +340,10 @@ function toLegacyContractDeployOptions<
  * @return {StacksTransactionWire}
  */
 export async function makeContractDeploy(
-  txOptions: SignedContractDeployOptions
+  txOptions: SignedContractDeployOptions | SignedMultiSigContractDeployOptions
 ): Promise<StacksTransactionWire>;
 export async function makeContractDeploy(
-  _txOptions: SignedContractDeployOptions
+  _txOptions: SignedContractDeployOptions | SignedMultiSigContractDeployOptions
 ): Promise<StacksTransactionWire> {
   const txOptions = toLegacyContractDeployOptions(_txOptions);
   if ('senderKey' in txOptions) {
@@ -392,10 +380,10 @@ export async function makeContractDeploy(
  * fields.
  */
 export async function makeUnsignedContractDeploy(
-  txOptions: UnsignedContractDeployOptions
+  txOptions: UnsignedContractDeployOptions | UnsignedMultiSigContractDeployOptions
 ): Promise<StacksTransactionWire>;
 export async function makeUnsignedContractDeploy(
-  _txOptions: UnsignedContractDeployOptions
+  _txOptions: UnsignedContractDeployOptions | UnsignedMultiSigContractDeployOptions
 ): Promise<StacksTransactionWire> {
   const txOptions = toLegacyContractDeployOptions(_txOptions);
   const defaultOptions = {
@@ -598,10 +586,10 @@ function toLegacyContractCallOptions<
  * @returns {Promise<StacksTransactionWire>}
  */
 export async function makeUnsignedContractCall(
-  txOptions: UnsignedContractCallOptions
+  txOptions: UnsignedContractCallOptions | UnsignedMultiSigContractCallOptions
 ): Promise<StacksTransactionWire>;
 export async function makeUnsignedContractCall(
-  _txOptions: UnsignedContractCallOptions
+  _txOptions: UnsignedContractCallOptions | UnsignedMultiSigContractCallOptions
 ): Promise<StacksTransactionWire> {
   const txOptions = toLegacyContractCallOptions(_txOptions);
   const defaultOptions = {
@@ -719,10 +707,10 @@ export async function makeUnsignedContractCall(
  * @return {StacksTransactionWire}
  */
 export async function makeContractCall(
-  txOptions: SignedContractCallOptions
+  txOptions: SignedContractCallOptions | SignedMultiSigContractCallOptions
 ): Promise<StacksTransactionWire>;
 export async function makeContractCall(
-  _txOptions: SignedContractCallOptions
+  _txOptions: SignedContractCallOptions | SignedMultiSigContractCallOptions
 ): Promise<StacksTransactionWire> {
   const txOptions = toLegacyContractCallOptions(_txOptions);
   if ('senderKey' in txOptions) {

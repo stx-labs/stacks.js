@@ -100,6 +100,7 @@ import {
   estimateTransactionByteLength,
   transactionToHex,
 } from '../src/transaction';
+import { ContractIdString } from '../src/types';
 import { cloneDeep, randomBytes } from '../src/utils';
 import { FungiblePostConditionWire, STXPostConditionWire } from '../src/wire/types';
 
@@ -2996,6 +2997,76 @@ test('Build transaction with originator post-condition mode', async () => {
 });
 
 describe('Preferred param shapes', () => {
+  test('multisig contract builders preserve serialization with preferred parameters', async () => {
+    const signerKeys = [
+      '6d430bb91222408e7706c9001cfaeb91b08c2be6d5ac95779ab52c6b431950e001',
+      '2a584d899fed1d24e26b524f202763c8ab30260167429f157f1c119f550fa6af01',
+    ];
+    const options = {
+      publicKeys: signerKeys.map(privateKeyToPublic),
+      signerKeys,
+      numSignatures: 2,
+      fee: 0,
+      nonce: 0,
+      network: STACKS_TESTNET,
+    };
+    const contractAddress = 'ST000000000000000000002AMW42H';
+    const contractName = 'kv-store';
+    const codeBody = '(define-public (hello) (ok true))';
+
+    for (const build of [makeContractDeploy, makeUnsignedContractDeploy]) {
+      const legacy = await build({ ...options, contractName, codeBody });
+      const preferred = await build({ ...options, name: contractName, clarityCode: codeBody });
+      expect(preferred.serialize()).toBe(legacy.serialize());
+    }
+
+    for (const build of [makeContractCall, makeUnsignedContractCall]) {
+      const callOptions = { ...options, functionName: 'hello', functionArgs: [] };
+      const legacy = await build({ ...callOptions, contractAddress, contractName });
+      const preferred = await build({
+        ...callOptions,
+        contract: `${contractAddress}.${contractName}`,
+      });
+      expect(preferred.serialize()).toBe(legacy.serialize());
+    }
+  });
+
+  test.each([
+    '',
+    'ST000000000000000000002AMW42H',
+    '.pox',
+    'ST000000000000000000002AMW42H.',
+    'ST000000000000000000002AMW42H.pox.extra',
+  ])('rejects malformed contract identifier %j before fetching', async contract => {
+    fetchMock.resetMocks();
+    const options = {
+      contract: contract as ContractIdString,
+      functionName: 'is-pox-active',
+      functionArgs: [],
+    };
+    const error = `Invalid contract identifier "${contract}". Expected format "<address>.<name>".`;
+
+    await expect(
+      makeUnsignedContractCall({
+        ...options,
+        publicKey: '03ef788b3830c00abe8f64f62dc32fc863bc0b2cafeb073b6c8e1c7657d9c2c3ab',
+      })
+    ).rejects.toThrow(error);
+    await expect(
+      makeContractCall({
+        ...options,
+        senderKey: 'e494f188c2d35887531ba474c433b1e41fadd8eb824aca983447fd4bb8b277a801',
+      })
+    ).rejects.toThrow(error);
+    await expect(
+      fetchCallReadOnlyFunction({
+        ...options,
+        senderAddress: 'ST000000000000000000002AMW42H',
+      })
+    ).rejects.toThrow(error);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   test('makeContractCall with `contract` produces identical serialization', async () => {
     const contractAddress = 'ST3KC0MTNW34S1ZXD36JYKFD3JJMWA01M55DSJ4JE';
     const contractName = 'kv-store';
