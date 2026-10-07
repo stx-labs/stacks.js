@@ -59,22 +59,6 @@ export interface EarlyExitPartial {
 }
 
 /**
- * Rebuild the unsigned ELSE-branch reclaim tx from a partial and derive its
- * BIP143 sighash (lowercase hex). The tx layout is fixed: one P2WSH input
- * (sequence 0xffffffff -> ELSE, no CLTV), one P2WPKH output already encoded in
- * `reclaimTxUnsignedHex`. The sighash MUST match `partial.sighashHex`.
- */
-export function computeSighash(partial: EarlyExitPartial): string {
-  const witnessScript = hexToBytes(partial.witnessScriptHex);
-  const amount = BigInt(partial.amountSats);
-  const p2wshScript = btc.p2wsh({ type: 'wsh', script: witnessScript }, REGTEST).script;
-
-  const tx = rebuildTx(partial, p2wshScript, witnessScript, amount);
-  const sighash = computeReclaimSighash(tx, { witnessScript, amountSats: amount });
-  return bytesToHex(sighash);
-}
-
-/**
  * Once BOTH signatures are present, assemble the ELSE-branch witness
  * `[stakerSig, cosignerSig, preimage, <empty>, witnessScript]` via
  * src/reclaim.ts's finalizeReclaim and return the final (broadcastable) tx hex.

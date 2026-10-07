@@ -1,5 +1,5 @@
 {
-  "/extended/v1/address/ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP/nonces": "{\"last_mempool_tx_nonce\":41,\"last_executed_tx_nonce\":40,\"possible_next_nonce\":42,\"detected_missing_nonces\":[],\"detected_mempool_nonces\":[]}",
+  "/extended/v3/principals/ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP/nonces": "{\"next_nonce\":42,\"last_confirmed_nonce\":40,\"mempool\":{\"last_nonce\":41,\"pending_nonces\":[],\"missing_nonces\":[]}}",
   "/v2/accounts/ST1V2ASRWGR81W7GBN1Z4W2JQKXJWCADPVZG30X45?proof=0": "{\"balance\":\"0x0000000000000000002386f26af93ec0\",\"locked\":\"0x00000000000000000000000000000000\",\"unlock_height\":0,\"nonce\":20}",
   "/v2/accounts/STEH2J3C05BAHYS0RBAQBANJ1AXR6SR43VMZ0D49?proof=0": "{\"balance\":\"0x0000000000000000002386f26fc0c568\",\"locked\":\"0x00000000000000000000000000001388\",\"unlock_height\":800,\"nonce\":1}",
   "/v2/contracts/call-read/ST000000000000000000002AMW42H/pox-5/bond-overlaps-new-position%3F#ST000000000000000000002AMW42H:[\"0x0a0c000000050b616d6f756e742d7361747301000000000000000000000000000027100b616d6f756e742d7573747801000000000000000000000000000013880a626f6e642d696e646578010000000000000000000000000000000c0a69732d6c312d6c6f636b04067369676e6572061aeabc65f3e890fb8bf20d153e95119c72d85765a90e7369676e65722d6d616e61676572\",\"0x0100000000000000000000000000000024\"]": "{\"okay\":true,\"result\":\"0x03\"}",

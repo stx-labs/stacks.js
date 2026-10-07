@@ -25,7 +25,6 @@
     "@stacks/transactions": "^7.6.0"
   },
   "devDependencies": {
-    "process": "^0.11.10",
     "rimraf": "^3.0.2"
   },
   "sideEffects": false,

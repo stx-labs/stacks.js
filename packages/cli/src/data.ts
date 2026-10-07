@@ -1,4 +1,4 @@
-import * as blockstack from 'blockstack';
+import { getTokenFileUrl } from '@stacks/profile';
 import * as URL from 'url';
 import * as crypto from 'crypto';
 import * as jsontokens from 'jsontokens';
@@ -10,14 +10,19 @@ import { getPrivateKeyAddress } from './common';
 
 import { CLINetworkAdapter, NameInfoType } from './network';
 
-import { UserData } from '@stacks/auth';
+import { AppConfig, UserData, UserSession, makeAuthResponse } from '@stacks/auth';
 
-import { GaiaHubConfig, connectToGaiaHub } from '@stacks/storage';
+import { GaiaHubConfig, Storage, connectToGaiaHub, uploadToGaiaHub } from '@stacks/storage';
+
+const gaiaSession = new UserSession({
+  appConfig: new AppConfig(['store_write'], 'http://localhost'),
+});
+export const gaiaStorage = new Storage({ userSession: gaiaSession });
 
 /*
  * Set up a session for Gaia.
  * Generate an authentication response like what the browser would do,
- * and store the relevant data to our emulated localStorage.
+ * and store the relevant data in the in-memory user session.
  */
 function makeFakeAuthResponseToken(
   appPrivateKey: string | null,
@@ -30,20 +35,20 @@ function makeFakeAuthResponseToken(
     '0496345da77fb5e06757b9c4fd656bf830a3b293f245a6cc2f11f8334ebb690f1' +
     '9582124f4b07172eb61187afba4514828f866a8a223e0d5c539b2e38a59ab8bb3';
 
-  window.localStorage.setItem('blockstack-transit-private-key', transitPrivateKey);
+  const session = gaiaSession.store.getSessionData();
+  session.transitKey = transitPrivateKey;
+  gaiaSession.store.setSessionData(session);
 
-  const authResponse = blockstack.makeAuthResponse(
+  const authResponse = makeAuthResponse(
     ownerPrivateKey,
     { type: '@Person', accounts: [] },
-    // @ts-ignore
-    null,
     {},
     null,
     appPrivateKey,
     undefined,
     transitPublicKey,
     hubURL,
-    blockstack.config.network.blockstackAPIUrl,
+    gaiaSession.appConfig.coreNode ?? null,
     associationToken
   );
 
@@ -54,7 +59,7 @@ function makeFakeAuthResponseToken(
  * Make an association token for the given address.
  * TODO belongs in a "gaia.js" library
  */
-export function makeAssociationToken(appPrivateKey: string, identityKey: string): string {
+function makeAssociationToken(appPrivateKey: string, identityKey: string): string {
   const appPublicKey = getPublicKeyFromPrivateKey(`${canonicalPrivateKey(appPrivateKey)}01`);
   const FOUR_MONTH_SECONDS = 60 * 60 * 24 * 31 * 4;
   const salt = crypto.randomBytes(16).toString('hex');
@@ -76,7 +81,7 @@ export function makeAssociationToken(appPrivateKey: string, identityKey: string)
  * Process a (fake) session token and set up a Gaia hub connection.
  * Returns a Promise that resolves to the (fake) userData
  */
-export function gaiaAuth(
+export async function gaiaAuth(
   network: CLINetworkAdapter,
   appPrivateKey: string | null,
   hubUrl: string | null,
@@ -92,11 +97,10 @@ export function gaiaAuth(
     associationToken = makeAssociationToken(appPrivateKey, ownerPrivateKey);
   }
 
-  const authSessionToken = makeFakeAuthResponseToken(appPrivateKey, hubUrl, associationToken);
-  const nameLookupUrl = `${network.legacyNetwork.blockstackAPIUrl}/v1/names/`;
-  const transitPrivateKey = 'f33fb466154023aba2003c17158985aa6603db68db0f1afc0fcf1d641ea6c2cb'; // same as above
-  //@ts-ignore
-  return blockstack.handlePendingSignIn(nameLookupUrl, authSessionToken, transitPrivateKey);
+  gaiaSession.signUserOut();
+  gaiaSession.appConfig.coreNode = network.nodeAPIUrl;
+  const authSessionToken = await makeFakeAuthResponseToken(appPrivateKey, hubUrl, associationToken);
+  return gaiaSession.handlePendingSignIn(authSessionToken);
 }
 
 /*
@@ -163,7 +167,7 @@ function gaiaFindProfileName(
       try {
         const zonefileJSON = ZoneFile.parseZoneFile(nameInfo.zonefile);
         if (zonefileJSON.uri && zonefileJSON.hasOwnProperty('$origin')) {
-          profileUrl = blockstack.getTokenFileUrl(zonefileJSON);
+          profileUrl = getTokenFileUrl(zonefileJSON);
         }
       } catch (e) {
         throw new Error(
@@ -212,7 +216,7 @@ function gaiaFindProfileName(
  * @privateKey (string) the private key to use to sign the challenge
  * @blockstackID (string) optional; the blockstack ID for which this profile will be stored.
  */
-export function gaiaUploadProfile(
+function gaiaUploadProfile(
   network: CLINetworkAdapter,
   gaiaHubURL: string,
   gaiaData: string,
@@ -230,7 +234,7 @@ export function gaiaUploadProfile(
       return gaiaFindProfileName(network, hubConfig, blockstackID);
     })
     .then((profilePath: string) => {
-      return blockstack.uploadToGaiaHub(profilePath, gaiaData, hubConfig);
+      return uploadToGaiaHub(profilePath, gaiaData, hubConfig).then(result => result.publicURL);
     });
 }
 
@@ -279,7 +283,7 @@ export function gaiaUploadProfileAll(
 /*
  * Given a Gaia bucket URL, extract its address
  */
-export function getGaiaAddressFromURL(appUrl: string): string {
+function getGaiaAddressFromURL(appUrl: string): string {
   const matches = appUrl.match(/([13][a-km-zA-HJ-NP-Z0-9]{26,35})/);
   if (!matches) {
     throw new Error('Failed to parse gaia address');

@@ -1,7 +1,7 @@
 import * as scureBip39 from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english';
 import { buildPreorderNameTx, buildRegisterNameTx } from '@stacks/bns';
-import { bytesToHex } from '@stacks/common';
+import { bytesToHex, config } from '@stacks/common';
 import {
   ACCOUNT_PATH,
   broadcastTransaction,
@@ -34,8 +34,7 @@ import {
   TxBroadcastResult,
   validateContractCall,
 } from '@stacks/transactions';
-import * as bitcoin from 'bitcoinjs-lib';
-import * as blockstack from 'blockstack';
+import { extractProfile } from '@stacks/profile';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import { prompt } from 'inquirer';
@@ -46,12 +45,12 @@ import * as winston from 'winston';
 
 const c32check = require('c32check');
 
-import { UserData } from '@stacks/auth';
+import { UserData, lookupProfile } from '@stacks/auth';
 import 'cross-fetch/polyfill';
 
 import { StackerInfo, StackingClient } from '@stacks/stacking';
 
-import { AccountsApi, Configuration, FaucetsApi } from '@stacks/blockchain-api-client';
+import { Configuration, FaucetsApi } from '@stacks/blockchain-api-client';
 
 import { GaiaHubConfig } from '@stacks/storage';
 
@@ -94,9 +93,15 @@ import {
   NameInfoType,
 } from './network';
 
-import { gaiaAuth, gaiaConnect, gaiaUploadProfileAll, getGaiaAddressFromProfile } from './data';
+import {
+  gaiaStorage,
+  gaiaAuth,
+  gaiaConnect,
+  gaiaUploadProfileAll,
+  getGaiaAddressFromProfile,
+} from './data';
 
-import { STACKS_TESTNET } from '@stacks/network';
+import { STACKS_TESTNET, StacksNetwork } from '@stacks/network';
 import { internal_parseCommaSeparated } from '@stacks/transactions';
 import {
   generateNewAccount,
@@ -179,7 +184,7 @@ function profileVerify(_network: CLINetworkAdapter, args: string[]): Promise<str
       throw new Error(`Data at ${profilePath} does not appear to be a signed profile`);
     }
 
-    const profile = blockstack.extractProfile(profileToken, publicKeyOrAddress);
+    const profile = extractProfile(profileToken, publicKeyOrAddress);
     return JSONStringify(profile);
   });
 }
@@ -1052,18 +1057,20 @@ function gaiaGetFile(_network: CLINetworkAdapter, args: string[]): Promise<strin
   }
 
   // force mainnet addresses
-  blockstack.config.network.layer1 = bitcoin.networks.bitcoin;
   return gaiaAuth(_network, appPrivateKey, null)
     .then((_userData: UserData) =>
-      blockstack.getFile(path, {
+      gaiaStorage.getFile(path, {
         decrypt: decrypt,
         verify: verify,
         app: origin,
         username: username,
       })
     )
-    .then((data: ArrayBuffer | Buffer | string) => {
+    .then(data => {
+      if (data === null) return 'null';
       if (data instanceof ArrayBuffer) {
+        return Buffer.from(data);
+      } else if (data instanceof Uint8Array) {
         return Buffer.from(data);
       } else {
         return data;
@@ -1101,10 +1108,9 @@ function gaiaPutFile(_network: CLINetworkAdapter, args: string[]): Promise<strin
 
   // force mainnet addresses
   // TODO
-  blockstack.config.network.layer1 = bitcoin.networks.bitcoin;
   return gaiaAuth(_network, appPrivateKey, hubUrl)
     .then((_userData: UserData) => {
-      return blockstack.putFile(gaiaPath, data, { encrypt: encrypt, sign: sign });
+      return gaiaStorage.putFile(gaiaPath, data, { encrypt: encrypt, sign: sign });
     })
     .then((url: string) => {
       return JSONStringify({ urls: [url] });
@@ -1132,10 +1138,9 @@ function gaiaDeleteFile(_network: CLINetworkAdapter, args: string[]): Promise<st
 
   // force mainnet addresses
   // TODO
-  blockstack.config.network.layer1 = bitcoin.networks.bitcoin;
   return gaiaAuth(_network, appPrivateKey, hubUrl)
     .then((_userData: UserData) => {
-      return blockstack.deleteFile(gaiaPath, { wasSigned: wasSigned });
+      return gaiaStorage.deleteFile(gaiaPath, { wasSigned: wasSigned });
     })
     .then(() => {
       return JSONStringify('ok');
@@ -1155,10 +1160,9 @@ function gaiaListFiles(_network: CLINetworkAdapter, args: string[]): Promise<str
   // force mainnet addresses
   // TODO
   let count = 0;
-  blockstack.config.network.layer1 = bitcoin.networks.bitcoin;
   return gaiaAuth(_network, canonicalPrivateKey(appPrivateKey), hubUrl)
     .then((_userData: UserData) => {
-      return blockstack.listFiles((name: string) => {
+      return gaiaStorage.listFiles((name: string) => {
         // print out incrementally
         console.log(name);
         count += 1;
@@ -1262,7 +1266,6 @@ function gaiaDumpBucket(_network: CLINetworkAdapter, args: string[]): Promise<st
 
   // force mainnet addresses
   // TODO: better way of doing this
-  blockstack.config.network.layer1 = bitcoin.networks.bitcoin;
 
   const fileNames: string[] = [];
   let gaiaHubConfig: GaiaHubConfig;
@@ -1280,7 +1283,7 @@ function gaiaDumpBucket(_network: CLINetworkAdapter, args: string[]): Promise<st
     })
     .then((hubConfig: GaiaHubConfig) => {
       gaiaHubConfig = hubConfig;
-      return blockstack.listFiles(name => {
+      return gaiaStorage.listFiles(name => {
         fileNames.push(name);
         return true;
       });
@@ -1346,7 +1349,6 @@ function gaiaRestoreBucket(_network: CLINetworkAdapter, args: string[]): Promise
 
   // force mainnet addresses
   // TODO better way of doing this
-  blockstack.config.network.layer1 = bitcoin.networks.bitcoin;
 
   return getIDAppKeys(_network, nameOrIDAddress, appOrigin, mnemonicOrCiphertext)
     .then((keyInfo: IDAppKeys) => {
@@ -1363,7 +1365,7 @@ function gaiaRestoreBucket(_network: CLINetworkAdapter, args: string[]): Promise
           const filePath = path.join(dumpDir, fileName);
           const dataBuf = fs.readFileSync(filePath);
           const gaiaPath = fileName.replace(/\\x2f/g, '/');
-          const url = await blockstack.putFile(gaiaPath, dataBuf, { encrypt: false, sign: false });
+          const url = await gaiaStorage.putFile(gaiaPath, dataBuf, { encrypt: false, sign: false });
           console.log(`Uploaded ${fileName} to ${url}`);
         });
         await Promise.all(uploadBatchPromises);
@@ -1407,7 +1409,7 @@ async function gaiaSetHub(_network: CLINetworkAdapter, args: string[]): Promise<
     }
   );
 
-  const profilePromise = blockstack.lookupProfile(blockstackID);
+  const profilePromise = lookupProfile({ username: blockstackID });
 
   const [nameInfo, nameProfile, mnemonic]: [NameInfoType, any, string] = await Promise.all([
     nameInfoPromise,
@@ -1666,6 +1668,18 @@ async function stackingStatus(_network: CLINetworkAdapter, args: string[]): Prom
     });
 }
 
+/**
+ * Fetch the spendable (unlocked) STX balance of an address via the
+ * `/extended/v3/principals/{principal}/balances/stx` endpoint.
+ */
+async function fetchAvailableBalance(network: StacksNetwork, address: string): Promise<bigint> {
+  const res = await fetch(
+    `${network.client.baseUrl}/extended/v3/principals/${address}/balances/stx`
+  );
+  const json: { available: string } = await res.json();
+  return BigInt(json.available);
+}
+
 async function canStack(_network: CLINetworkAdapter, args: string[]): Promise<string> {
   const amount = BigInt(args[0]);
   const cycles = Number(args[1]);
@@ -1675,14 +1689,7 @@ async function canStack(_network: CLINetworkAdapter, args: string[]): Promise<st
   const network = getStacksNetwork(_network);
   const stacker = new StackingClient({ address: stxAddress, network });
 
-  const apiConfig = new Configuration({
-    basePath: network.client.baseUrl,
-  });
-  const accounts = new AccountsApi(apiConfig);
-
-  const balancePromise = accounts.getAccountBalance({
-    principal: stxAddress,
-  });
+  const balancePromise = fetchAvailableBalance(network, stxAddress);
 
   const poxInfoPromise = stacker.getPoxInfo();
 
@@ -1691,7 +1698,7 @@ async function canStack(_network: CLINetworkAdapter, args: string[]): Promise<st
   return Promise.all([balancePromise, poxInfoPromise, stackingEligiblePromise])
     .then(([balance, poxInfo, stackingEligible]) => {
       const minAmount = BigInt(poxInfo.min_amount_ustx);
-      const balanceBN = BigInt(balance.stx.balance);
+      const balanceBN = balance;
 
       if (minAmount > amount) {
         throw new Error(
@@ -1701,7 +1708,7 @@ async function canStack(_network: CLINetworkAdapter, args: string[]): Promise<st
 
       if (amount > balanceBN) {
         throw new Error(
-          `Stacking amount greater than account balance of ${balanceBN.toString()} microstacks`
+          `Stacking amount greater than spendable account balance of ${balanceBN.toString()} microstacks`
         );
       }
 
@@ -1735,18 +1742,11 @@ async function stack(_network: CLINetworkAdapter, args: string[]): Promise<strin
 
   const network = getStacksNetwork(_network);
 
-  const apiConfig = new Configuration({
-    basePath: network.client.baseUrl,
-  });
-  const accounts = new AccountsApi(apiConfig);
-
   const stxAddress = getAddressFromPrivateKey(privateKey, network);
 
-  const balancePromise = accounts.getAccountBalance({
-    principal: stxAddress,
-  });
-
   const stacker = new StackingClient({ address: stxAddress, network });
+
+  const balancePromise = fetchAvailableBalance(network, stxAddress);
 
   const poxInfoPromise = stacker.getPoxInfo();
 
@@ -1757,7 +1757,7 @@ async function stack(_network: CLINetworkAdapter, args: string[]): Promise<strin
   return Promise.all([balancePromise, poxInfoPromise, coreInfoPromise, stackingEligiblePromise])
     .then(([balance, poxInfo, coreInfo, stackingEligible]) => {
       const minAmount = BigInt(poxInfo.min_amount_ustx);
-      const balanceBN = BigInt(balance.stx.balance);
+      const balanceBN = balance;
       const burnChainBlockHeight = coreInfo.burn_block_height;
       const startBurnBlock = burnChainBlockHeight + 3;
 
@@ -1769,7 +1769,7 @@ async function stack(_network: CLINetworkAdapter, args: string[]): Promise<strin
 
       if (amount > balanceBN) {
         throw new Error(
-          `Stacking amount greater than account balance of ${balanceBN.toString()} microstacks`
+          `Stacking amount greater than spendable account balance of ${balanceBN.toString()} microstacks`
         );
       }
 
@@ -2110,8 +2110,7 @@ export function CLIMain() {
       // blockstackNetwork.MAGIC_BYTES = magicBytes;
     }
 
-    // blockstack.config.network = blockstackNetwork;
-    blockstack.config.logLevel = 'error';
+    config.logLevel = 'error';
 
     const method = COMMANDS[cmdArgs.command];
     let exitcode = 0;

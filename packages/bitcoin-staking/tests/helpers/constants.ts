@@ -13,6 +13,3 @@ export const SBTC_TOKEN = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.sbtc-token'
 
 /** sBTC registry contract (`pox_5_sbtc_registry_contract` in the env toml). */
 export const SBTC_REGISTRY = 'ST3NBRSFKX28FQ2ZJ1MAKX58HKHSDGNV5N7R21XCP.sbtc-registry' as const;
-
-/** Fungible-token asset name inside sbtc-token: `(define-fungible-token sbtc-token)`. */
-export const SBTC_ASSET_NAME = 'sbtc-token' as const;
