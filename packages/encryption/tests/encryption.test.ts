@@ -305,6 +305,22 @@ test('encrypt-to-decrypt works', async () => {
   expect(bytesToHex(deciphered)).toEqual(bytesToHex(testBytes));
 });
 
+test.each(['gG+jJjIZQYV/87I1LD6aXA==', 'gG-jJjIZQYV_87I1LD6aXA=='])(
+  'decrypts legacy Base64 ciphertext %s',
+  async (cipherText) => {
+    const cipherObj = {
+      iv: '147acd8031c6d752c249a979344920a4',
+      ephemeralPK: '0213d30d073339d8633cbfea35e624c248cd2c67075f9c8d39433a84295b3502da',
+      cipherText,
+      mac: '2da30901d4457df0957e18a1edf04a851cffb4526dcb1c624eb79c999ffea692',
+      wasString: true,
+      cipherTextEncoding: 'base64' as const,
+    };
+
+    await expect(decryptECIES(privateKey, cipherObj)).resolves.toBe('legacy base64');
+  }
+);
+
 test('encrypt-to-decrypt fails on bad mac', async () => {
   const testString = 'all work and no play makes jack a dull boy';
   const cipherObj = await encryptECIES(publicKey, utf8ToBytes(testString), true);

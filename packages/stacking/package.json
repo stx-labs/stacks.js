@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@noble/hashes": "1.1.5",
-    "@scure/base": "1.1.1",
+    "@scure/base": "1.2.6",
     "@stacks/common": "^7.6.0",
     "@stacks/encryption": "^7.6.0",
     "@stacks/network": "^7.6.0",

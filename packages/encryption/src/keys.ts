@@ -9,7 +9,7 @@ import {
   privateKeyToBytes,
   readUInt8,
 } from '@stacks/common';
-import base58 from 'bs58';
+import { base58 } from '@scure/base';
 import { hashRipemd160 } from './hashRipemd160';
 import { hashSha256Sync } from './sha2Hash';
 
