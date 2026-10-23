@@ -5,7 +5,6 @@ import type { StacksNetwork, StacksNetworkName } from '@stacks/network';
 import { type BufferCV, ClarityType, type ClarityValue, type TupleCV } from '@stacks/transactions';
 import {
   B58_ADDR_PREFIXES,
-  BitcoinNetworkVersion,
   POX_ADDR_DATA_LENGTH,
   PoXAddressVersion,
   SEGWIT_ADDR_PREFIXES,
@@ -13,9 +12,8 @@ import {
   SEGWIT_V0_ADDR_PREFIX,
   SEGWIT_V1,
   SEGWIT_V1_ADDR_PREFIX,
-  SegwitPrefix,
 } from './constants';
-import { networkNameFrom } from './network';
+import { BTC_NETWORKS, type BtcNetwork, btcNetworkFrom } from './network';
 
 /** Parsed Bitcoin address: PoX version byte + hash bytes. */
 export interface BtcAddressRepr {
@@ -47,11 +45,11 @@ export function assertValidBtcAddressRepr(repr: BtcAddressRepr): BtcAddressRepr 
 /** @internal */
 function btcAddressVersionToLegacyHashMode(btcAddressVersion: number): PoXAddressVersion {
   switch (btcAddressVersion) {
-    case BitcoinNetworkVersion.mainnet.P2PKH:
-    case BitcoinNetworkVersion.testnet.P2PKH:
+    case BTC_NETWORKS.mainnet.pubKeyHash:
+    case BTC_NETWORKS.testnet.pubKeyHash:
       return PoXAddressVersion.P2PKH;
-    case BitcoinNetworkVersion.mainnet.P2SH:
-    case BitcoinNetworkVersion.testnet.P2SH:
+    case BTC_NETWORKS.mainnet.scriptHash:
+    case BTC_NETWORKS.testnet.scriptHash:
       return PoXAddressVersion.P2SH;
     default:
       throw new Error('Invalid pox address version');
@@ -99,15 +97,15 @@ function decodeNativeSegwitBtcAddress(btcAddress: string) {
 /** @internal */
 function legacyHashModeToBtcAddressVersion(
   hashMode: PoXAddressVersion,
-  network: StacksNetworkName
+  network: BtcNetwork
 ): number {
   switch (hashMode) {
     case PoXAddressVersion.P2PKH:
-      return BitcoinNetworkVersion[network].P2PKH;
+      return network.pubKeyHash;
     case PoXAddressVersion.P2SH:
     case PoXAddressVersion.P2SHP2WPKH:
     case PoXAddressVersion.P2SHP2WSH:
-      return BitcoinNetworkVersion[network].P2SH;
+      return network.scriptHash;
     default:
       throw new Error('Invalid pox address version');
   }
@@ -157,15 +155,12 @@ export function parse(
   btcAddress: string,
   network?: StacksNetworkName | StacksNetwork
 ): BtcAddressRepr {
-  const networkName = network == null ? undefined : networkNameFrom(network);
+  const params = network == null ? undefined : btcNetworkFrom(network);
   try {
     if (B58_ADDR_PREFIXES.test(btcAddress)) {
       const b58 = base58CheckDecode(btcAddress);
-      if (networkName != null) {
-        const versions = BitcoinNetworkVersion[networkName];
-        if (b58.version !== versions.P2PKH && b58.version !== versions.P2SH) {
-          throw new Error(`version byte 0x${b58.version.toString(16)} is not a ${networkName} one`);
-        }
+      if (params && b58.version !== params.pubKeyHash && b58.version !== params.scriptHash) {
+        throw new Error(`version byte 0x${b58.version.toString(16)} is not a ${params.name} one`);
       }
       return {
         version: btcAddressVersionToLegacyHashMode(b58.version),
@@ -174,9 +169,9 @@ export function parse(
     }
     if (SEGWIT_ADDR_PREFIXES.test(btcAddress)) {
       const b32 = decodeNativeSegwitBtcAddress(btcAddress);
-      if (networkName != null && b32.prefix.toLowerCase() !== SegwitPrefix[networkName]) {
+      if (params && b32.prefix.toLowerCase() !== params.bech32) {
         throw new Error(
-          `prefix '${b32.prefix}' is not the ${networkName} one ('${SegwitPrefix[networkName]}')`
+          `prefix '${b32.prefix}' is not the ${params.name} one ('${params.bech32}')`
         );
       }
       return {
@@ -186,7 +181,7 @@ export function parse(
     }
   } catch (cause) {
     throw new Error(
-      `'${btcAddress}' is not a valid${networkName ? ` ${networkName}` : ''} P2PKH/P2SH/P2WPKH/P2WSH/P2TR address`,
+      `'${btcAddress}' is not a valid${params ? ` ${params.name}` : ''} P2PKH/P2SH/P2WPKH/P2WSH/P2TR address`,
       { cause }
     );
   }
@@ -214,7 +209,7 @@ export function stringify(
   address: BtcAddressRepr | TupleCV,
   network: StacksNetworkName | StacksNetwork
 ): string {
-  const networkName = networkNameFrom(network);
+  const params = btcNetworkFrom(network);
   const { version, data } = assertValidBtcAddressRepr(
     'type' in address ? fromPoxTuple(address) : address
   );
@@ -224,17 +219,17 @@ export function stringify(
     case PoXAddressVersion.P2SH:
     case PoXAddressVersion.P2SHP2WPKH:
     case PoXAddressVersion.P2SHP2WSH: {
-      const btcAddrVersion = legacyHashModeToBtcAddressVersion(version, networkName);
+      const btcAddrVersion = legacyHashModeToBtcAddressVersion(version, params);
       return base58CheckEncode(btcAddrVersion, data);
     }
     case PoXAddressVersion.P2WPKH:
     case PoXAddressVersion.P2WSH: {
       const words = bech32.toWords(data);
-      return bech32.encode(SegwitPrefix[networkName], [SEGWIT_V0, ...words]);
+      return bech32.encode(params.bech32, [SEGWIT_V0, ...words]);
     }
     case PoXAddressVersion.P2TR: {
       const words = bech32m.toWords(data);
-      return bech32m.encode(SegwitPrefix[networkName], [SEGWIT_V1, ...words]);
+      return bech32m.encode(params.bech32, [SEGWIT_V1, ...words]);
     }
     default:
       throw new Error(`Unexpected address version: ${version}`);

@@ -10,27 +10,8 @@ import {
   bondPeriodToRewardCycle,
   rewardCycleToBurnHeight,
 } from './cycles';
-import { networkNameFrom } from './network';
+import { btcNetworkFrom } from './network';
 import type { PoxInfo } from './types';
-
-// regtest == testnet except for the bech32 HRP (`bcrt` vs `tb`).
-const REGTEST_NETWORK = { ...btc.TEST_NETWORK, bech32: 'bcrt' };
-
-const BTC_NETWORKS: Record<StacksNetworkName, typeof btc.NETWORK> = {
-  mainnet: btc.NETWORK,
-  testnet: btc.TEST_NETWORK,
-  devnet: REGTEST_NETWORK,
-  mocknet: REGTEST_NETWORK,
-};
-
-/**
- * @internal Resolve a Stacks network to its `@scure/btc-signer` network params
- * (address HRP / version bytes). Shared so tx builders and address derivation
- * agree on the BTC network.
- */
-export function btcNetworkFrom(network: StacksNetworkName | StacksNetwork): typeof btc.NETWORK {
-  return BTC_NETWORKS[networkNameFrom(network)];
-}
 
 /**
  * Build the default unlock script: `<compressedPubKey> OP_CHECKSIG`.
@@ -437,7 +418,7 @@ export function buildLockAddress(opts: {
     earlyUnlockBytes: opts.earlyUnlockBytes,
     validateEarlyUnlockBytes: opts.validateEarlyUnlockBytes,
   });
-  return scriptToAddress(script, networkNameFrom(opts.network));
+  return scriptToAddress(script, opts.network);
 }
 
 /**
@@ -450,8 +431,7 @@ export function scriptToAddress(
   script: Uint8Array,
   network: StacksNetworkName | StacksNetwork
 ): string {
-  const btcNetwork = BTC_NETWORKS[networkNameFrom(network)];
-  const result = btc.p2wsh({ type: 'wsh', script }, btcNetwork);
+  const result = btc.p2wsh({ type: 'wsh', script }, btcNetworkFrom(network));
   if (!result.address) throw new Error('Failed to derive P2WSH address');
   return result.address;
 }
@@ -576,7 +556,7 @@ export function buildRegisterMetadata(opts: {
   });
 
   return {
-    lockAddress: scriptToAddress(lockScript, networkNameFrom(opts.network)),
+    lockAddress: scriptToAddress(lockScript, opts.network),
     lockScript,
     outputScript: scriptToWshOutput(lockScript),
     unlockBytes,

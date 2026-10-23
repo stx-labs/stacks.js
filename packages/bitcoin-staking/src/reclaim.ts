@@ -4,7 +4,8 @@ import { signECDSA } from '@scure/btc-signer/utils.js';
 import { concatBytes, equals, hexToBytes, intToBigInt, privateKeyToBytes } from '@stacks/common';
 import type { IntegerType, PrivateKey } from '@stacks/common';
 import type { StacksNetwork, StacksNetworkName } from '@stacks/network';
-import { btcNetworkFrom, computeRegisterPreimage, scriptToWshOutput } from './script';
+import { btcNetworkFrom } from './network';
+import { computeRegisterPreimage, scriptToWshOutput } from './script';
 import type { Utxo } from './types';
 
 /**
