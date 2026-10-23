@@ -252,10 +252,6 @@ class PartialPcFtWithCode {
   /**
    * ### Fungible Token Post Condition
    * ⚠ Amount of fungible tokens is denoted in the smallest unit of the token
-   */
-  /**
-   * ### Fungible Token Post Condition
-   * ⚠ Amount of fungible tokens is denoted in the smallest unit of the token
    * @param asset - The asset identifier of the fungible token. Formatted as `<contract-address>.<contract-name>::<token-name>`.
    */
   ft(asset: AssetString): FungiblePostCondition;
@@ -269,10 +265,13 @@ class PartialPcFtWithCode {
   ft(...args: [AssetString] | [ContractIdString, string]): FungiblePostCondition {
     const asset: AssetString = args.length === 1 ? args[0] : `${args[0]}::${args[1]}`;
 
-    const [contractId] = asset.split('::') as [ContractIdString, ...string[]];
-    const [address, name] = contractId.split('.');
-    if (!address || !validateStacksAddress(address) || (typeof name === 'string' && !name)) {
+    const [contractId, tokenName, ...extraAsset] = asset.split('::');
+    const [address, name, ...extraContract] = contractId.split('.');
+    if (!address || !validateStacksAddress(address) || !name || extraContract.length) {
       throw new Error(`Invalid contract id: ${contractId}`);
+    }
+    if (!tokenName || tokenName.includes('.') || extraAsset.length) {
+      throw new Error(`Invalid fully-qualified ft asset name: ${asset}`);
     }
 
     return {
