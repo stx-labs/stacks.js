@@ -320,8 +320,8 @@ Example:
 
       stx faucet ST3PWZ5M026785YW8YKKEH316DYPE4AC7NNTD9ADN
       {
-        txid: '0xd33672dd4dbb0b88f733bc67b938359843123ca3be550ca87d487d067bd1b3c3',
-        transaction: 'https://explorer.hiro.so/txid/0xd33672dd4dbb0b88f733bc67b938359843123ca3be550ca87d487d067bd1b3c3?chain=testnet'
+        "txid": "0xd33672dd4dbb0b88f733bc67b938359843123ca3be550ca87d487d067bd1b3c3",
+        "transaction": "https://explorer.hiro.so/txid/0xd33672dd4dbb0b88f733bc67b938359843123ca3be550ca87d487d067bd1b3c3?chain=testnet"
       }
 ```
 
