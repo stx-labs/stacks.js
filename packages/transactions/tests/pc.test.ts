@@ -23,6 +23,16 @@ const NFT_CONTRACT_NAME = 'super-nft';
 const NFT_TOKEN_NAME = 'super';
 const NFT_ASSET_ID = uintCV(21);
 
+const INVALID_FT_ASSETS = [
+  `${FT_CONTRACT_ADDRESS}.${FT_CONTRACT_NAME}`,
+  `${FT_CONTRACT_ADDRESS}.${FT_CONTRACT_NAME}::`,
+  `${FT_CONTRACT_ADDRESS}::${FT_ASSET_NAME}`,
+  `${FT_CONTRACT_ADDRESS}.${FT_CONTRACT_NAME}::${FT_ASSET_NAME}::extra`,
+  `${FT_CONTRACT_ADDRESS}.${FT_CONTRACT_NAME}::${FT_ASSET_NAME}.extra`,
+  `${FT_CONTRACT_ADDRESS}.${FT_CONTRACT_NAME}.extra::${FT_ASSET_NAME}`,
+  `invalid.${FT_CONTRACT_NAME}::${FT_ASSET_NAME}`,
+];
+
 describe('pc -- post condition builder', () => {
   test('fully-qualified token name', () => {
     const pcA = Pc.principal(STANDARD_ADDRESS)
@@ -34,7 +44,26 @@ describe('pc -- post condition builder', () => {
     expect(pcA).toEqual(pcB);
   });
 
+  test('fully-qualified ft asset name', () => {
+    const pcA = Pc.principal(STANDARD_ADDRESS)
+      .willSendEq(100)
+      .ft(`${FT_CONTRACT_ADDRESS}.${FT_CONTRACT_NAME}::${FT_ASSET_NAME}`);
+    const pcB = Pc.principal(STANDARD_ADDRESS)
+      .willSendEq(100)
+      .ft(`${FT_CONTRACT_ADDRESS}.${FT_CONTRACT_NAME}`, FT_ASSET_NAME);
+    expect(pcA).toEqual(pcB);
+    expect(postConditionToHex(pcA)).toEqual(postConditionToHex(pcB));
+  });
+
   describe('invalid input', () => {
+    test.each(INVALID_FT_ASSETS)('invalid ft asset %s', asset => {
+      expect(() =>
+        Pc.principal(STANDARD_ADDRESS)
+          .willSendEq(100)
+          .ft(asset as any)
+      ).toThrow();
+    });
+
     test('invalid addresses', () => {
       expect(() => Pc.principal(STANDARD_ADDRESS).willSendEq(100).ustx()).not.toThrow();
       expect(() => Pc.principal('invalid address').willSendEq(100).ustx()).toThrow();
