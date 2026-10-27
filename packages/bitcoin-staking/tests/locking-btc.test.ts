@@ -269,6 +269,31 @@ describe('buildLockProof', () => {
     expect(proof().unlockBurnHeight).toBe(850_000);
   });
 
+  it('normalizes a byte-array unlock height to a number', () => {
+    const out = buildLockProof({
+      txHex: TX_HEX,
+      header: HEADER_HEX,
+      merkleProof: MERKLE_PROOF,
+      txCount: 3721,
+      unlockHeight: new Uint8Array([0x0c, 0xf8, 0x50]),
+      outputScript: OUTPUT_0_SCRIPT,
+    });
+    expect(out.unlockBurnHeight).toBe(850_000);
+  });
+
+  it('rejects an unlock height above Number.MAX_SAFE_INTEGER instead of rounding it', () => {
+    expect(() =>
+      buildLockProof({
+        txHex: TX_HEX,
+        header: HEADER_HEX,
+        merkleProof: MERKLE_PROOF,
+        txCount: 3721,
+        unlockHeight: 2n ** 53n + 1n,
+        outputScript: OUTPUT_0_SCRIPT,
+      })
+    ).toThrow('exceeds Number.MAX_SAFE_INTEGER');
+  });
+
   it('strips the witness so the stored tx bytes hash to the txid (not the wtxid)', () => {
     const out = proof();
     const stored = out.tx as Uint8Array;
