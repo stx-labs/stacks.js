@@ -279,6 +279,7 @@ jobs:
         env:
           TAG: ${{ needs.validate-dispatch.outputs.tag }}
           SUFFIX: ${{ needs.validate-dispatch.outputs.suffix }}
+          REF: ${{ needs.validate-dispatch.outputs.ref }}
         run: |
           set -euo pipefail
           name_re='^@stacks/[a-z0-9-]+$'
@@ -306,12 +307,17 @@ jobs:
             version=$v
           done
 
+          # Provenance records the commit of this run, which is on `main`. That
+          # is the wrong source for a build of a different ref.
+          provenance=true
+          if [ "$REF" != "main" ]; then provenance=false; fi
+
           for i in "${!files[@]}"; do
             if [ -n "$(npm view "${names[$i]}@$version" version 2>/dev/null || true)" ]; then
               echo "${names[$i]}@$version is already published; skipping"
               continue
             fi
-            npm publish "${files[$i]}" --tag "$TAG" --access public --ignore-scripts
+            npm publish "${files[$i]}" --tag "$TAG" --access public --ignore-scripts --provenance="$provenance"
           done
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
