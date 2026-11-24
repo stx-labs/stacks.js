@@ -1,5 +1,14 @@
 # Change Log
 
+## 7.8.0
+
+### Patch Changes
+
+- Updated dependencies [[`dca286a`](https://github.com/stx-labs/stacks.js/commit/dca286a962f19220608edb6b00273bba7afe7b3e)]:
+  - @stacks/transactions@7.8.0
+  - @stacks/common@7.8.0
+  - @stacks/network@7.8.0
+
 ## 7.7.0
 
 ### Patch Changes

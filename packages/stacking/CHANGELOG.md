@@ -1,5 +1,19 @@
 # Change Log
 
+## 7.8.0
+
+### Minor Changes
+
+- [#1894](https://github.com/stx-labs/stacks.js/pull/1894) [`24a8262`](https://github.com/stx-labs/stacks.js/commit/24a8262c84d1cf80df65d3305fa75adc49c1b476) - `StackingClient.getAccountExtendedBalances()` now uses the `/extended/v3/principals/{principal}/balances/stx` endpoint instead of the deprecated `/extended/v1/address/{address}/balances`. The returned `ExtendedAccountBalances` (and `ExtendedAccountBalancesResponse`) type changes to the flat STX-only v3 shape `{ balance, available, locked, mempool }`; `stx.total_sent`, `stx.total_received`, `fungible_tokens` and `non_fungible_tokens` are no longer returned.
+
+### Patch Changes
+
+- Updated dependencies [[`dca286a`](https://github.com/stx-labs/stacks.js/commit/dca286a962f19220608edb6b00273bba7afe7b3e)]:
+  - @stacks/transactions@7.8.0
+  - @stacks/common@7.8.0
+  - @stacks/encryption@7.8.0
+  - @stacks/network@7.8.0
+
 ## 7.7.0
 
 ### Patch Changes
