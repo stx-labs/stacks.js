@@ -1,5 +1,12 @@
 # Change Log
 
+## 7.8.0
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @stacks/common@7.8.0
+
 ## 7.7.0
 
 ### Patch Changes

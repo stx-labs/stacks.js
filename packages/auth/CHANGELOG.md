@@ -1,5 +1,15 @@
 # Change Log
 
+## 7.8.0
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @stacks/common@7.8.0
+  - @stacks/encryption@7.8.0
+  - @stacks/network@7.8.0
+  - @stacks/profile@7.8.0
+
 ## 7.7.0
 
 ### Patch Changes

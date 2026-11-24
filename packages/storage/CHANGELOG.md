@@ -1,5 +1,14 @@
 # Change Log
 
+## 7.8.0
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @stacks/auth@7.8.0
+  - @stacks/common@7.8.0
+  - @stacks/encryption@7.8.0
+
 ## 7.7.0
 
 ### Patch Changes
