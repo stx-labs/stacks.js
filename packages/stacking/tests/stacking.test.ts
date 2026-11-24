@@ -1002,6 +1002,74 @@ test('get the burnchain rewards total for the set address', async () => {
   expect(response.reward_amount.toString()).toBe(rewardsTotalInfo.reward_amount);
 });
 
+test('get extended account balances via the v3 balances endpoint', async () => {
+  const address = 'ST3XKKN4RPV69NN1PHFDNX3TYKXT7XPC4N8KC1ARH';
+  const network = STACKS_TESTNET;
+
+  const balancesResponse = {
+    balance: '1000000000',
+    available: '400000000',
+    locked: {
+      amount: '600000000',
+      pox_version: 4,
+      lock_tx_id: '0x' + '11'.repeat(32),
+      stacks_lock_height: 100,
+      burn_lock_height: 200,
+      burn_unlock_height: 300,
+    },
+    mempool: {
+      estimated_balance: '999000000',
+      inbound: '500',
+      outbound: '1000500',
+    },
+  };
+
+  fetchMock.mockResponse(() =>
+    Promise.resolve({ body: JSON.stringify(balancesResponse), status: 200 })
+  );
+
+  const client = new StackingClient({ address, network });
+  const balances = await client.getAccountExtendedBalances();
+
+  expect(fetchMock.mock.calls).toHaveLength(1);
+  expect(fetchMock.mock.calls[0][0]).toEqual(
+    `${HIRO_TESTNET_URL}/extended/v3/principals/${address}/balances/stx`
+  );
+  expect(balances).toEqual({
+    balance: 1000000000n,
+    available: 400000000n,
+    locked: {
+      amount: 600000000n,
+      pox_version: 4,
+      lock_tx_id: '0x' + '11'.repeat(32),
+      stacks_lock_height: 100,
+      burn_lock_height: 200,
+      burn_unlock_height: 300,
+    },
+    mempool: {
+      estimated_balance: 999000000n,
+      inbound: 500n,
+      outbound: 1000500n,
+    },
+  });
+});
+
+test('get extended account balances with no locked or mempool balance', async () => {
+  const address = 'ST3XKKN4RPV69NN1PHFDNX3TYKXT7XPC4N8KC1ARH';
+
+  fetchMock.mockResponse(() =>
+    Promise.resolve({
+      body: JSON.stringify({ balance: '42', available: '42', locked: null, mempool: null }),
+      status: 200,
+    })
+  );
+
+  const client = new StackingClient({ address, network: STACKS_TESTNET });
+  const balances = await client.getAccountExtendedBalances();
+
+  expect(balances).toEqual({ balance: 42n, available: 42n, locked: null, mempool: null });
+});
+
 test('get a list of burnchain reward holders for the set address ', async () => {
   const address = 'myfTfju9XSMRusaY2qTitSEMSchsWRA441';
   const network = STACKS_TESTNET;
