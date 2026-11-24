@@ -241,6 +241,10 @@ export async function makeSTXTokenTransfer(
  * Contract deploy transaction options
  */
 export type BaseContractDeployOptions = {
+  /**
+   * Sets the Clarity version of the contract (versioned deploy).
+   * @deprecated From Epoch 4.1, nodes reject deploys that set a Clarity version.
+   */
   clarityVersion?: ClarityVersion;
   contractName: string;
   /** the Clarity code to be deployed */
@@ -327,7 +331,6 @@ export async function makeUnsignedContractDeploy(
     network: STACKS_MAINNET,
     postConditionMode: PostConditionMode.Deny,
     sponsored: false,
-    clarityVersion: ClarityVersion.Clarity4,
   };
 
   const options = Object.assign(defaultOptions, txOptions);
